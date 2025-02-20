@@ -1,6 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&display=swap');
+
+
 
 :root {
   --background: #ffffff;
@@ -24,4 +27,7 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+}
+.open-sans{
+  font-family: "Open Sans",serif;
 }
