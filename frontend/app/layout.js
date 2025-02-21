@@ -1,4 +1,6 @@
 import localFont from "next/font/local";
+import { Poppins, Open_Sans } from "next/font/google";
+
 import "./globals.css";
 
 const geistSans = localFont({
@@ -11,6 +13,17 @@ const geistMono = localFont({
   variable: "--font-geist-mono",
   weight: "100 900",
 });
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"], // Choose specific weights
+});
+const opensans = Open_Sans({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"], // Choose specific weights
+});
+
+
 
 export const metadata = {
   metadataBase: new URL("https://your-site.com"),
@@ -46,8 +59,8 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+        className={`${geistSans.variable} ${geistMono.variable} ${poppins.className} ${opensans.className}  antialiased`}
+      > 
         {children}
       </body>
     </html>
