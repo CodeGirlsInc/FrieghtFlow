@@ -1,10 +1,8 @@
 import React from "react";
-import GoogleIcon from "@/svg/GoogleIcon";
-import FaceBookIcon from "@/svg/FaceBookIcon";
 
 const providerIcons = {
-  google: GoogleIcon,
-  facebook: FaceBookIcon,
+  google: "/google-icon.svg", // Update with the correct filename
+  facebook: "/facebook-icon.svg", // Update with the correct filename
 };
 
 const providerText = {
@@ -13,18 +11,17 @@ const providerText = {
 };
 
 const SocialAuthButton = ({ provider, onClick }) => {
-  const IconComponent = providerIcons[provider];
-
   return (
     <button
       type="button"
       onClick={onClick}
       className="w-full h-[57px] flex items-center justify-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-800 rounded-[4.5px] border border-gray-200 transition duration-200"
     >
-      <div className="w-6 h-6">
-        <IconComponent className="w-full h-full" />{" "}
-        {/* Directly render the SVG component */}
-      </div>
+      <img
+        src={providerIcons[provider]}
+        alt={`${provider} icon`}
+        className="w-6 h-6"
+      />
       <span className="font-medium">{providerText[provider]}</span>
     </button>
   );
