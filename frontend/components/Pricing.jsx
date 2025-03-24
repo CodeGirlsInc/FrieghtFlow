@@ -57,7 +57,7 @@ function Pricing() {
           Get personalized recommendations based on your location
         </p>
       </div>
-      <div className="flex flex-col md:flex-row gap-6 justify-center items-center mt-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 justify-center items-center mt-3">
         {pricingPlans.map((plan, index) => (
           <PricingCard key={index} {...plan} />
         ))}
