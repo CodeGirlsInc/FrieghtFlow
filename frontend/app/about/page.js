@@ -1,92 +1,51 @@
-"use client"
+
 
 
 import Button from "@/components/ui/Button";
 import Hero from "@/components/ui/Hero";
 import Image from "next/image";
-import {  useEffect, useRef, useState } from "react";
 
-// export const metadata = {
-//   title: "About Us",
-//   description: "Learn about FreightFlow's mission, values, and team",
-//   openGraph: {
-//     title: "About FreightFlow",
-//     description: "Learn about FreightFlow's mission, values, and team",
-//     images: [
-//       {
-//         url: "https://your-site.com/images/about-og.jpg",
-//         width: 1200,
-//         height: 630,
-//         alt: "About FreightFlow",
-//       },
-//     ],
-//   },
-//   twitter: {
-//     card: "summary_large_image",
-//     title: "About FreightFlow",
-//     description: "Learn about FreightFlow's mission, values, and team",
-//     //https://your-site.com/images/about-og.jpg
-//     images: [""],
-//   },
-//   other: {
-//     "script:ld+json": {
-//       "@context": "https://schema.org",
-//       "@type": "AboutPage",
-//       name: "About FreightFlow",
-//       description: "Learn about FreightFlow's mission, values, and team",
-//       url: "https://your-site.com/about",
-//     },
-//   },
-// };
+
+export const metadata = {
+  title: "About Us",
+  description: "Learn about FreightFlow's mission, values, and team",
+  openGraph: {
+    title: "About FreightFlow",
+    description: "Learn about FreightFlow's mission, values, and team",
+    images: [
+      {
+        url: "https://your-site.com/images/about-og.jpg",
+        width: 1200,
+        height: 630,
+        alt: "About FreightFlow",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "About FreightFlow",
+    description: "Learn about FreightFlow's mission, values, and team",
+    //https://your-site.com/images/about-og.jpg
+    images: [""],
+  },
+  other: {
+    "script:ld+json": {
+      "@context": "https://schema.org",
+      "@type": "AboutPage",
+      name: "About FreightFlow",
+      description: "Learn about FreightFlow's mission, values, and team",
+      url: "https://your-site.com/about",
+    },
+  },
+};
 
 export default function About() {
 
-  const [shipmentCount, setShipmentCount] = useState(0)
-  const [isVisible, setIsVisible] = useState(false)
-  const sectionRef = useRef(null)
 
 
 
 
 
-useEffect(() => {
-  const observer = new IntersectionObserver(
-    ([entry]) => {
-      if (entry.isIntersecting) {
-        setIsVisible(true);
-      }
-    },
-    {threshold: 0.5}
-  );
-  if (sectionRef.current) {
-    observer.observe(sectionRef.current);
-  }
-
-  return () => {
-    if (sectionRef.current) {
-      observer.unobserve(sectionRef.current)
-    }
-  }
-}, [])
-
-
-useEffect(() => {
-  if (isVisible) {
-    let count = 0;
-    const interval = setInterval(() => {
-      setShipmentCount((prevCount) => {
-        if (prevCount < 1500 ) {
-          return prevCount + 1
-        }
-        else {
-          clearInterval(interval);
-          return prevCount;
-        }
-      })
-    }, 1)
-    return () => clearInterval(interval);
-  }
-}, [isVisible])
 
 
 
@@ -94,7 +53,7 @@ useEffect(() => {
     <div className="open_sans"  >
 
       <Hero
-      bg={"/about-us-img.svg"}
+      bg={"/about-us-img.jpeg"}
       heading= "Seamless Freight & Cargo Management for Businesses of All Sizes"
       content="Freightflow connects small businesses, enterprises and independent shippers with reliable logistics solutions, all powered by blockchian security"
       buttonText="Track Shipment"
@@ -112,12 +71,12 @@ useEffect(() => {
 <div className="w-full flex items-center flex-wrap gap-6  justify-between  " >
 
 
-<div className=" flex flex-col gap-1 md:gap-5 max-w-[340px] items-start mx-auto md:mx-0 " >
+<div className=" flex flex-col gap-1 md:gap-5 lg:max-w-[340px] items-start mx-auto lg:mx-0 " >
 <h3 className=" font-normal text-sm md:text-lg text-[#B57704]  " >A BIT</h3>
 <h1 className=" text-xl  md:text-[52px] font-semibold text-[#10111A] " >ABOUT US</h1>
 <p className=" text-[#97918B] font-normal text text-base md:text-lg  " >From they fine john he give of rich he. They age and draw mrs like. Improving end distrusts may instantly was household applauded incommode. Why kept very ever home mrs. Considered sympathize ten uncommonly occasional assistance sufficient not.</p>
 
-<Button text={"Explore More"} className= "w-fit custom-shadow text-[#ffffff] text-lg font-normal rounded-[10px]  " />
+<Button text={"Explore More"} className= "max-w-[223px] custom-shadow text-[#ffffff] text-lg font-normal rounded-[10px]  " />
 
 
 </div>
@@ -147,8 +106,8 @@ useEffect(() => {
 
 
 
-    <div ref={sectionRef}  className=" flex flex-col items-center justify-center  absolute bg-[#B57704] h-[84.6px] w-[109.6px]  md:h-[169.2px] md:w-[217.2px] right-[-50%] bottom-7 rounded-[19.2px] stats-shadow  " >
-      <h2 className="font-semibold text-2xl md:text-[57.6px] md:leading-[57.6px] text-[#ffffff] " >  {shipmentCount}+ </h2>
+    <div  className=" flex flex-col items-center justify-center  absolute bg-[#B57704] h-[84.6px] w-[109.6px]  md:h-[169.2px] md:w-[217.2px] right-[-50%] bottom-7 rounded-[19.2px] stats-shadow  " >
+      <h2 className="font-semibold text-2xl md:text-[57.6px] md:leading-[57.6px] text-[#ffffff] " > 1500+ </h2>
       <p className="font-semibold text-base md:text-[28.8px] md:leading-[28.8px] text-[#ffffff] "  >shipments</p>
     </div>
     </div>

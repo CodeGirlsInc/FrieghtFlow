@@ -17,7 +17,7 @@ const Hero = ({ bg, heading, content, buttonText, linkUrl }) => {
         backgroundImage: `url(${bg})`,
       }}
        >
-      <div className=" flex items-center justify-center gap-2  md:gap-4 flex-col w-full max-w-[1190px] text-center " >
+      <div className=" flex items-center justify-center gap-2  md:gap-4 flex-col w-full max-w-[1018px] text-center " >
       <h1 className="font-semibold text-3xl md:text-5xl mb-2 md:mb-4   " >{heading} </h1>
         <p className="font-medium text-lg md:text-2xl mb-5   " >{content} </p>
        <Link href={linkUrl} >
