@@ -28,10 +28,10 @@ export default function Services() {
         <h1>Services</h1>
       </div>
       <div
-        className="h-max bg-fixed bg-cover bg-center"
+        className="h-max bg-fixed bg-cover bg-no-repeat bg-center"
         style={{ backgroundImage: "url('/servicebg.jpg')" }}
       >
-        <div className="bg-[#000000]/80 w-full h-max py-8">
+        <div className="bg-[#000000]/80 w-full h-max py-[6rem]">
           <div className="flex items-center flex-wrap justify-center gap-6 sm:gap-8 md:gap-12 lg:gap-16 p-4 sm:p-6 md:p-8 h-full mx-auto">
             {services.map((service) => (
               <div
