@@ -21,7 +21,7 @@ const Hero = ({ bg, heading, content, buttonText, linkUrl }) => {
       <h1 className="font-semibold text-3xl md:text-5xl mb-2 md:mb-4   " >{heading} </h1>
         <p className="font-medium text-lg md:text-2xl mb-5   " >{content} </p>
        <Link href={linkUrl} >
-       <Button  className=" text-base md:text-2xl font-normal bg-[#B57704] rounded-[10px] px-8   " text={buttonText} />
+       <Button  className=" text-base md:text-2xl font-normal bg-[#B57704] rounded-[10px] px-8  mt-[40px] transform hover:scale-105 duration-200 transition-all ease-in-out  " text={buttonText} />
         </Link>
       </div>
 
