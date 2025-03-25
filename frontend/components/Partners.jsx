@@ -1,15 +1,18 @@
-"use client"
-import Button from "./ui/Button"
-import SearchButton from "./ui/SearchButton"
+"use client";
+import Button from "./ui/Button";
+import SearchButton from "./ui/SearchButton";
+import Image from "next/image";
 
 const Partners = () => {
-  const partners = [1, 2, 3, 4, 5] 
+  const partners = [1, 2, 3, 4, 5];
 
   return (
     <section className="w-full py-12 md:py-16 lg:py-24">
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex flex-col items-center text-center mb-10">
-          <h2 className="text-[32px] md:text-4xl font-medium text-[#956811] mb-4">SHIPPING PARTNERS</h2>
+          <h2 className="text-[32px] md:text-4xl font-medium text-[#956811] mb-4">
+            SHIPPING PARTNERS
+          </h2>
           <p className="text-base md:text-lg text-gray-400 max-w-2xl">
             Get personalized recommendations based on your location
           </p>
@@ -26,10 +29,14 @@ const Partners = () => {
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
                     <div className="flex justify-center">
-                      <img src="/logo.png" alt="Logo" className="w-60 h-50" />
-                        
+                      <Image
+                        src="/logo.png"
+                        alt="Logo"
+                        width={200}
+                        height={200}
+                        // className="w-60 h-50"
+                      />
                     </div>
-                    
                   </div>
                 </div>
               </div>
@@ -52,8 +59,7 @@ const Partners = () => {
         </div>
       </div>
     </section>
-  )
-}
+  );
+};
 
 export default Partners;
-
