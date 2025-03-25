@@ -1,5 +1,6 @@
 import Image from "next/image"
 import Partners from "../components/Partners"
+import TrackShipments from "@/components/TrackShipments";
 
 export default function Home() {
   return (
@@ -51,6 +52,7 @@ export default function Home() {
         </div>
 
         <Partners />
+        <TrackShipments />
       </main>
       <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
         <a
