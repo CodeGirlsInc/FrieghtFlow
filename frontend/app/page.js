@@ -1,6 +1,7 @@
 import FAQ from "@/components/FAQ";
 import Services from "@/components/Services";
 import Partners from "../components/Partners"
+import TrackShipments from "@/components/TrackShipments";
 import HomepageHero from "@/components/HomepageHero";
 import HomepageHero2 from "@/components/HomepageHero2";
 import Pricing from "@/components/Pricing";
@@ -13,6 +14,7 @@ export default function Home() {
         <HomepageHero2 />
       <Services />
         <Partners />
+        <TrackShipments />
     <Pricing />
     <FAQ />
       </main>
