@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 
 const providerIcons = {
   google: "/google-icon.svg", // Update with the correct filename
@@ -17,10 +18,12 @@ const SocialAuthButton = ({ provider, onClick }) => {
       onClick={onClick}
       className="w-full h-[57px] flex items-center justify-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-800 rounded-[4.5px] border border-gray-200 transition duration-200"
     >
-      <img
+      <Image
         src={providerIcons[provider]}
         alt={`${provider} icon`}
-        className="w-6 h-6"
+        width={24}
+        height={24}
+        // className="w-6 h-6"
       />
       <span className="font-medium">{providerText[provider]}</span>
     </button>

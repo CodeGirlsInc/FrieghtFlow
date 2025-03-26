@@ -144,7 +144,7 @@ export default function SignIn() {
                 />
               </div>
               <p className="flex gap-1 justify-center text-center open-sans text-[15.6px] pt-4">
-                Don't you have an account?{" "}
+                Don`&apos;`t you have an account?
                 <Link href="/sign-up" className="text-blue-600">
                   Sign up
                 </Link>

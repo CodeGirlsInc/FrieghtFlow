@@ -4,6 +4,7 @@ import Partners from "../components/Partners"
 import TrackShipments from "@/components/TrackShipments";
 import HomepageHero from "@/components/HomepageHero";
 import HomepageHero2 from "@/components/HomepageHero2";
+import Testimonials from "@/components/Testimonials";
 import Pricing from "@/components/Pricing";
 
 export default function Home() {
@@ -14,6 +15,7 @@ export default function Home() {
         <HomepageHero2 />
       <Services />
         <Partners />
+        <Testimonials />
         <TrackShipments />
     <Pricing />
     <FAQ />
