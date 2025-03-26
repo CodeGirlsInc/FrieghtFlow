@@ -21,10 +21,10 @@ const CustomSelect = ({
 
   return (
     <div className="mb-4">
-      <label className="block text-[#0C1421] text-[14.72px] font-['Open_Sans'] font-normal mb-2 leading-[100%] tracking-[1%] align-middle">
+      <label className="block text-[#0C1421] text-[14.72px] font-open-sans font-normal mb-2 leading-[100%] tracking-[1%] align-middle">
         {label}{" "}
         {optional && (
-          <span className="text-[#0C1421] text-sm italic text-[14.72px]  font-['Open_Sans'] font-normal leading-[100%] tracking-[1%] align-middle">
+          <span className="text-[#0C1421] text-sm italic text-[14.72px]  font-open-sans font-normal leading-[100%] tracking-[1%] align-middle">
             (Optional)
           </span>
         )}
@@ -39,8 +39,8 @@ const CustomSelect = ({
           <span
             className={`${
               selectedOption
-                ? "text-[14.4px] text-[#8897AD] leading-[100%] tracking-[1%] align-middle font-['Open_Sans'] font-normal "
-                : "text-[14.4px] text-[#8897AD] leading-[100%] tracking-[1%] align-middle font-['Open_Sans'] font-normal "
+                ? "text-[14.4px] text-[#8897AD] leading-[100%] tracking-[1%] align-middle font-open-sans font-normal "
+                : "text-[14.4px] text-[#8897AD] leading-[100%] tracking-[1%] align-middle font-open-sans font-normal "
             }`}
           >
             {selectedOption || placeholder}
@@ -87,16 +87,16 @@ const CustomSelect = ({
 const Input = ({ label, optional = false, ...props }) => {
   return (
     <div className="mb-4">
-      <label className="block text-[#0C1421]  text-[14.72px] font-['Open_Sans'] font-normal mb-2 leading-[100%] tracking-[1%] align-middle">
+      <label className="block text-[#0C1421]  text-[14.72px] font-open-sans font-normal mb-2 leading-[100%] tracking-[1%] align-middle">
         {label}{" "}
         {optional && (
-          <span className="text-[#0C1421]  text-[14.72px italic font-['Open_Sans'] font-normal leading-[100%] tracking-[1%] align-middle">
+          <span className="text-[#0C1421]  text-[14.72px italic font-open-sans font-normal leading-[100%] tracking-[1%] align-middle">
             (Optional)
           </span>
         )}
       </label>
       <input
-        className="w-[100%]  h-[51.2px] text-[14.4px] text-[#8897AD] leading-[100%] tracking-[1%] align-middle font-['Open_Sans'] font-normal  px-4 py-2 bg-[#F4F6F3] border border-gray-200 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="w-[100%]  h-[51.2px] text-[14.4px] text-[#8897AD] leading-[100%] tracking-[1%] align-middle font-open-sans font-normal  px-4 py-2 bg-[#F4F6F3] border border-gray-200 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-blue-500"
         {...props}
       />
     </div>
@@ -178,148 +178,146 @@ const SmallBusiness = () => {
     { value: "usps", label: "USPS" },
     { value: "dhl", label: "DHL" },
   ];
-    const LocationOptions = [
-      { value: "new_york", label: "New York, USA" },
-      { value: "lagos", label: "Lagos, Nigeria" },
-      { value: "berlin", label: "Berlin, Germany" },
-      { value: "tokyo", label: "Tokyo, Japan" },
-      { value: "los_angeles", label: "Los Angeles, USA" },
-     
-    ];
-
+  const LocationOptions = [
+    { value: "new_york", label: "New York, USA" },
+    { value: "lagos", label: "Lagos, Nigeria" },
+    { value: "berlin", label: "Berlin, Germany" },
+    { value: "tokyo", label: "Tokyo, Japan" },
+    { value: "los_angeles", label: "Los Angeles, USA" },
+  ];
 
   return (
-    <div className="min-h-screen w-full relative">
-    {/* Split background - top half gradient, bottom half white */}
-    <div className="absolute inset-0">
-      <div
-        className="h-1/2"
-        style={{
-          background:
-            "linear-gradient(72.28deg, #1B1E1F 16.3%, #1B1E1F 25.66%, #1B1E1F 32.86%, #1B1E1F 42.93%, #1B1E1F 54.51%, #5E4717 77.38%, #795714 90.51%, #956811 104.43%, #E19508 113.96%)",
-        }}
-      ></div>
-      <div className="h-1/2 bg-white"></div>
-    </div>
-
-    {/* Content container */}
-    <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Header section */}
-      <div className="text-center pt-10 pb-16">
-        <h1 className="text-4xl text-white font-bold mb-2">Small Business</h1>
-        <p className="text-white opacity-80">
-          Suitable for Start-up, retailers and small scale distributors
-        </p>
+    <div className="relative w-full min-h-screen">
+      {/* Split background - top half gradient, bottom half white */}
+      <div className="absolute inset-0">
+        <div
+          className="h-1/2"
+          style={{
+            background:
+              "linear-gradient(72.28deg, #1B1E1F 16.3%, #1B1E1F 25.66%, #1B1E1F 32.86%, #1B1E1F 42.93%, #1B1E1F 54.51%, #5E4717 77.38%, #795714 90.51%, #956811 104.43%, #E19508 113.96%)",
+          }}
+        ></div>
+        <div className="bg-white h-1/2"></div>
       </div>
 
-      {/* Form section */}
-      <div
-        className="bg-white py-5 my-5 shadow-lg rounded-[20px] p-0  sm:p-8 mx-auto "
-        style={{ width: 'full', maxWidth: "1095px" }}
-      >
-        <form onSubmit={handleSubmit(onSubmit)} className="w-full">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4  mx-auto">
-            {/* Left Column */}
-            <div >
-             <div className=" m-2 md:ml-[5%]">
-             <Input
-                label="Business Name"
-                placeholder="Enter business name"
-                {...register("businessName")}
-              />
+      {/* Content container */}
+      <div className="relative px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+        {/* Header section */}
+        <div className="pt-10 pb-16 text-center">
+          <h1 className="mb-2 text-4xl font-bold text-white">Small Business</h1>
+          <p className="text-white opacity-80">
+            Suitable for Start-up, retailers and small scale distributors
+          </p>
+        </div>
 
-              <CustomSelect
-                label="Business Type"
-                placeholder="E.g retail, wholesale, manufacturer"
-                options={businessTypeOptions}
-                {...register("businessType")}
-              />
+        {/* Form section */}
+        <div
+          className="bg-white py-5 my-5 shadow-lg rounded-[20px] p-0  sm:p-8 mx-auto "
+          style={{ width: "full", maxWidth: "1095px" }}
+        >
+          <form onSubmit={handleSubmit(onSubmit)} className="w-full">
+            <div className="grid grid-cols-1 mx-auto md:grid-cols-2 gap-x-8 gap-y-4">
+              {/* Left Column */}
+              <div>
+                <div className=" m-2 md:ml-[5%]">
+                  <Input
+                    label="Business Name"
+                    placeholder="Enter business name"
+                    {...register("businessName")}
+                  />
 
-              <Input
-                label="Business Registration Number"
-                optional={true}
-                placeholder="Enter registration number"
-                {...register("registrationNumber")}
-              />
+                  <CustomSelect
+                    label="Business Type"
+                    placeholder="E.g retail, wholesale, manufacturer"
+                    options={businessTypeOptions}
+                    {...register("businessType")}
+                  />
 
-              <CustomSelect
-                label="Number of Employees"
-                placeholder="1-5"
-                options={employeeOptions}
-                {...register("employeeCount")}
-              />
+                  <Input
+                    label="Business Registration Number"
+                    optional={true}
+                    placeholder="Enter registration number"
+                    {...register("registrationNumber")}
+                  />
 
-              <CustomSelect
-                label="Country Selection"
-                placeholder="Select country"
-                options={countryOptions}
-                {...register("country")}
-              />
+                  <CustomSelect
+                    label="Number of Employees"
+                    placeholder="1-5"
+                    options={employeeOptions}
+                    {...register("employeeCount")}
+                  />
 
-              <CustomSelect
-                label="State Selection"
-                placeholder="Select state"
-                options={stateOptions}
-                {...register("state")}
-              />
-             </div>
+                  <CustomSelect
+                    label="Country Selection"
+                    placeholder="Select country"
+                    options={countryOptions}
+                    {...register("country")}
+                  />
+
+                  <CustomSelect
+                    label="State Selection"
+                    placeholder="Select state"
+                    options={stateOptions}
+                    {...register("state")}
+                  />
+                </div>
+              </div>
+
+              {/* Right Column */}
+              <div>
+                <div className="m-2  md:mr-[2%]">
+                  <CustomSelect
+                    label="Preferred Shipping Partners"
+                    placeholder="Select Shipping Partners"
+                    options={shippingPartnersOptions}
+                    {...register("shippingPartners")}
+                  />
+
+                  <CustomSelect
+                    label="Pickup and Delivery Location"
+                    placeholder="Select pickup and delivery location"
+                    options={LocationOptions}
+                    {...register("pickupLocation")}
+                  />
+
+                  <CustomSelect
+                    label="Shipping Frequency"
+                    placeholder="Select shipping frequency"
+                    options={shippingFrequencyOptions}
+                    {...register("shippingFrequency")}
+                  />
+
+                  <CustomSelect
+                    label="Average Package Weight and Size"
+                    placeholder="Select package weight and size"
+                    options={packageSizeOptions}
+                    {...register("packageSize")}
+                  />
+
+                  <Input
+                    label="Contact Person Details"
+                    placeholder="Enter Full name"
+                    {...register("contactName")}
+                  />
+
+                  <Input
+                    label="Contact Person Details"
+                    placeholder="Enter phone number and email address"
+                    {...register("contactInfo")}
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Right Column */}
-            <div >
-             <div className="m-2  md:mr-[2%]" >
-             <CustomSelect
-                label="Preferred Shipping Partners"
-                placeholder="Select Shipping Partners"
-                options={shippingPartnersOptions}
-                {...register("shippingPartners")}
-              />
-
-              <CustomSelect
-                label="Pickup and Delivery Location"
-                placeholder="Select pickup and delivery location"
-                options={LocationOptions}
-                {...register("pickupLocation")}
-              />
-
-              <CustomSelect
-                label="Shipping Frequency"
-                placeholder="Select shipping frequency"
-                options={shippingFrequencyOptions}
-                {...register("shippingFrequency")}
-              />
-
-              <CustomSelect
-                label="Average Package Weight and Size"
-                placeholder="Select package weight and size"
-                options={packageSizeOptions}
-                {...register("packageSize")}
-              />
-
-              <Input
-                label="Contact Person Details"
-                placeholder="Enter Full name"
-                {...register("contactName")}
-              />
-
-              <Input
-                label="Contact Person Details"
-                placeholder="Enter phone number and email address"
-                {...register("contactInfo")}
-              />
-             </div>
+            <div className="flex justify-center mt-6">
+              <div className="w-full max-w-md">
+                <Button type="submit">REGISTER</Button>
+              </div>
             </div>
-          </div>
-
-          <div className="mt-6 flex justify-center">
-            <div className="w-full max-w-md">
-              <Button type="submit">REGISTER</Button>
-            </div>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
-  </div>
   );
 };
 
