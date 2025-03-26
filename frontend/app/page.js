@@ -1,3 +1,9 @@
+import Services from "@/components/Services";
+
+export default function Home() {
+  return (
+    <div>
+      <Services />
 import Image from "next/image"
 import Partners from "../components/Partners"
 
