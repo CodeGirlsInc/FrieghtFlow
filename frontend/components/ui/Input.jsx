@@ -17,16 +17,18 @@ const Input = ({
       formState: { errors },
    } = useFormContext();
 
-   const validationRules = {
-      required,
-   };
 
-   if (type === "password" && minLength) {
-      validationRules.minLength = {
-         value: minLength,
-         message: `Password should be a minimum of ${minLength} characters`,
-      };
-   }
+  const validationRules = {
+    required,
+  };
+
+  if (type === "password" && minLength) {
+    validationRules.minLength = {
+      value: minLength,
+      message: `Password should be a minimum of ${minLength} characters`,
+    };
+  }
+
 
    return (
       <div className="flex flex-col">
