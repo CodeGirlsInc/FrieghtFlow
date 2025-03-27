@@ -1,5 +1,8 @@
 import localFont from "next/font/local";
 import "./globals.css";
+import { GoogleOAuthProvider } from "@react-oauth/google";
+
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
 export const metadata = {
    metadataBase: new URL("https://your-site.com"),
@@ -19,7 +22,6 @@ export const metadata = {
          "max-snippet": -1,
       },
    },
-   // JSON-LD structured data for organization
    other: {
       "script:ld+json": {
          "@context": "https://schema.org",
@@ -34,7 +36,10 @@ export const metadata = {
 export default function RootLayout({children}) {
    return (
       <html lang="en">
-         <body>{children}</body>
+         <body>{
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+         {children}
+      </GoogleOAuthProvider> }</body>
       </html>
    );
 }

@@ -1,22 +1,4 @@
-// export const metadata = {
-//   title: "Sign Up",
-//   description: "Sign Up to FreightFlow",
-//   robots: {
-//     index: false,
-//     follow: false,
-//   },
-// };
-// export const metadata = {
-//   title: "Sign Up",
-//   description: "Sign Up to FreightFlow",
-//   robots: {
-//     index: false,
-//     follow: false,
-//   },
-// };
-
 "use client";
-
 import React from "react";
 import Input from "@/components/ui/Input";
 import { useForm, FormProvider } from "react-hook-form";
@@ -40,11 +22,10 @@ export default function SignIn() {
         <div className="sm:hidden w-full h-[201px] relative rounded-t-sm overflow-hidden">
           <div className="absolute top-0 bottom-0 left-0 right-0 bg-[#00000085]/50 z-40"></div>
           <Image
-            src={backgroundImage}
-            layout="fill"
-            objectFit="cover"
+            src={backgroundImage || "/placeholder.svg"}
+            fill
             alt="Freight container ship illustration"
-            className="z-0"
+            className="object-cover z-0"
           />
         </div>
 
@@ -52,11 +33,10 @@ export default function SignIn() {
         <div className="hidden sm:block lg:hidden w-full h-[400px] relative rounded-t-sm overflow-hidden">
           <div className="absolute top-0 bottom-0 left-0 right-0 bg-[#00000085]/50 z-40"></div>
           <Image
-            src={backgroundImage}
-            layout="fill"
-            objectFit="cover"
+            src={backgroundImage || "/placeholder.svg"}
+            fill
             alt="Freight container ship illustration"
-            className="z-0"
+            className="object-cover z-0"
           />
         </div>
 
@@ -64,11 +44,10 @@ export default function SignIn() {
         <div className="hidden lg:block absolute top-0 bottom-0 left-0 right-0">
           <div className="absolute top-0 bottom-0 left-0 right-0 bg-[#00000085]/50 z-40"></div>
           <Image
-            src={backgroundImage}
-            layout="fill"
-            objectFit="cover"
+            src={backgroundImage || "/placeholder.svg"}
+            fill
             alt="Freight container ship illustration"
-            className="z-0"
+            className="object-cover z-0"
           />
         </div>
       </section>
@@ -144,7 +123,7 @@ export default function SignIn() {
                 />
               </div>
               <p className="flex gap-1 justify-center text-center open-sans text-[15.6px] pt-4">
-                Don't you have an account?{" "}
+                Don&apos;t you have an account?{" "}
                 <Link href="/sign-up" className="text-blue-600">
                   Sign up
                 </Link>
