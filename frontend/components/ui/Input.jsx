@@ -1,11 +1,20 @@
 "use client";
 import React from "react";
-import {useForm, useFormContext} from "react-hook-form";
+import { useFormContext } from "react-hook-form";
 
-const Input = ({type, name, label, placeholder, required, ErrorMessage, minLength, list}) => {
+const Input = ({
+   type,
+   name,
+   label,
+   placeholder,
+   required,
+   ErrorMessage,
+   minLength,
+   list
+}) => {
    const {
       register,
-      formState: {errors},
+      formState: { errors },
    } = useFormContext();
 
    const validationRules = {
@@ -28,11 +37,13 @@ const Input = ({type, name, label, placeholder, required, ErrorMessage, minLengt
             type={type}
             id={name}
             list={list}
-            className={`w-full h-[57px] rounded-[4.5px] text-[#8897ad] text-[15.6px] px-4 border-[var(--border)] border-[1.3px] border-solid bg-[var(--inputBackground)] focus:outline-none open_sans font-[400]`}
+            className={`w-full h-[57px] rounded-[4.5px] text-[#8897ad] text-[15.6px] px-4 border-[var(--border)] border-[1.3px] border-solid bg-[var(--inputBackground)] focus:outline-none open_sans font-[400] ${errors[name] ? 'border-red-500' : ''}`}
             placeholder={placeholder}
-            {...register(name, validationRules)}
+            {...register(name, {
+               required: required ? 'This field is required' : false
+            })}
          />
-         {errors[name] && <span className="text-red-600 text-xs text-left">{ErrorMessage || "this field is required"}</span>}
+         {ErrorMessage && <span className="text-red-600 text-xs text-left mt-1">{ErrorMessage}</span>}
       </div>
    );
 };
