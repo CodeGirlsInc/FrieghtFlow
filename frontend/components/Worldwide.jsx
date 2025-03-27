@@ -109,7 +109,7 @@ export default function CargoDeliveryForm() {
                   value={shippingItem}
                   onChange={(e) => setShippingItem(e.target.value)}
                 >
-                  <option value="" disabled selected>Choose</option>
+                  <option value="" disabled>Choose</option>
                   <option value="documents">Documents</option>
                   <option value="parcel">Parcel</option>
                   <option value="freight">Freight</option>
@@ -131,7 +131,7 @@ export default function CargoDeliveryForm() {
                   value={calculationUnit}
                   onChange={(e) => setCalculationUnit(e.target.value)}
                 >
-                  <option value="" disabled selected>kg/ton</option>
+                  <option value="" disabled>kg/ton</option>
                   <option value="kg">Kilograms (kg)</option>
                   <option value="ton">Tons</option>
                   <option value="lbs">Pounds (lbs)</option>

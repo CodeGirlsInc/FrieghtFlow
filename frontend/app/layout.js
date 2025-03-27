@@ -1,7 +1,10 @@
-import localFont from "next/font/local";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./providers";
 import Header from "@/components/ui/Header";
 import Footer from "@/components/ui/Footer";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
   metadataBase: new URL("https://your-site.com"),
@@ -36,10 +39,12 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>
-        <Header />
-        {children}
-        <Footer/>
+      <body className={inter.className}>
+        <Providers>
+          <Header />
+          {children}
+          <Footer/>
+        </Providers>
       </body>
     </html>
   );

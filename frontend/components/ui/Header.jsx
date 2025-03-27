@@ -1,8 +1,21 @@
 "use client";
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth0 } from "@auth0/auth0-react";
+import Image from "next/image";
 
 const Header = () => {
+  const navigation = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isAuthenticated, logout, user } = useAuth0();
+
+  const handleAuthAction = () => {
+    if (isAuthenticated) {
+      logout({ returnTo: window.location.origin });
+    } else {
+      navigation.push("/sign-up");
+    }
+  };
 
   return (
     <header className="flex items-center justify-between py-2 px-10 bg-white shadow-md">
@@ -12,19 +25,18 @@ const Header = () => {
           <img
             src="/logo.png"
             alt="FreightFlow Logo"
-            className=" object-cover w-full h-full"
+            className="object-cover w-full h-full"
           />
         </div>
-
         <span className="text-xs hidden md:flex font-bold text-gray-800">FreightFlow</span>
       </div>
 
-      <div className="flex flex-row items-center  w-1/2 justify-between ml-7">
+      <div className="flex flex-row items-center w-1/2 justify-between ml-7">
         {/* Navigation Links - Desktop */}
         <nav className="hidden md:flex space-x-6 w-[70%] justify-between">
           <a
             href="#home"
-            className="text-gray-600 hover:text-amber-600 transition-colors "
+            className="text-gray-600 hover:text-amber-600 transition-colors"
           >
             Home
           </a>
@@ -48,10 +60,29 @@ const Header = () => {
           </a>
         </nav>
 
-        {/* Sign Up Button */}
-        <div className="hidden md:block">
-          <button className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors">
-            Sign Up
+        {/* Auth Button and User Info */}
+        <div className="hidden md:flex items-center space-x-4">
+          {isAuthenticated && user && (
+            <div className="flex items-center space-x-2">
+              {user.picture && (
+                <div className="h-8 w-8 rounded-full overflow-hidden">
+                  <Image
+                    src={user.picture}
+                    alt={user.name || "User profile"}
+                    width={32}
+                    height={32}
+                    className="object-cover"
+                  />
+                </div>
+              )}
+              <span className="text-sm text-gray-700">{user.name}</span>
+            </div>
+          )}
+          <button
+            onClick={handleAuthAction}
+            className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors"
+          >
+            {isAuthenticated ? "Logout" : "Sign Up"}
           </button>
         </div>
       </div>
@@ -82,8 +113,27 @@ const Header = () => {
             <a href="#contact" className="text-gray-600 hover:text-gray-900">
               Contact
             </a>
-            <button className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors">
-              Sign Up
+            {isAuthenticated && user && (
+              <div className="flex items-center space-x-2 py-2">
+                {user.picture && (
+                  <div className="h-8 w-8 rounded-full overflow-hidden">
+                    <Image
+                      src={user.picture}
+                      alt={user.name || "User profile"}
+                      width={32}
+                      height={32}
+                      className="object-cover"
+                    />
+                  </div>
+                )}
+                <span className="text-sm text-gray-700">{user.name}</span>
+              </div>
+            )}
+            <button
+              onClick={handleAuthAction}
+              className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors w-full"
+            >
+              {isAuthenticated ? "Logout" : "Sign Up"}
             </button>
           </nav>
         </div>
