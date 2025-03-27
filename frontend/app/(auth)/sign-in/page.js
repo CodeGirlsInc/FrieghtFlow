@@ -17,7 +17,7 @@
 
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
@@ -25,46 +25,47 @@ import Image from "next/image";
 import backgroundImage from "@/public/backgroundimage.svg";
 import SocialAuthButton from "@/components/ui/SocialAuthButton";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import * as yup from "yup";
+import { yupResolver } from "@hookform/resolvers/yup";
+
+const schema = yup.object().shape({
+  email: yup.string().email("Invalid email format").required("Email is required"),
+  password: yup.string().min(8, "Password must be at least 8 characters").required("Password is required"),
+});
 
 export default function SignIn() {
   const router = useRouter();
-  const { loginWithRedirect, isAuthenticated, isLoading, error } = useAuth0();
-
-  useEffect(() => {
-    // Si está autenticado, redirigir al home
-    if (isAuthenticated) {
-      router.push('/');
+  const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0();
+  
+  const { 
+    register, 
+    handleSubmit, 
+    formState: { errors, isSubmitting },
+    setError 
+  } = useForm({
+    resolver: yupResolver(schema),
+    defaultValues: {
+      email: "",
+      password: ""
     }
-    // Si hay un error de autenticación, mantener en la página de sign-in
-    if (error) {
-      console.error('Authentication error:', error);
-    }
-  }, [isAuthenticated, error, router]);
+  });
 
-  const handleLogin = async (provider = null) => {
+  const onSubmit = async (data) => {
+    console.log('Form submitted with:', data);
+  };
+
+  const handleSocialLogin = async (provider = null) => {
     try {
-      const options = {
+      await loginWithRedirect({
         authorizationParams: {
-          redirect_uri: window.location.origin + '/callback',
-        },
-        appState: {
-          returnTo: window.location.origin,
-        }
-      };
-
-      if (provider) {
-        options.authorizationParams = {
-          ...options.authorizationParams,
           connection: provider,
-          prompt: 'select_account',
-          screen_hint: 'signup',
           scope: 'openid profile email',
-        };
-      }
-
-      await loginWithRedirect(options);
+          screen_hint: 'login',
+        }
+      });
     } catch (error) {
-      console.error('Error during login:', error);
+      console.error('Error during social login:', error);
     }
   };
 
@@ -116,7 +117,7 @@ export default function SignIn() {
         </div>
       </section>
 
-      {/* Right section with auth buttons */}
+      {/* Right section with auth form */}
       <section className="w-[470px] xl:w-[634.2px] flex flex-col items-center py-16 px-8 lg:px-14 xl:px-20">
         <div className="min-h-[547.6px] h-auto w-full space-y-5">
           <div className="space-y-2 mb-5">
@@ -129,41 +130,91 @@ export default function SignIn() {
             </p>
           </div>
 
-          <div className="space-y-4">
-            <Button
-              onClick={() => handleLogin()}
-              text="Sign in with Email"
-              className="w-full h-[57px] open_sans rounded-[4.5px] text-[15.6px] bg-amber-600 hover:bg-amber-700"
-            />
-
-            {/* Social authentication buttons */}
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  {...register("email")}
+                  className={`mt-1 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500 ${
+                    errors.email ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Example@email.com"
+                  disabled={isSubmitting}
+                />
+                {errors.email && (
+                  <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                )}
               </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or continue with</span>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  {...register("password")}
+                  className={`mt-1 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500 ${
+                    errors.password ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="At least 8 characters"
+                  disabled={isSubmitting}
+                />
+                {errors.password && (
+                  <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+                )}
+                <div className="flex justify-end mt-1">
+                  <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500">
+                    Forgot Password?
+                  </Link>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-3">
-              <SocialAuthButton
-                provider="google"
-                onClick={() => handleLogin('google-oauth2')}
-              />
-              <SocialAuthButton
-                provider="facebook"
-                onClick={() => handleLogin('facebook')}
+              {errors.root && (
+                <p className="text-sm text-red-600 text-center">{errors.root.message}</p>
+              )}
+
+              <Button
+                type="submit"
+                text={isSubmitting ? "Signing in..." : "Sign in with Email"}
+                className="w-full h-[57px] open_sans rounded-[4.5px] text-[15.6px] bg-amber-600 hover:bg-amber-700 disabled:opacity-50"
+                disabled={isSubmitting}
               />
             </div>
+          </form>
 
-            <p className="flex gap-1 justify-center text-center open-sans text-[15.6px] pt-4">
-              Don&apos;t have an account?{" "}
-              <Link href="/sign-up" className="text-blue-600">
-                Sign up
-              </Link>
-            </p>
+          {/* Social authentication buttons */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or continue with</span>
+            </div>
           </div>
+
+          <div className="space-y-3">
+            <SocialAuthButton
+              provider="google"
+              onClick={() => handleSocialLogin('google-oauth2')}
+            />
+            <SocialAuthButton
+              provider="facebook"
+              onClick={() => handleSocialLogin('facebook')}
+            />
+          </div>
+
+          <p className="flex gap-1 justify-center text-center open-sans text-[15.6px] pt-4">
+            Don&apos;t have an account?{" "}
+            <Link href="/sign-up" className="text-blue-600">
+              Sign up
+            </Link>
+          </p>
         </div>
       </section>
     </div>
