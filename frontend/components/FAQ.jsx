@@ -29,7 +29,7 @@ const FAQ = () => {
   };
 
   return (
-    <div className="p-6 lg:px-20 md:px-10 px-5">
+    <div className="p-6 lg:px-20 md:px-10 px-5 w-full">
       <div className="grid lg:grid-cols-2 grid-cols-1 gap-8">
         <div>
           <h1 className="lg:text-4xl text-2xl font-semibold">
