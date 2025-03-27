@@ -48,7 +48,7 @@ const pricingPlans = [
 
 function Pricing() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-[#F4EBDA] py-3 space-y-5">
+    <div className=" w-full flex flex-col items-center justify-center min-h-screen bg-[#F4EBDA] py-3 space-y-5">
       <div className="text-center space-y-3">
         <h1 className="text-3xl font-semibold text-[#313435] uppercase">
           Pricing Plans
