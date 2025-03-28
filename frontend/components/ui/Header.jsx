@@ -61,21 +61,21 @@ const Header = () => {
         </nav>
 
         {/* Auth Button and User Info */}
-        <div className="hidden md:flex items-center space-x-4">
+        <div className="hidden md:flex items-center gap-2">
           {isAuthenticated && user && (
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center ml-6 gap-2 border-2 border-amber-600 rounded-[10px]">
               {user.picture && (
-                <div className="h-8 w-8 rounded-full overflow-hidden">
+                <div className="flex items-center justify-center h-[60px] w-[60px] overflow-hidden rounded-full ml-2">
                   <Image
                     src={user.picture}
                     alt={user.name || "User profile"}
-                    width={32}
-                    height={32}
+                    width={60}
+                    height={60}
                     className="object-cover"
                   />
                 </div>
               )}
-              <span className="text-sm text-gray-700">{user.name}</span>
+              <span className="text-sm text-gray-700 text-center">{user.name}</span>
             </div>
           )}
           <button

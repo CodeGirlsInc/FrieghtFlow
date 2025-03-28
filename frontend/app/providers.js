@@ -6,22 +6,12 @@ import { useRouter } from 'next/navigation';
 export function Providers({ children }) {
   const router = useRouter();
 
-  const onRedirectCallback = (appState, user) => {
-    // Verificar si hay error en la URL
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const error = params.get('error');
-      const errorDescription = params.get('error_description');
-
-      // Si el error es access_denied (usuario canceló la autenticación)
-      if (error === 'access_denied') {
-        router.push('/sign-in');
-        return;
-      }
-    }
-
-    // Si no hay error, proceder con la redirección normal
-    router.push(appState?.returnTo || '/');
+  const onRedirectCallback = (appState) => {
+    window.history.replaceState(
+      {},
+      document.title,
+      appState?.returnTo || window.location.pathname
+    );
   };
 
   const onError = (error) => {
@@ -31,7 +21,7 @@ export function Providers({ children }) {
 
   const redirectUri = typeof window !== 'undefined' 
     ? `${window.location.origin}/callback`
-    : 'http://localhost:3000/callback';
+    : process.env.NEXT_PUBLIC_AUTH0_REDIRECT_URI;
 
   return (
     <Auth0Provider
@@ -39,8 +29,9 @@ export function Providers({ children }) {
       clientId={process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID}
       authorizationParams={{
         redirect_uri: redirectUri,
+        audience: process.env.NEXT_PUBLIC_AUTH0_AUDIENCE,
         scope: 'openid profile email',
-        prompt: 'select_account',
+        response_type: 'token id_token',
       }}
       useRefreshTokens={true}
       cacheLocation="localstorage"

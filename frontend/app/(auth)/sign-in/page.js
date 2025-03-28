@@ -25,31 +25,30 @@ import Image from "next/image";
 import backgroundImage from "@/public/backgroundimage.svg";
 import SocialAuthButton from "@/components/ui/SocialAuthButton";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, FormProvider } from "react-hook-form";
 import * as yup from "yup";
 import { yupResolver } from "@hookform/resolvers/yup";
+import Input from "@/components/ui/Input";
 
 const schema = yup.object().shape({
-  email: yup.string().email("Invalid email format").required("Email is required"),
-  password: yup.string().min(8, "Password must be at least 8 characters").required("Password is required"),
+  Email: yup.string().email("Invalid email format").required("Email is required"),
+  Password: yup.string().min(8, "Password must be at least 8 characters").required("Password is required"),
 });
 
 export default function SignIn() {
   const router = useRouter();
   const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0();
   
-  const { 
-    register, 
-    handleSubmit, 
-    formState: { errors, isSubmitting },
-    setError 
-  } = useForm({
+  const methods = useForm({
     resolver: yupResolver(schema),
     defaultValues: {
-      email: "",
-      password: ""
-    }
+      Email: "",
+      Password: ""
+    },
+    mode: "onSubmit"
   });
+
+  const { formState: { errors, isSubmitting } } = methods;
 
   const onSubmit = async (data) => {
     console.log('Form submitted with:', data);
@@ -130,63 +129,46 @@ export default function SignIn() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  {...register("email")}
-                  className={`mt-1 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500 ${
-                    errors.email ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="Example@email.com"
-                  disabled={isSubmitting}
-                />
-                {errors.email && (
-                  <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  {...register("password")}
-                  className={`mt-1 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500 ${
-                    errors.password ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="At least 8 characters"
-                  disabled={isSubmitting}
-                />
-                {errors.password && (
-                  <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
-                )}
-                <div className="flex justify-end mt-1">
-                  <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500">
-                    Forgot Password?
-                  </Link>
-                </div>
-              </div>
-
-              {errors.root && (
-                <p className="text-sm text-red-600 text-center">{errors.root.message}</p>
-              )}
-
-              <Button
-                type="submit"
-                text={isSubmitting ? "Signing in..." : "Sign in with Email"}
-                className="w-full h-[57px] open_sans rounded-[4.5px] text-[15.6px] bg-amber-600 hover:bg-amber-700 disabled:opacity-50"
-                disabled={isSubmitting}
+          <FormProvider {...methods}>
+            <form
+              onSubmit={methods.handleSubmit(onSubmit)}
+              className="flex flex-col space-y-4 mt-6"
+            >
+              <Input
+                type="email"
+                name="Email"
+                label="Email"
+                placeholder="Example@email.com"
+                required={true}
+                ErrorMessage={errors.Email?.message}
               />
-            </div>
-          </form>
+
+              <Input
+                type="password"
+                name="Password"
+                label="Password"
+                placeholder="At least 8 characters"
+                required={true}
+                minLength={8}
+                ErrorMessage={errors.Password?.message}
+              />
+
+              <div className="flex justify-end">
+                <Link href="/forgot-password" className="text-blue-600 text-sm">
+                  Forgot Password?
+                </Link>
+              </div>
+
+              <div className="pt-4">
+                <Button
+                  type="submit"
+                  text={isSubmitting ? "Signing in..." : "Sign in"}
+                  className="w-full h-[57px] open_sans rounded-[4.5px] text-[15.6px] bg-amber-600 hover:bg-amber-700"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </form>
+          </FormProvider>
 
           {/* Social authentication buttons */}
           <div className="relative">
