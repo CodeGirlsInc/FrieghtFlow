@@ -1,3 +1,8 @@
+
+"use client"
+import Image from 'next/image'
+import Button from "./ui/Button"
+import SearchButton from "./ui/SearchButton"
 "use client";
 import Button from "./ui/Button";
 import SearchButton from "./ui/SearchButton";
@@ -29,6 +34,12 @@ const Partners = () => {
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
                     <div className="flex justify-center">
+                      <Image 
+                        src="/logo.png" 
+                        alt="Logo" 
+                        width={150} 
+                        height={125} 
+                        className="object-contain"
                       <Image
                         src="/logo.png"
                         alt="Logo"
@@ -61,5 +72,3 @@ const Partners = () => {
     </section>
   );
 };
-
-export default Partners;
