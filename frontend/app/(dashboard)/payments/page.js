@@ -508,6 +508,550 @@ const PaymentsPage = () => {
     );
   };
 
+  // Render the transactions tab
+  const renderTransactionsTab = () => {
+    return (
+      <div className="bg-white rounded-xl border border-[#d9d9d9] shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-[#d9d9d9]">
+          <h2 className="text-xl font-bold text-[#0c1421] mb-4">
+            Transaction History
+          </h2>
+
+          {/* Filters */}
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#313957]"
+                  size={18}
+                />
+                <input
+                  type="text"
+                  placeholder="Search transactions..."
+                  className="w-full pl-10 pr-4 py-2 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                  value={transactionFilters.search}
+                  onChange={(e) =>
+                    setTransactionFilters({
+                      ...transactionFilters,
+                      search: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <select
+                className="px-3 py-2 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                value={transactionFilters.type}
+                onChange={(e) =>
+                  setTransactionFilters({
+                    ...transactionFilters,
+                    type: e.target.value,
+                  })
+                }
+              >
+                <option value="all">All Types</option>
+                <option value="payment">Payments</option>
+                <option value="refund">Refunds</option>
+                <option value="deposit">Deposits</option>
+              </select>
+
+              <select
+                className="px-3 py-2 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                value={transactionFilters.method}
+                onChange={(e) =>
+                  setTransactionFilters({
+                    ...transactionFilters,
+                    method: e.target.value,
+                  })
+                }
+              >
+                <option value="all">All Methods</option>
+                <option value="Credit Card">Credit Card</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="StarkNet Wallet">StarkNet Wallet</option>
+              </select>
+
+              <button className="flex items-center px-3 py-2 border border-[#d9d9d9] rounded-md bg-[#f4f6f3] text-[#313957]">
+                <Calendar size={18} className="mr-2" />
+                <span>Date</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Transaction List */}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-[#f4f6f3] border-b border-[#d9d9d9]">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Description
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Method
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Amount
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#d9d9d9]">
+              {filteredTransactions.map((transaction) => (
+                <tr key={transaction.id} className="hover:bg-[#f4f6f3]/50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-[#313957]">
+                    {formatDate(transaction.date)}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-[#0c1421]">
+                    <div className="flex items-center">
+                      {transaction.type === "payment" && (
+                        <ArrowUpRight size={16} className="text-red-500 mr-2" />
+                      )}
+                      {transaction.type === "refund" && (
+                        <ArrowDownUp
+                          size={16}
+                          className="text-green-500 mr-2"
+                        />
+                      )}
+                      {transaction.type === "deposit" && (
+                        <ArrowDownUp
+                          size={16}
+                          className="text-green-500 mr-2"
+                        />
+                      )}
+                      {transaction.description}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-[#313957]">
+                    {transaction.method}
+                    {transaction.method === "StarkNet Wallet" && (
+                      <div className="text-xs text-[#b57704]">
+                        Blockchain verified
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      {transaction.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                    <span
+                      className={
+                        transaction.amount < 0
+                          ? "text-red-500"
+                          : "text-green-500"
+                      }
+                    >
+                      {formatCurrency(transaction.amount)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-[#313957] text-right">
+                    <button
+                      onClick={() => handleViewTransaction(transaction)}
+                      className="text-[#b57704] hover:text-[#9c6503]"
+                    >
+                      Details
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {filteredTransactions.length === 0 && (
+          <div className="p-6 text-center text-[#313957]">
+            No transactions found matching your filters
+          </div>
+        )}
+
+        <div className="p-4 border-t border-[#d9d9d9] flex justify-between items-center">
+          <div className="text-sm text-[#313957]">
+            Showing {filteredTransactions.length} of{" "}
+            {mockPaymentData.recentTransactions.length} transactions
+          </div>
+
+          <div className="flex gap-2">
+            <button className="px-3 py-1 border border-[#d9d9d9] rounded-md bg-[#f4f6f3] text-[#313957]">
+              Previous
+            </button>
+            <button className="px-3 py-1 border border-[#d9d9d9] rounded-md bg-[#f4f6f3] text-[#313957]">
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render the payment methods tab
+  const renderPaymentMethodsTab = () => {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-xl border border-[#d9d9d9] shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-[#d9d9d9] flex justify-between items-center">
+            <h2 className="text-xl font-bold text-[#0c1421]">
+              Payment Methods
+            </h2>
+            <button
+              onClick={() => setShowAddPaymentModal(true)}
+              className="flex items-center bg-[#b57704] text-white px-4 py-2 rounded-md text-sm hover:bg-[#9c6503] transition-colors"
+            >
+              <Plus size={16} className="mr-2" />
+              Add Payment Method
+            </button>
+          </div>
+
+          <div className="divide-y divide-[#d9d9d9]">
+            {mockPaymentData.paymentMethods.map((method) => (
+              <div
+                key={method.id}
+                className="p-6 flex flex-col md:flex-row md:items-center md:justify-between"
+              >
+                <div className="flex items-center mb-4 md:mb-0">
+                  {method.type === "credit_card" && (
+                    <CreditCard size={24} className="text-[#b57704] mr-4" />
+                  )}
+                  {method.type === "bank_account" && (
+                    <Globe size={24} className="text-[#b57704] mr-4" />
+                  )}
+                  {method.type === "starknet_wallet" && (
+                    <Wallet size={24} className="text-[#b57704] mr-4" />
+                  )}
+
+                  <div>
+                    <div className="font-medium text-[#0c1421]">
+                      {method.name}
+                    </div>
+                    {method.type === "credit_card" && (
+                      <div className="text-sm text-[#313957]">
+                        •••• {method.last4} | Expires {method.expiryMonth}/
+                        {method.expiryYear}
+                      </div>
+                    )}
+                    {method.type === "bank_account" && (
+                      <div className="text-sm text-[#313957]">
+                        {method.bankName} •••• {method.last4}
+                      </div>
+                    )}
+                    {method.type === "starknet_wallet" && (
+                      <div className="text-sm text-[#313957]">
+                        {method.address.substring(0, 6)}...
+                        {method.address.substring(method.address.length - 4)}
+                      </div>
+                    )}
+                  </div>
+
+                  {method.isDefault && (
+                    <span className="ml-4 px-2 py-1 text-xs font-medium bg-[#f4f6f3] text-[#313957] rounded">
+                      Default
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {!method.isDefault && (
+                    <button className="text-sm text-[#313957] hover:text-[#0c1421]">
+                      Set as Default
+                    </button>
+                  )}
+                  <button className="text-sm text-red-500 hover:text-red-700">
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-[#d9d9d9] shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-[#d9d9d9]">
+            <h2 className="text-xl font-bold text-[#0c1421]">
+              StarkNet Integration
+            </h2>
+          </div>
+
+          <div className="p-6">
+            <div className="flex items-start gap-6">
+              <div className="bg-[#f4f6f3] p-4 rounded-lg">
+                <Wallet size={40} className="text-[#b57704]" />
+              </div>
+
+              <div className="flex-1">
+                <h />
+              </div>
+
+              <div className="flex-1">
+                <h3 className="text-lg font-medium text-[#0c1421] mb-2">
+                  Connect Your StarkNet Wallet
+                </h3>
+                <p className="text-[#313957] mb-4">
+                  Connect your StarkNet wallet to enable blockchain-based
+                  payments, enhanced security, and transparent transaction
+                  verification.
+                </p>
+
+                {isWalletConnected ? (
+                  <div className="flex flex-col md:flex-row md:items-center gap-4">
+                    <div className="flex items-center text-green-600">
+                      <CheckCircle2 size={20} className="mr-2" />
+                      <span>Wallet Connected</span>
+                    </div>
+                    <div className="text-[#313957]">
+                      Balance: {walletBalance} ETH
+                    </div>
+                    <button className="text-[#b57704] hover:text-[#9c6503]">
+                      View on StarkScan
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleConnectWallet}
+                    className="bg-[#b57704] text-white px-4 py-2 rounded-md hover:bg-[#9c6503] transition-colors"
+                  >
+                    Connect Wallet
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-8 border-t border-[#d9d9d9] pt-6">
+              <h3 className="text-lg font-medium text-[#0c1421] mb-4">
+                Benefits of StarkNet Payments
+              </h3>
+
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="bg-[#f4f6f3] p-4 rounded-lg">
+                  <div className="flex items-center mb-2">
+                    <Shield size={20} className="text-[#b57704] mr-2" />
+                    <span className="font-medium text-[#0c1421]">
+                      Enhanced Security
+                    </span>
+                  </div>
+                  <p className="text-sm text-[#313957]">
+                    Blockchain-based payments provide cryptographic security and
+                    immutable transaction records.
+                  </p>
+                </div>
+
+                <div className="bg-[#f4f6f3] p-4 rounded-lg">
+                  <div className="flex items-center mb-2">
+                    <ArrowDownUp size={20} className="text-[#b57704] mr-2" />
+                    <span className="font-medium text-[#0c1421]">
+                      Lower Fees
+                    </span>
+                  </div>
+                  <p className="text-sm text-[#313957]">
+                    Save on transaction fees compared to traditional payment
+                    processors, especially for international shipments.
+                  </p>
+                </div>
+
+                <div className="bg-[#f4f6f3] p-4 rounded-lg">
+                  <div className="flex items-center mb-2">
+                    <Clock size={20} className="text-[#b57704] mr-2" />
+                    <span className="font-medium text-[#0c1421]">
+                      Faster Settlement
+                    </span>
+                  </div>
+                  <p className="text-sm text-[#313957]">
+                    Payments settle quickly on StarkNet, reducing delays in
+                    shipment processing and improving cash flow.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render the invoices tab
+  const renderInvoicesTab = () => {
+    return (
+      <div className="bg-white rounded-xl border border-[#d9d9d9] shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-[#d9d9d9] flex justify-between items-center">
+          <h2 className="text-xl font-bold text-[#0c1421]">Invoices</h2>
+
+          <div className="flex gap-2">
+            <div className="relative">
+              <Search
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#313957]"
+                size={18}
+              />
+              <input
+                type="text"
+                placeholder="Search invoices..."
+                className="w-full pl-10 pr-4 py-2 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+              />
+            </div>
+
+            <button className="flex items-center px-3 py-2 border border-[#d9d9d9] rounded-md bg-[#f4f6f3] text-[#313957]">
+              <Filter size={18} className="mr-2" />
+              <span>Filter</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-[#f4f6f3] border-b border-[#d9d9d9]">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Invoice #
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Due Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Description
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Amount
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-[#313957] uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#d9d9d9]">
+              {/* Pending Invoices */}
+              {mockPaymentData.pendingInvoices.map((invoice) => (
+                <tr key={invoice.id} className="hover:bg-[#f4f6f3]/50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#0c1421]">
+                    {invoice.id}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-[#313957]">
+                    {formatDate(invoice.date)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-[#313957]">
+                    {formatDate(invoice.dueDate)}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-[#313957]">
+                    {invoice.description}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                    {formatCurrency(invoice.amount)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                      {invoice.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => handlePayInvoice(invoice)}
+                        className="text-[#b57704] hover:text-[#9c6503]"
+                      >
+                        Pay
+                      </button>
+                      <button className="text-[#313957] hover:text-[#0c1421]">
+                        <Download size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+
+              {/* Paid Invoices (Mock) */}
+              <tr className="hover:bg-[#f4f6f3]/50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#0c1421]">
+                  INV-2025-000
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-[#313957]">
+                  Mar 15, 2025
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-[#313957]">
+                  Mar 30, 2025
+                </td>
+                <td className="px-6 py-4 text-sm text-[#313957]">
+                  Shipment #SH-9850 - Standard Freight
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                  $5,200.00
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center">
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                    paid
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                  <div className="flex justify-end gap-2">
+                    <button className="text-[#313957] hover:text-[#0c1421]">
+                      <Download size={18} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <tr className="hover:bg-[#f4f6f3]/50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#0c1421]">
+                  INV-2024-099
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-[#313957]">
+                  Mar 10, 2025
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-[#313957]">
+                  Mar 25, 2025
+                </td>
+                <td className="px-6 py-4 text-sm text-[#313957]">
+                  Shipment #SH-9845 - Express Shipping
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                  $3,800.00
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center">
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                    paid
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                  <div className="flex justify-end gap-2">
+                    <button className="text-[#313957] hover:text-[#0c1421]">
+                      <Download size={18} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="p-4 border-t border-[#d9d9d9] flex justify-between items-center">
+          <div className="text-sm text-[#313957]">Showing 4 of 24 invoices</div>
+
+          <div className="flex gap-2">
+            <button className="px-3 py-1 border border-[#d9d9d9] rounded-md bg-[#f4f6f3] text-[#313957]">
+              Previous
+            </button>
+            <button className="px-3 py-1 border border-[#d9d9d9] rounded-md bg-[#f4f6f3] text-[#313957]">
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
 };
 
 export default PaymentsPage;
