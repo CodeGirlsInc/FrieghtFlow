@@ -1,22 +1,4 @@
-// export const metadata = {
-//   title: "Sign Up",
-//   description: "Sign Up to FreightFlow",
-//   robots: {
-//     index: false,
-//     follow: false,
-//   },
-// };
-// export const metadata = {
-//   title: "Sign Up",
-//   description: "Sign Up to FreightFlow",
-//   robots: {
-//     index: false,
-//     follow: false,
-//   },
-// };
-
 "use client";
-
 import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import Button from "@/components/ui/Button";
@@ -38,7 +20,7 @@ const schema = yup.object().shape({
 export default function SignIn() {
   const router = useRouter();
   const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0();
-  
+
   const methods = useForm({
     resolver: yupResolver(schema),
     defaultValues: {
@@ -83,11 +65,10 @@ export default function SignIn() {
         <div className="sm:hidden w-full h-[201px] relative rounded-t-sm overflow-hidden">
           <div className="absolute top-0 bottom-0 left-0 right-0 bg-[#00000085]/50 z-40"></div>
           <Image
-            src={backgroundImage}
-            layout="fill"
-            objectFit="cover"
+            src={backgroundImage || "/placeholder.svg"}
+            fill
             alt="Freight container ship illustration"
-            className="z-0"
+            className="object-cover z-0"
           />
         </div>
 
@@ -95,11 +76,10 @@ export default function SignIn() {
         <div className="hidden sm:block lg:hidden w-full h-[400px] relative rounded-t-sm overflow-hidden">
           <div className="absolute top-0 bottom-0 left-0 right-0 bg-[#00000085]/50 z-40"></div>
           <Image
-            src={backgroundImage}
-            layout="fill"
-            objectFit="cover"
+            src={backgroundImage || "/placeholder.svg"}
+            fill
             alt="Freight container ship illustration"
-            className="z-0"
+            className="object-cover z-0"
           />
         </div>
 
@@ -107,11 +87,10 @@ export default function SignIn() {
         <div className="hidden lg:block absolute top-0 bottom-0 left-0 right-0">
           <div className="absolute top-0 bottom-0 left-0 right-0 bg-[#00000085]/50 z-40"></div>
           <Image
-            src={backgroundImage}
-            layout="fill"
-            objectFit="cover"
+            src={backgroundImage || "/placeholder.svg"}
+            fill
             alt="Freight container ship illustration"
-            className="z-0"
+            className="object-cover z-0"
           />
         </div>
       </section>
