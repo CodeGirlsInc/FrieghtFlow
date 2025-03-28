@@ -1,9 +1,11 @@
-import localFont from "next/font/local";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import { GoogleOAuthProvider } from "@react-oauth/google";
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+import { Providers } from "./providers";
 import Header from "@/components/ui/Header";
 import Footer from "@/components/ui/Footer";
+
+const inter = Inter({ subsets: ["latin"] });
+
 export const metadata = {
   metadataBase: new URL("https://your-site.com"),
   title: {
@@ -17,36 +19,6 @@ export const metadata = {
     googleBot: {
       index: true,
       follow: true,
-      googleBot: {
-         index: true,
-         follow: true,
-         "max-video-preview": -1,
-         "max-image-preview": "large",
-         "max-snippet": -1,
-      },
-   },
-   other: {
-      "script:ld+json": {
-         "@context": "https://schema.org",
-         "@type": "Organization",
-         name: "FreightFlow",
-         description: "Efficient freight management and logistics solutions",
-         url: "https://your-site.com",
-      },
-   },
-};
-
-export default function RootLayout({children}) {
-   return (
-      <html lang="en">
-         <body>{
-        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-         {children}
-      </GoogleOAuthProvider> }</body>
-      </html>
-   );
-}
-=======
       "max-video-preview": -1,
       "max-image-preview": "large",
       "max-snippet": -1,
@@ -67,10 +39,12 @@ export default function RootLayout({children}) {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>
-        <Header />
-        {children}
-        <Footer/>
+      <body className={inter.className}>
+        <Providers>
+          <Header />
+          {children}
+          <Footer/>
+        </Providers>
       </body>
     </html>
   );
