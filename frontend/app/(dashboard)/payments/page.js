@@ -428,10 +428,11 @@ const PaymentsPage = () => {
 
                   <div className="flex items-center gap-4">
                     <div
-                      className={`text-lg font-bold ${transaction.amount < 0
-                        ? "text-red-500"
-                        : "text-green-500"
-                        }`}
+                      className={`text-lg font-bold ${
+                        transaction.amount < 0
+                          ? "text-red-500"
+                          : "text-green-500"
+                      }`}
                     >
                       {formatCurrency(transaction.amount)}
                     </div>
@@ -1052,6 +1053,538 @@ const PaymentsPage = () => {
     );
   };
 
+  // Add Payment Method Modal
+  const renderAddPaymentModal = () => {
+    if (!showAddPaymentModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-lg max-w-md w-full">
+          <div className="p-6 border-b border-[#d9d9d9] flex justify-between items-center">
+            <h3 className="text-xl font-bold text-[#0c1421]">
+              Add Payment Method
+            </h3>
+            <button
+              onClick={() => setShowAddPaymentModal(false)}
+              className="text-[#313957] hover:text-[#0c1421]"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="p-6">
+            <div className="mb-6">
+              <label className="block text-[#313957] mb-2">Payment Type</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  className={`p-3 border rounded-md flex flex-col items-center ${
+                    newPaymentType === "credit_card"
+                      ? "border-[#b57704] bg-[#f4f6f3]"
+                      : "border-[#d9d9d9] hover:bg-[#f4f6f3]"
+                  }`}
+                  onClick={() => setNewPaymentType("credit_card")}
+                >
+                  <CreditCard size={24} className="mb-2" />
+                  <span className="text-sm">Credit Card</span>
+                </button>
+
+                <button
+                  className={`p-3 border rounded-md flex flex-col items-center ${
+                    newPaymentType === "bank_account"
+                      ? "border-[#b57704] bg-[#f4f6f3]"
+                      : "border-[#d9d9d9] hover:bg-[#f4f6f3]"
+                  }`}
+                  onClick={() => setNewPaymentType("bank_account")}
+                >
+                  <Globe size={24} className="mb-2" />
+                  <span className="text-sm">Bank Account</span>
+                </button>
+
+                <button
+                  className={`p-3 border rounded-md flex flex-col items-center ${
+                    newPaymentType === "starknet_wallet"
+                      ? "border-[#b57704] bg-[#f4f6f3]"
+                      : "border-[#d9d9d9] hover:bg-[#f4f6f3]"
+                  }`}
+                  onClick={() => setNewPaymentType("starknet_wallet")}
+                >
+                  <Wallet size={24} className="mb-2" />
+                  <span className="text-sm">StarkNet</span>
+                </button>
+              </div>
+            </div>
+
+            {newPaymentType === "credit_card" && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-[#313957] mb-2">Card Name</label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                    placeholder="Name on card"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-[#313957] mb-2">
+                    Card Number
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                    placeholder="1234 5678 9012 3456"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-[#313957] mb-2">
+                      Expiry Date
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                      placeholder="MM/YY"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[#313957] mb-2">CVC</label>
+                    <input
+                      type="text"
+                      className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                      placeholder="123"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {newPaymentType === "bank_account" && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-[#313957] mb-2">
+                    Account Name
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                    placeholder="Account holder name"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-[#313957] mb-2">Bank Name</label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                    placeholder="Bank name"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-[#313957] mb-2">
+                    Account Number
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                    placeholder="Account number"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-[#313957] mb-2">
+                    Routing Number
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                    placeholder="Routing number"
+                  />
+                </div>
+              </>
+            )}
+
+            {newPaymentType === "starknet_wallet" && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-[#313957] mb-2">
+                    Wallet Name
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                    placeholder="Name for this wallet"
+                  />
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-[#313957] mb-2">
+                    Wallet Address
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                    placeholder="StarkNet wallet address"
+                  />
+                </div>
+
+                <div className="flex justify-center mb-4">
+                  <button className="flex items-center bg-[#f4f6f3] text-[#0c1421] px-4 py-2 rounded-md hover:bg-[#e0e4dc] transition-colors">
+                    <Wallet size={18} className="mr-2" />
+                    Connect Wallet Instead
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div className="flex items-center mb-6">
+              <input
+                type="checkbox"
+                id="default-payment"
+                className="w-5 h-5 text-[#b57704] border-[#d9d9d9] rounded focus:ring-[#b57704]"
+              />
+              <label htmlFor="default-payment" className="ml-2 text-[#313957]">
+                Set as default payment method
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowAddPaymentModal(false)}
+                className="px-4 py-2 border border-[#d9d9d9] rounded-md text-[#313957] hover:bg-[#f4f6f3]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddPaymentMethod}
+                className="px-4 py-2 bg-[#b57704] text-white rounded-md hover:bg-[#9c6503]"
+              >
+                Add Payment Method
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Pay Invoice Modal
+  const renderPayInvoiceModal = () => {
+    if (!showPayInvoiceModal || !selectedInvoice) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-lg max-w-md w-full">
+          <div className="p-6 border-b border-[#d9d9d9] flex justify-between items-center">
+            <h3 className="text-xl font-bold text-[#0c1421]">Pay Invoice</h3>
+            <button
+              onClick={() => setShowPayInvoiceModal(false)}
+              className="text-[#313957] hover:text-[#0c1421]"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="p-6">
+            <div className="bg-[#f4f6f3] p-4 rounded-lg mb-6">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[#313957]">Invoice Number:</span>
+                <span className="font-medium text-[#0c1421]">
+                  {selectedInvoice.id}
+                </span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[#313957]">Description:</span>
+                <span className="font-medium text-[#0c1421]">
+                  {selectedInvoice.description}
+                </span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[#313957]">Due Date:</span>
+                <span className="font-medium text-[#0c1421]">
+                  {formatDate(selectedInvoice.dueDate)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-[#d9d9d9] mt-2">
+                <span className="text-[#313957] font-medium">Amount Due:</span>
+                <span className="font-bold text-xl text-[#0c1421]">
+                  {formatCurrency(selectedInvoice.amount)}
+                </span>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-[#313957] mb-2">
+                Select Payment Method
+              </label>
+              <select
+                className="w-full p-3 border border-[#d9d9d9] rounded-md bg-[#f4f6f3]"
+                value={selectedPaymentMethod}
+                onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+              >
+                <option value="">Select a payment method</option>
+                {mockPaymentData.paymentMethods.map((method) => (
+                  <option key={method.id} value={method.id}>
+                    {method.name}{" "}
+                    {method.type === "credit_card" && `(•••• ${method.last4})`}
+                    {method.type === "bank_account" && `(${method.bankName})`}
+                    {method.type === "starknet_wallet" && "(StarkNet)"}
+                  </option>
+                ))}
+                <option value="account_balance">Use Account Balance</option>
+              </select>
+            </div>
+
+            <div className="flex justify-between items-center p-4 bg-[#f4f6f3] rounded-lg mb-6">
+              <div className="text-[#313957]">
+                <span className="block">Available Balance:</span>
+                <span className="font-medium text-[#0c1421]">
+                  {formatCurrency(mockPaymentData.balance.available)}
+                </span>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="use-balance"
+                  className="w-5 h-5 text-[#b57704] border-[#d9d9d9] rounded focus:ring-[#b57704]"
+                />
+                <label htmlFor="use-balance" className="ml-2 text-[#313957]">
+                  Apply balance to payment
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowPayInvoiceModal(false)}
+                className="px-4 py-2 border border-[#d9d9d9] rounded-md text-[#313957] hover:bg-[#f4f6f3]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCompletePayment}
+                className="px-4 py-2 bg-[#b57704] text-white rounded-md hover:bg-[#9c6503]"
+              >
+                Pay {formatCurrency(selectedInvoice.amount)}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Transaction Details Modal
+  const renderTransactionDetailsModal = () => {
+    if (!showTransactionDetails || !selectedTransaction) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-lg max-w-md w-full">
+          <div className="p-6 border-b border-[#d9d9d9] flex justify-between items-center">
+            <h3 className="text-xl font-bold text-[#0c1421]">
+              Transaction Details
+            </h3>
+            <button
+              onClick={() => setShowTransactionDetails(false)}
+              className="text-[#313957] hover:text-[#0c1421]"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center">
+                {selectedTransaction.type === "payment" && (
+                  <ArrowUpRight size={24} className="text-red-500 mr-2" />
+                )}
+                {selectedTransaction.type === "refund" && (
+                  <ArrowDownUp size={24} className="text-green-500 mr-2" />
+                )}
+                {selectedTransaction.type === "deposit" && (
+                  <ArrowDownUp size={24} className="text-green-500 mr-2" />
+                )}
+                <span className="font-medium text-[#0c1421]">
+                  {selectedTransaction.type.charAt(0).toUpperCase() +
+                    selectedTransaction.type.slice(1)}
+                </span>
+              </div>
+              <span
+                className={`text-xl font-bold ${
+                  selectedTransaction.amount < 0
+                    ? "text-red-500"
+                    : "text-green-500"
+                }`}
+              >
+                {formatCurrency(selectedTransaction.amount)}
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <span className="text-[#313957]">Transaction ID:</span>
+                <span className="font-medium text-[#0c1421]">
+                  {selectedTransaction.id}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-[#313957]">Date:</span>
+                <span className="font-medium text-[#0c1421]">
+                  {formatDate(selectedTransaction.date)}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-[#313957]">Description:</span>
+                <span className="font-medium text-[#0c1421]">
+                  {selectedTransaction.description}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-[#313957]">Payment Method:</span>
+                <span className="font-medium text-[#0c1421]">
+                  {selectedTransaction.method}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-[#313957]">Status:</span>
+                <span className="font-medium text-green-600 capitalize">
+                  {selectedTransaction.status}
+                </span>
+              </div>
+
+              {selectedTransaction.txHash && (
+                <div className="flex justify-between">
+                  <span className="text-[#313957]">Blockchain Hash:</span>
+                  <div className="flex items-center">
+                    <span className="font-medium text-[#0c1421] mr-2">
+                      {selectedTransaction.txHash.substring(0, 6)}...
+                      {selectedTransaction.txHash.substring(
+                        selectedTransaction.txHash.length - 4
+                      )}
+                    </span>
+                    <a
+                      href={`https://starkscan.co/tx/${selectedTransaction.txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#b57704] hover:text-[#9c6503] ml-2"
+                    >
+                      <ExternalLink size={16} />
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-[#d9d9d9]">
+              <div className="flex justify-between">
+                <button
+                  onClick={() => setShowTransactionDetails(false)}
+                  className="px-4 py-2 border border-[#d9d9d9] rounded-md text-[#313957] hover:bg-[#f4f6f3]"
+                >
+                  Close
+                </button>
+                <button className="flex items-center px-4 py-2 bg-[#f4f6f3] text-[#313957] rounded-md hover:bg-[#e0e4dc]">
+                  <Download size={16} className="mr-2" />
+                  Download Receipt
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f4f6f3] text-[#171717] font-sans">
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-[#0c1421]">Payments</h1>
+            <p className="text-[#313957] mt-1">
+              Manage your payments, invoices, and payment methods
+            </p>
+          </div>
+
+          <div className="mt-4 md:mt-0 flex gap-2">
+            <button className="flex items-center bg-white border border-[#d9d9d9] text-[#313957] px-4 py-2 rounded-md hover:bg-[#f4f6f3]">
+              <Download size={18} className="mr-2" />
+              Export
+            </button>
+            <button className="flex items-center bg-[#b57704] text-white px-4 py-2 rounded-md hover:bg-[#9c6503]">
+              <Plus size={18} className="mr-2" />
+              Add Funds
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-xl border border-[#d9d9d9] shadow-sm mb-6">
+          <div className="flex overflow-x-auto">
+            <button
+              className={`px-6 py-4 font-medium text-sm border-b-2 ${
+                activeTab === "overview"
+                  ? "border-[#b57704] text-[#b57704]"
+                  : "border-transparent text-[#313957] hover:text-[#0c1421]"
+              }`}
+              onClick={() => setActiveTab("overview")}
+            >
+              Overview
+            </button>
+            <button
+              className={`px-6 py-4 font-medium text-sm border-b-2 ${
+                activeTab === "transactions"
+                  ? "border-[#b57704] text-[#b57704]"
+                  : "border-transparent text-[#313957] hover:text-[#0c1421]"
+              }`}
+              onClick={() => setActiveTab("transactions")}
+            >
+              Transactions
+            </button>
+            <button
+              className={`px-6 py-4 font-medium text-sm border-b-2 ${
+                activeTab === "invoices"
+                  ? "border-[#b57704] text-[#b57704]"
+                  : "border-transparent text-[#313957] hover:text-[#0c1421]"
+              }`}
+              onClick={() => setActiveTab("invoices")}
+            >
+              Invoices
+            </button>
+            <button
+              className={`px-6 py-4 font-medium text-sm border-b-2 ${
+                activeTab === "payment_methods"
+                  ? "border-[#b57704] text-[#b57704]"
+                  : "border-transparent text-[#313957] hover:text-[#0c1421]"
+              }`}
+              onClick={() => setActiveTab("payment_methods")}
+            >
+              Payment Methods
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === "overview" && renderOverviewTab()}
+        {activeTab === "transactions" && renderTransactionsTab()}
+        {activeTab === "invoices" && renderInvoicesTab()}
+        {activeTab === "payment_methods" && renderPaymentMethodsTab()}
+
+        {/* Modals */}
+        {renderAddPaymentModal()}
+        {renderPayInvoiceModal()}
+        {renderTransactionDetailsModal()}
+      </div>
+    </div>
+  );
 };
 
 export default PaymentsPage;
