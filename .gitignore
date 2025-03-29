@@ -21,3 +21,4 @@ build/
 # IDE settings
 .vscode/
 .idea/
+.qodo
