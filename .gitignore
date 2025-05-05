@@ -21,3 +21,6 @@ build/
 # IDE settings
 .vscode/
 .idea/
+.qodo
+
+.DS_Store.DS_Store
