@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-
+import { LoggingModule } from './logging/logging.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { InAppModule } from './in-app-/in-app-.module';
 import { InAppNotificationModule } from './in-app-notification/in-app-notification.module';
@@ -60,6 +60,7 @@ const ENV = process.env.NODE_ENV;
     }),
     UsersModule,
     MailModule,
+    LoggingModule,
     PaginationModule,
   ],
 
