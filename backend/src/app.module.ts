@@ -1,13 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-
-import { NotificationsModule } from './notifications/notifications.module';
-import { InAppModule } from './in-app-/in-app-.module';
-import { InAppNotificationModule } from './in-app-notification/in-app-notification.module';
-
-@Module({
-  imports: [NotificationsModule, NotificationModule, InAppModule, InAppNotificationModule],
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import environmentValidation from './environment.validation';
@@ -62,7 +55,6 @@ const ENV = process.env.NODE_ENV;
     MailModule,
     PaginationModule,
   ],
-
   controllers: [AppController],
   providers: [
     AppService,

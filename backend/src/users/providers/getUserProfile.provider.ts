@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { User } from '../entities/users.entity';
+import { User } from '../entities/user.entity';
 import { FindOneUserByIdProvider } from './findOneUserById.provider';
 
 @Injectable()

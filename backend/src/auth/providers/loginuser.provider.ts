@@ -10,7 +10,7 @@ import { HashingProvider } from './hashing.provider';
 import { UsersService } from 'src/users/providers/users.service';
 import { GenerateTokensProvider } from './generateTokens.provider';
 import { RefreshTokenRepositoryOperations } from './RefreshTokenCrud.repository';
-import { User } from 'src/users/entities/users.entity';
+import { User } from 'src/users/entities/user.entity';
 import { Request } from 'express';
 
 @Injectable()

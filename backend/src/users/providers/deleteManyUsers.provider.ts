@@ -5,8 +5,8 @@ import {
   RequestTimeoutException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { DeleteManyUsersDto } from '../dtos/deleteManyUsers.dto';
-import { User } from '../entities/users.entity';
+import { DeleteManyUsersDto } from '../dto/deleteManyUsers.dto';
+import { User } from '../entities/user.entity';
 
 @Injectable()
 export class DeleteManyUsersProvider {
@@ -14,7 +14,7 @@ export class DeleteManyUsersProvider {
 
   public async deleteUsers(deleteManyUsersDto: DeleteManyUsersDto) {
     const deletedUsers: string[] = [];
-    let user = undefined;
+    let user;
 
     // create a query runner
     const queryRunner = this.datasource.createQueryRunner();
@@ -38,7 +38,7 @@ export class DeleteManyUsersProvider {
 
         await queryRunner.manager.delete(User, userId);
 
-        deletedUsers.push(user);
+        // deletedUsers.push(user);
       }
 
       // if successful, commit the transactions

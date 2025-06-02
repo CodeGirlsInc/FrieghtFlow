@@ -18,16 +18,14 @@ import { LoginUserDto } from './dtos/loginuser.dto';
 import { RefreshTokenDto } from './dtos/refreshtoken.dto';
 import { LocalAuthGuard } from './guards/localAuth.guard';
 import { GetUser } from './decorators/getUser.decorator';
-import { User } from 'src/users/entities/users.entity';
+import { User } from 'src/users/entities/user.entity';
 import { Request } from 'express';
 import { RefreshTokenGuard } from './guards/refreshToken.guard';
 import { ForgotPasswordDto } from './dtos/forgotPassword.dto';
 import { ResetPasswordDto } from './dtos/resetPassword.dto';
 import { VerifyEmailDto } from './dtos/verifyEmail.dto';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { IsPublic } from './decorators/public.decorator';
 
-@UseGuards(ThrottlerGuard)
 @Controller('api/v1/auth')
 @ApiTags('Auth')
 export class AuthController {
@@ -38,12 +36,6 @@ export class AuthController {
   @Post('login')
   @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Throttle({
-    default: {
-      limit: 5,
-      ttl: 60000,
-    },
-  })
   @ApiOperation({
     summary: 'verifies and logs in a user',
     description:
@@ -78,12 +70,6 @@ export class AuthController {
   @Post('refresh-token')
   @UseGuards(RefreshTokenGuard)
   @HttpCode(HttpStatus.OK)
-  @Throttle({
-    default: {
-      limit: 10,
-      ttl: 60000,
-    },
-  })
   @ApiOperation({
     summary: 'Route to get an access token',
     description: 'An access token is successfully gotten upon success',
@@ -151,12 +137,6 @@ export class AuthController {
   @IsPublic()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @Throttle({
-    default: {
-      limit: 3,
-      ttl: 60000 * 15, // 3 requests per 15 mins
-    },
-  })
   @ApiOperation({
     summary: 'Request a password reset',
     description:
@@ -179,12 +159,6 @@ export class AuthController {
   @IsPublic()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @Throttle({
-    default: {
-      limit: 5,
-      ttl: 60000 * 60, // 5 requests per hour
-    },
-  })
   @ApiOperation({
     summary: 'user password reset',
     description: 'User enters a new password to reset their password',
@@ -209,12 +183,6 @@ export class AuthController {
   @IsPublic()
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
-  @Throttle({
-    default: {
-      limit: 5,
-      ttl: 60000,
-    },
-  })
   @ApiOperation({
     summary: 'Verify user email',
     description: 'Verify the user email with their token and id',
@@ -239,12 +207,6 @@ export class AuthController {
   @Post('resend-email-verification')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
-  @Throttle({
-    default: {
-      limit: 3,
-      ttl: 60000 * 15, // 3 requests per 15 mins
-    },
-  })
   @ApiOperation({
     summary: 'Resend the verification email',
     description: 'Resend the email verification to the user',

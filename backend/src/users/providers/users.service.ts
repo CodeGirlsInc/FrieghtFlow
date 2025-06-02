@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { CreateUserDto } from '../dtos/createuser.dto';
-import { User } from '../entities/users.entity';
+import { CreateUserDto } from '../dto/createuser.dto';
+import { User } from '../entities/user.entity';
 import { CreateSinlgeUserProvider } from './createsingleuser.provider';
 import { FindOneUserByEmailProvider } from './findOneUserByEmail.provider';
 import { FindOneUserByIdProvider } from './findOneUserById.provider';
 import { ChangePasswordProvider } from './changeUserPassword.provider';
-import { ChangePasswordDto } from '../dtos/changeUserPassword.dto';
+import { ChangePasswordDto } from '../dto/changeUserPassword.dto';
 import { ForgotPasswordDto } from 'src/auth/dtos/forgotPassword.dto';
 import { PasswordResetTokenProvider } from './setPasswordResetToken.provider';
 import { ResetPasswordDto } from 'src/auth/dtos/resetPassword.dto';
@@ -17,16 +17,16 @@ import { VerifyEmailDto } from 'src/auth/dtos/verifyEmail.dto';
 import { ResendEmailVerificationProvider } from './resendEmailVerification.provider';
 import { FindAllUsersProvider } from './findAllUsers.provider';
 import { UpdateOneUserProvider } from './updateOneUser.provider';
-import { UpdateUserDto } from '../dtos/updateUser.dto';
+import { UpdateUserDto } from '../dto/updateUser.dto';
 import { DeleteOneUserProvider } from './deleteOneUser.provider';
 import { PaginationQueryDto } from 'src/common/pagination/dtos/paginationQuery.dto';
-import { CreateManyUsersDto } from '../dtos/createManyUsers.dto';
+import { CreateManyUsersDto } from '../dto/createManyUsers.dto';
 import { CreateManyUsersProvider } from './createManyUsers.provider';
 import { DeleteManyUsersProvider } from './deleteManyUsers.provider';
-import { DeleteManyUsersDto } from '../dtos/deleteManyUsers.dto';
+import { DeleteManyUsersDto } from '../dto/deleteManyUsers.dto';
 import { GetUserProfileProvider } from './getUserProfile.provider';
 import { CreateAdminProvider } from './createAdminUser.provider';
-import { CreateAdminDto } from '../dtos/createAdmin.dto';
+import { CreateAdminDto } from '../dto/createAdmin.dto';
 import { UserRole } from 'src/auth/enums/roles.enum';
 
 @Injectable()

@@ -7,7 +7,7 @@ import {
 import { FindOneUserByEmailProvider } from 'src/users/providers/findOneUserByEmail.provider';
 import { HashingProvider } from 'src/auth/providers/hashing.provider';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from 'src/users/entities/users.entity';
+import { User } from 'src/users/entities/user.entity';
 import { Repository } from 'typeorm';
 import { GenerateRandomTokenProvider } from './generateRandomToken.provider';
 

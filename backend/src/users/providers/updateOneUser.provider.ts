@@ -4,10 +4,10 @@ import {
   RequestTimeoutException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from '../entities/users.entity';
+import { User } from '../entities/user.entity';
 import { Repository } from 'typeorm';
 import { HashingProvider } from 'src/auth/providers/hashing.provider';
-import { UpdateUserDto } from '../dtos/updateUser.dto';
+import { UpdateUserDto } from '../dto/updateUser.dto';
 import { FindOneUserByIdProvider } from './findOneUserById.provider';
 
 @Injectable()
