@@ -2,6 +2,16 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { Injectable, NestMiddleware } from '@nestjs/common';
+
+@Injectable()
+export class ContextMiddleware implements NestMiddleware {
+  use(req: any, res: any, next: () => void) {
+    // Attach dummy user for example; in real life, pull from auth token
+    req.user = { id: 'user-123', email: 'user@example.com' };
+    next();
+  }
+}
 
 async function bootstrap() {
   try {
