@@ -7,7 +7,7 @@ import { InAppModule } from './in-app-/in-app-.module';
 import { InAppNotificationModule } from './in-app-notification/in-app-notification.module';
 
 @Module({
-  imports: [NotificationsModule, NotificationModule, InAppModule, InAppNotificationModule],
+  imports: [NotificationsModule, NotificationModule, InAppModule, InAppNotificationModule, LocationModule],
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import environmentValidation from './environment.validation';
@@ -22,6 +22,7 @@ import jwtConfig from './auth/config/jwtConfig';
 import { JwtAuthGuard } from './auth/guards/jwtAuth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { PassportModule } from '@nestjs/passport';
+import { LocationModule } from './location/location.module';
 
 const ENV = process.env.NODE_ENV;
 
