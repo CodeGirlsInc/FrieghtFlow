@@ -53,6 +53,7 @@ const ENV = process.env.NODE_ENV;
     }),
     UsersModule,
     MailModule,
+    LoggingModule,
     PaginationModule,
   ],
   controllers: [AppController],
