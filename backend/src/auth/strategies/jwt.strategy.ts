@@ -6,7 +6,7 @@ import { ConfigType } from '@nestjs/config';
 import { UsersService } from 'src/users/providers/users.service';
 
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy) {
+export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
     @Inject(jwtConfig.KEY)
     private readonly jwtConfigurations: ConfigType<typeof jwtConfig>,
@@ -17,9 +17,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: jwtConfigurations.secret,
-      issuer: jwtConfigurations.issuer,
-      audience: jwtConfigurations.audience,
+      secretOrKey: jwtConfigurations.secret ?? 'defaultSecret',
+      issuer: jwtConfigurations.issuer ?? 'defaultIssuer',
+      audience: jwtConfigurations.audience ?? 'defaultAudience',
     });
   }
 

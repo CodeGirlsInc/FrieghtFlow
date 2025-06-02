@@ -4,12 +4,12 @@ import {
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { CreateAdminDto } from '../dtos/createAdmin.dto';
+import { CreateAdminDto } from '../dto/createAdmin.dto';
 import { UserRole } from 'src/auth/enums/roles.enum';
 import { FindOneUserByEmailProvider } from './findOneUserByEmail.provider';
 import { HashingProvider } from 'src/auth/providers/hashing.provider';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from '../entities/users.entity';
+import { User } from '../entities/user.entity';
 import { Repository } from 'typeorm';
 
 @Injectable()

@@ -6,9 +6,9 @@ import {
   RequestTimeoutException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ChangePasswordDto } from '../dtos/changeUserPassword.dto';
+import { ChangePasswordDto } from '../dto/changeUserPassword.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from '../entities/users.entity';
+import { User } from '../entities/user.entity';
 import { Repository } from 'typeorm';
 import { FindOneUserByEmailProvider } from './findOneUserByEmail.provider';
 import { HashingProvider } from 'src/auth/providers/hashing.provider';

@@ -8,8 +8,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { HashingProvider } from 'src/auth/providers/hashing.provider';
 import { Repository } from 'typeorm';
-import { User } from '../entities/users.entity';
-import { CreateUserDto } from '../dtos/createuser.dto';
+import { User } from '../entities/user.entity';
+import { CreateUserDto } from '../dto/createuser.dto';
 import { UserRole } from 'src/auth/enums/roles.enum';
 
 @Injectable()
@@ -24,7 +24,7 @@ export class CreateSinlgeUserProvider {
 
   public async createSingleUser(createUserDto: CreateUserDto) {
     // SECTION TO CHECK FOR EXISTING USER
-    let existingUser: User = null;
+    let existingUser = null;
 
     try {
       //check if the user already exists using the user's email
