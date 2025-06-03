@@ -22,3 +22,5 @@ build/
 .vscode/
 .idea/
 .qodo
+
+.DS_Store.DS_Store

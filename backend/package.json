@@ -35,14 +35,17 @@
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.7",
     "joi": "^17.13.3",
+    "nestjs-pino": "^4.4.0",
     "nodemailer": "^6.10.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "pg": "^8.13.3",
+    "pino-http": "^10.4.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.20",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

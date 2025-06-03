@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { RefreshTokenEntity } from '../entities/refreshToken.entity';
 import { Repository } from 'typeorm';
-import { User } from 'src/users/entities/users.entity';
+import { User } from 'src/users/entities/user.entity';
 import { Request } from 'express';
 import jwtConfig from '../config/jwtConfig';
 import { ConfigType } from '@nestjs/config';
