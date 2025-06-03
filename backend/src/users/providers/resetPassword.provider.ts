@@ -7,7 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Repository } from 'typeorm';
-import { User } from '../entities/users.entity';
+import { User } from '../entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ResetPasswordDto } from 'src/auth/dtos/resetPassword.dto';
 import { FindOneUserByEmailProvider } from './findOneUserByEmail.provider';
@@ -56,8 +56,8 @@ export class ResetPasswordProvider {
     // hash the new password, clear reset token fields and save the new password
     try {
       user.password = await this.hashingProvider.hashPassword(password);
-      user.passwordResetToken = null;
-      user.passwordResetExpires = null;
+      // user.passwordResetToken = null;
+      // user.passwordResetExpires = null;
 
       await this.usersRepository.save(user);
     } catch (error) {

@@ -18,7 +18,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
 
     super({
       jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
-      secretOrKey: secret,
+      secretOrKey: secret ?? 'dvdjlvv',
       passReqToCallback: true,
       audience,
       issuer,

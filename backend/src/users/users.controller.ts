@@ -12,25 +12,24 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './providers/users.service';
-import { CreateUserDto } from './dtos/createuser.dto';
+import { CreateUserDto } from './dto/createuser.dto';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { User } from './entities/users.entity';
+import { User } from './entities/user.entity';
 import { GetUser } from 'src/auth/decorators/getUser.decorator';
-import { ChangePasswordDto } from './dtos/changeUserPassword.dto';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { UpdateUserDto } from './dtos/updateUser.dto';
+import { ChangePasswordDto } from './dto/changeUserPassword.dto';
+import { UpdateUserDto } from './dto/updateUser.dto';
 import { PaginationQueryDto } from 'src/common/pagination/dtos/paginationQuery.dto';
-import { CreateManyUsersDto } from './dtos/createManyUsers.dto';
-import { DeleteManyUsersDto } from './dtos/deleteManyUsers.dto';
+import { CreateManyUsersDto } from './dto/createManyUsers.dto';
+import { DeleteManyUsersDto } from './dto/deleteManyUsers.dto';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/auth/enums/roles.enum';
 import { IsPublic } from 'src/auth/decorators/public.decorator';
-import { CreateAdminDto } from './dtos/createAdmin.dto';
+import { CreateAdminDto } from './dto/createAdmin.dto';
 
 @Controller('api/v1/users')
 @ApiTags('Users')
@@ -41,13 +40,6 @@ export class UsersController {
   @Post('sign-up')
   @HttpCode(HttpStatus.CREATED)
   @IsPublic()
-  @UseGuards(ThrottlerGuard)
-  @Throttle({
-    default: {
-      limit: 5,
-      ttl: 60000 * 10, // 5 requests per 10 mins
-    },
-  })
   @ApiOperation({
     summary: 'registers a new user',
     description:
@@ -71,14 +63,7 @@ export class UsersController {
 
   // CHANGE USER PASSWORD ENDPOINT
   @Post('change-password')
-  @UseGuards(ThrottlerGuard)
   @HttpCode(HttpStatus.OK)
-  @Throttle({
-    default: {
-      limit: 5,
-      ttl: 60000 * 30, // 5 requests every 30 mins
-    },
-  })
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Change user password',

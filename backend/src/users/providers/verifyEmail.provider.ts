@@ -7,7 +7,7 @@ import {
   RequestTimeoutException,
 } from '@nestjs/common';
 import { VerifyEmailDto } from 'src/auth/dtos/verifyEmail.dto';
-import { User } from '../entities/users.entity';
+import { User } from '../entities/user.entity';
 import { HashingProvider } from 'src/auth/providers/hashing.provider';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -62,8 +62,8 @@ export class VerifyEmailProvider {
 
     try {
       user.isEmailVerified = true;
-      user.emailVerificationExpiresIn = null;
-      user.emailVerificationToken = null;
+      // user.emailVerificationExpiresIn = null;
+      // user.emailVerificationToken = null;
 
       await this.usersRepository.save(user);
     } catch (error) {

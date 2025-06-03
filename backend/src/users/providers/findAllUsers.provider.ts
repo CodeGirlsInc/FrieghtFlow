@@ -1,5 +1,5 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from '../entities/users.entity';
+import { User } from '../entities/user.entity';
 import { Repository } from 'typeorm';
 import { PaginationProvider } from 'src/common/pagination/pagination.provider';
 import { PaginationQueryDto } from 'src/common/pagination/dtos/paginationQuery.dto';
