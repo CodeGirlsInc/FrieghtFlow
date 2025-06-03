@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { LoggingModule } from './logging/logging.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { InAppModule } from './in-app-/in-app-.module';
+import { InAppNotificationModule } from './in-app-notification/in-app-notification.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import environmentValidation from './environment.validation';
@@ -15,6 +19,7 @@ import jwtConfig from './auth/config/jwtConfig';
 import { JwtAuthGuard } from './auth/guards/jwtAuth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { PassportModule } from '@nestjs/passport';
+import { LocationModule } from './location/location.module';
 
 const ENV = process.env.NODE_ENV;
 
