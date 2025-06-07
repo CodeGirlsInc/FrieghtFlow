@@ -10,6 +10,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import environmentValidation from './environment.validation';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { CarriersModule } from './users/carrier.module';
 import { MailModule } from './mail/mail.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -20,6 +21,8 @@ import { JwtAuthGuard } from './auth/guards/jwtAuth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { PassportModule } from '@nestjs/passport';
 import { LocationModule } from './location/location.module';
+import { HealthModule } from "./health/health.module"
+import { MetricsInterceptor } from "./health/interceptors/metrics.interceptor"
 
 const ENV = process.env.NODE_ENV;
 
@@ -60,6 +63,8 @@ const ENV = process.env.NODE_ENV;
     MailModule,
     LoggingModule,
     PaginationModule,
+    CarriersModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
