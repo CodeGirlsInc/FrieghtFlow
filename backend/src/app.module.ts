@@ -11,6 +11,7 @@ import environmentValidation from './environment.validation';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CarriersModule } from './users/carrier.module';
+import { AnalyticsModule } from './users/analytics.module';
 import { MailModule } from './mail/mail.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -23,6 +24,7 @@ import { PassportModule } from '@nestjs/passport';
 import { LocationModule } from './location/location.module';
 import { HealthModule } from "./health/health.module"
 import { MetricsInterceptor } from "./health/interceptors/metrics.interceptor"
+import { FileUpload } from "./upload/entities/file-upload.entity"
 
 const ENV = process.env.NODE_ENV;
 
@@ -65,6 +67,8 @@ const ENV = process.env.NODE_ENV;
     PaginationModule,
     CarriersModule,
     HealthModule,
+    AnalyticsModule,
+    FileUpload
   ],
   controllers: [AppController],
   providers: [
