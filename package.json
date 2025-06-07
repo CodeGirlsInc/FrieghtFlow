@@ -1,5 +1,0 @@
-{
-  "dependencies": {
-    "@nestjs/throttler": "^6.4.0"
-  }
-}
