@@ -21,6 +21,7 @@ import { JwtAuthGuard } from './auth/guards/jwtAuth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { PassportModule } from '@nestjs/passport';
 import { LocationModule } from './location/location.module';
+import { FileUpload } from "./upload/entities/file-upload.entity"
 
 const ENV = process.env.NODE_ENV;
 
@@ -61,7 +62,8 @@ const ENV = process.env.NODE_ENV;
     MailModule,
     LoggingModule,
     PaginationModule,
-    AnalyticsModule
+    AnalyticsModule,
+    FileUpload
   ],
   controllers: [AppController],
   providers: [
