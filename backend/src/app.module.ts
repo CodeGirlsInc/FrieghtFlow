@@ -10,6 +10,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import environmentValidation from './environment.validation';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { AnalyticsModule } from './users/analytics.module';
 import { MailModule } from './mail/mail.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -61,6 +62,7 @@ const ENV = process.env.NODE_ENV;
     MailModule,
     LoggingModule,
     PaginationModule,
+    AnalyticsModule,
     FileUpload
   ],
   controllers: [AppController],
