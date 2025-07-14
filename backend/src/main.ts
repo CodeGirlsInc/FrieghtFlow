@@ -2,16 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
-import { Injectable, NestMiddleware } from '@nestjs/common';
-
-@Injectable()
-export class ContextMiddleware implements NestMiddleware {
-  use(req: any, res: any, next: () => void) {
-    // Attach dummy user for example; in real life, pull from auth token
-    req.user = { id: 'user-123', email: 'user@example.com' };
-    next();
-  }
-}
 
 async function bootstrap() {
   try {
@@ -35,13 +25,11 @@ async function bootstrap() {
 
     // SWAGGER DOCUMENTATION
     const config = new DocumentBuilder()
-      .setTitle('Nestjs Blog App Api Tutorial')
-      .setDescription(
-        'rhfbejberhberjhkfberjhfberjhbgerhbgrjgbrhge rjlvge rvjhrebgerjh vherervherberhvkefgeufyegoeuhuhfuhrufho3uihf3u4',
-      )
+      .setTitle('FreightFlow')
+      .setDescription('Swagger API Docs for FreightFlow Project')
       .setTermsOfService('terms-of-service')
       .setLicense('MIT License', 'mit')
-      .addServer('http://localhost:3000')
+      .addServer('http://localhost:6000')
       .setVersion('1.0')
       .build();
     const document = SwaggerModule.createDocument(app, config);
