@@ -6,7 +6,6 @@ import { User } from './entities/user.entity';
 import { UserCrudActivitiesProvider } from './providers/userCrud.provider';
 import { AuthModule } from 'src/auth/auth.module';
 import { EmailVerificationTokenProvider } from './providers/emailVerificationToken.provider';
-import { GenerateRandomTokenProvider } from './providers/generateRandomToken.provider';
 import { EmailModule } from 'src/email/email.module';
 import { VerifyEmailProvider } from './providers/verifyEmail.provider';
 import { ResendEmailVerificationProvider } from './providers/resendVerifyEmail.provider';
@@ -20,6 +19,7 @@ import { UpdateOneUserProvider } from './providers/updateOneUser.provider';
 import { FindAllUsersProvider } from './providers/findAllUsers.provider';
 import { DeleteOneUserProvider } from './providers/deleteOneUser.provider';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
+import { GenerateRandomTokenProvider } from './providers/generateRandomToken.provider';
 
 @Module({
   imports: [
