@@ -20,10 +20,16 @@ import { GetUserProfileProvider } from './getUserProfile.provider';
 import { UpdateOneUserProvider } from './updateOneUser.provider';
 import { FindAllUsersProvider } from './findAllUsers.provider';
 import { DeleteOneUserProvider } from './deleteOneUser.provider';
+import { InjectRepository } from '@nestjs/typeorm';
+import { EmailVerificationToken } from 'src/email/emailVerificationToken.enttity';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class UsersService {
   constructor(
+    @InjectRepository(EmailVerificationToken)
+    private readonly emailVerificationRepository: Repository<EmailVerificationToken>, 
+
     private readonly userCrudActivities: UserCrudActivitiesProvider,
 
     private readonly emailVerificationTokenProvider: EmailVerificationTokenProvider,
@@ -66,6 +72,15 @@ export class UsersService {
   // CREATE A SINGLE USER
   public async createSingleUser(createUserDto: CreateUserDto) {
     const user = await this.userCrudActivities.createSingleUser(createUserDto);
+
+    const { token, expiresAt } = this.emailService.emailVerificationToken();
+
+     // Save token in DB or related store
+    await this.emailVerificationRepository.save({
+      userId: user.id,
+      token,
+      expiresAt,
+    });
 
     const emailVerificationToken =
       await this.emailVerificationTokenProvider.getEmailVerificationToken(user);
