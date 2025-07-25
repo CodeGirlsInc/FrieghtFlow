@@ -1,36 +1,43 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from "typeorm"
-import { NotificationType, NotificationChannel } from "./notification.entity"
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
+import { NotificationType, NotificationChannel } from './notification.entity';
 
-@Entity("notification_preferences")
-@Index(["userId", "type"])
+@Entity('notification_preferences')
+@Index(['userId', 'type'])
 export class NotificationPreference {
-  @PrimaryGeneratedColumn("uuid")
-  id: string
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-  @Column({ type: "uuid" })
-  userId: string
+  @Column({ type: 'uuid' })
+  userId: string;
 
   @Column({
-    type: "enum",
+    type: 'enum',
     enum: NotificationType,
   })
-  type: NotificationType
+  type: NotificationType;
 
   @Column({
-    type: "enum",
+    type: 'enum',
     enum: NotificationChannel,
   })
-  channel: NotificationChannel
+  channel: NotificationChannel;
 
   @Column({ default: true })
-  enabled: boolean
+  enabled: boolean;
 
-  @Column({ type: "jsonb", nullable: true })
-  settings: Record<string, any>
+  @Column({ type: 'jsonb', nullable: true })
+  settings: Record<string, any>;
 
   @CreateDateColumn()
-  createdAt: Date
+  createdAt: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date
+  updatedAt: Date;
 }

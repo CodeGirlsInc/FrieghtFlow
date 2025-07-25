@@ -1,83 +1,87 @@
-import { Injectable } from "@nestjs/common"
+import { Injectable } from '@nestjs/common';
 
 export interface EmailOptions {
-  to: string
-  subject: string
-  text: string
-  html?: string
-  from?: string
-  replyTo?: string
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  from?: string;
+  replyTo?: string;
   attachments?: Array<{
-    filename: string
-    content: Buffer | string
-    contentType?: string
-  }>
+    filename: string;
+    content: Buffer | string;
+    contentType?: string;
+  }>;
 }
 
 export interface EmailResult {
-  success: boolean
-  messageId?: string
-  error?: string
+  success: boolean;
+  messageId?: string;
+  error?: string;
 }
 
 @Injectable()
 export class EmailService {
-  private emailQueue: Array<{ email: EmailOptions; timestamp: Date; id: string }> = []
+  private emailQueue: Array<{
+    email: EmailOptions;
+    timestamp: Date;
+    id: string;
+  }> = [];
 
   async sendEmail(options: EmailOptions): Promise<EmailResult> {
     try {
       // Simulate email sending with in-memory queue
-      const emailId = `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const emailId = `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       this.emailQueue.push({
         id: emailId,
         email: options,
         timestamp: new Date(),
-      })
+      });
 
       // Simulate processing delay
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      console.log(`📧 Email sent to ${options.to}:`)
-      console.log(`   Subject: ${options.subject}`)
-      console.log(`   Message: ${options.text}`)
-      console.log(`   Message ID: ${emailId}`)
-      console.log(`   Timestamp: ${new Date().toISOString()}`)
+      console.log(`📧 Email sent to ${options.to}:`);
+      console.log(`   Subject: ${options.subject}`);
+      console.log(`   Message: ${options.text}`);
+      console.log(`   Message ID: ${emailId}`);
+      console.log(`   Timestamp: ${new Date().toISOString()}`);
 
       return {
         success: true,
         messageId: emailId,
-      }
+      };
     } catch (error) {
-      console.error("Failed to send email:", error)
+      console.error('Failed to send email:', error);
       return {
         success: false,
         error: error.message,
-      }
+      };
     }
   }
 
   async sendBulkEmails(emails: EmailOptions[]): Promise<EmailResult[]> {
-    const results: EmailResult[] = []
+    const results: EmailResult[] = [];
 
     for (const email of emails) {
-      const result = await this.sendEmail(email)
-      results.push(result)
+      const result = await this.sendEmail(email);
+      results.push(result);
     }
 
-    return results
+    return results;
   }
 
   getEmailQueue(): Array<{ email: EmailOptions; timestamp: Date; id: string }> {
-    return [...this.emailQueue]
+    return [...this.emailQueue];
   }
 
   clearEmailQueue(): void {
-    this.emailQueue = []
+    this.emailQueue = [];
   }
 
   getQueueSize(): number {
-    return this.emailQueue.length
+    return this.emailQueue.length;
   }
 
   async sendTemplateEmail(
@@ -87,7 +91,10 @@ export class EmailService {
     options?: Partial<EmailOptions>,
   ): Promise<EmailResult> {
     // In a real implementation, this would use a template engine
-    const processedTemplate = this.processEmailTemplate(templateName, templateData)
+    const processedTemplate = this.processEmailTemplate(
+      templateName,
+      templateData,
+    );
 
     return this.sendEmail({
       to,
@@ -95,7 +102,7 @@ export class EmailService {
       text: processedTemplate.text,
       html: processedTemplate.html,
       ...options,
-    })
+    });
   }
 
   private processEmailTemplate(
@@ -105,7 +112,7 @@ export class EmailService {
     // Mock template processing - in real app, use a proper template engine
     const templates = {
       shipment_created: {
-        subject: "Your shipment {{trackingNumber}} has been created",
+        subject: 'Your shipment {{trackingNumber}} has been created',
         text: `Hello {{recipientName}},
 
 Your shipment has been created and is being prepared for delivery.
@@ -141,7 +148,7 @@ Thank you for your business!`,
 <p><a href="{{actionUrl}}">Track your shipment</a></p>`,
       },
       shipment_delivered: {
-        subject: "Your shipment {{trackingNumber}} has been delivered",
+        subject: 'Your shipment {{trackingNumber}} has been delivered',
         text: `Hello {{recipientName}},
 
 Great news! Your shipment has been successfully delivered.
@@ -165,27 +172,27 @@ Thank you for choosing our service!`,
 </ul>
 {{#if deliveryNotes}}<p><strong>Delivery Notes:</strong> {{deliveryNotes}}</p>{{/if}}`,
       },
-    }
+    };
 
     const template = templates[templateName] || {
-      subject: "Notification",
-      text: "You have a new notification.",
-    }
+      subject: 'Notification',
+      text: 'You have a new notification.',
+    };
 
     // Simple template variable replacement
-    let subject = template.subject
-    let text = template.text
-    let html = template.html
+    let subject = template.subject;
+    let text = template.text;
+    let html = template.html;
 
     for (const [key, value] of Object.entries(data)) {
-      const regex = new RegExp(`{{${key}}}`, "g")
-      subject = subject.replace(regex, String(value))
-      text = text.replace(regex, String(value))
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      subject = subject.replace(regex, String(value));
+      text = text.replace(regex, String(value));
       if (html) {
-        html = html.replace(regex, String(value))
+        html = html.replace(regex, String(value));
       }
     }
 
-    return { subject, text, html }
+    return { subject, text, html };
   }
 }

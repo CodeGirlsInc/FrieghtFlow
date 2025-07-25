@@ -10,25 +10,31 @@ import {
   Res,
   HttpStatus,
   ParseUUIDPipe,
-} from "@nestjs/common"
-import { FileInterceptor } from "@nestjs/platform-express"
-import type { Response } from "express"
-import type { FileUploadService } from "./file-upload.service"
-import type { UploadDocumentDto, QueryDocumentsDto } from "./dto/upload-document.dto"
-import type { DocumentStatus } from "./entities/document.entity"
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
+import type { FileUploadService } from './file-upload.service';
+import type {
+  UploadDocumentDto,
+  QueryDocumentsDto,
+} from './dto/upload-document.dto';
+import type { DocumentStatus } from './entities/document.entity';
 
-@Controller("upload")
+@Controller('upload')
 export class FileUploadController {
   constructor(private readonly fileUploadService: FileUploadService) {}
 
-  @Post("documents")
-  @UseInterceptors(FileInterceptor("file"))
+  @Post('documents')
+  @UseInterceptors(FileInterceptor('file'))
   async uploadDocument(file: any, @Body() uploadDto: UploadDocumentDto) {
-    const document = await this.fileUploadService.uploadDocument(file, uploadDto)
+    const document = await this.fileUploadService.uploadDocument(
+      file,
+      uploadDto,
+    );
 
     return {
       success: true,
-      message: "Document uploaded successfully",
+      message: 'Document uploaded successfully',
       data: {
         id: document.id,
         originalName: document.originalName,
@@ -38,12 +44,12 @@ export class FileUploadController {
         status: document.status,
         createdAt: document.createdAt,
       },
-    }
+    };
   }
 
-  @Get("documents")
+  @Get('documents')
   async getDocuments(@Query() queryDto: QueryDocumentsDto) {
-    const result = await this.fileUploadService.findAll(queryDto)
+    const result = await this.fileUploadService.findAll(queryDto);
 
     return {
       success: true,
@@ -52,76 +58,87 @@ export class FileUploadController {
         total: result.total,
         limit: queryDto.limit,
         offset: queryDto.offset,
-        hasMore: result.total > (queryDto.offset + queryDto.limit),
+        hasMore: result.total > queryDto.offset + queryDto.limit,
       },
-    }
+    };
   }
 
-  @Get("documents/:id")
-  async getDocument(@Param("id", ParseUUIDPipe) id: string) {
-    const document = await this.fileUploadService.findOne(id)
+  @Get('documents/:id')
+  async getDocument(@Param('id', ParseUUIDPipe) id: string) {
+    const document = await this.fileUploadService.findOne(id);
 
     return {
       success: true,
       data: document,
-    }
+    };
   }
 
-  @Get("documents/:id/download")
-  async downloadDocument(@Param("id", ParseUUIDPipe) id: string, @Res() res: Response) {
-    const { buffer, document } = await this.fileUploadService.downloadDocument(id)
+  @Get('documents/:id/download')
+  async downloadDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ) {
+    const { buffer, document } =
+      await this.fileUploadService.downloadDocument(id);
 
     res.set({
-      "Content-Type": document.mimeType,
-      "Content-Disposition": `attachment; filename="${document.originalName}"`,
-      "Content-Length": buffer.length.toString(),
-    })
+      'Content-Type': document.mimeType,
+      'Content-Disposition': `attachment; filename="${document.originalName}"`,
+      'Content-Length': buffer.length.toString(),
+    });
 
-    res.status(HttpStatus.OK).send(buffer)
+    res.status(HttpStatus.OK).send(buffer);
   }
 
-  @Delete("documents/:id")
-  async deleteDocument(@Param("id", ParseUUIDPipe) id: string) {
-    await this.fileUploadService.deleteDocument(id)
+  @Delete('documents/:id')
+  async deleteDocument(@Param('id', ParseUUIDPipe) id: string) {
+    await this.fileUploadService.deleteDocument(id);
 
     return {
       success: true,
-      message: "Document deleted successfully",
-    }
+      message: 'Document deleted successfully',
+    };
   }
 
-  @Post("documents/:id/status")
-  async updateDocumentStatus(@Param("id", ParseUUIDPipe) id: string, @Body("status") status: DocumentStatus) {
-    const document = await this.fileUploadService.updateDocumentStatus(id, status)
+  @Post('documents/:id/status')
+  async updateDocumentStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('status') status: DocumentStatus,
+  ) {
+    const document = await this.fileUploadService.updateDocumentStatus(
+      id,
+      status,
+    );
 
     return {
       success: true,
-      message: "Document status updated successfully",
+      message: 'Document status updated successfully',
       data: {
         id: document.id,
         status: document.status,
         updatedAt: document.updatedAt,
       },
-    }
+    };
   }
 
-  @Get("documents/shipment/:shipmentId")
-  async getDocumentsByShipment(@Param("shipmentId") shipmentId: string) {
-    const documents = await this.fileUploadService.getDocumentsByShipment(shipmentId)
+  @Get('documents/shipment/:shipmentId')
+  async getDocumentsByShipment(@Param('shipmentId') shipmentId: string) {
+    const documents =
+      await this.fileUploadService.getDocumentsByShipment(shipmentId);
 
     return {
       success: true,
       data: documents,
-    }
+    };
   }
 
-  @Get("stats")
+  @Get('stats')
   async getDocumentStats() {
-    const stats = await this.fileUploadService.getDocumentStats()
+    const stats = await this.fileUploadService.getDocumentStats();
 
     return {
       success: true,
       data: stats,
-    }
+    };
   }
 }

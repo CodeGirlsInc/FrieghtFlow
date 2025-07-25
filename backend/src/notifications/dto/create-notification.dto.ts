@@ -1,76 +1,90 @@
-import { IsEnum, IsString, IsOptional, IsUUID, IsObject, IsDateString, IsNumber, Min, Max } from "class-validator"
-import { NotificationType, NotificationChannel, NotificationPriority } from "../entities/notification.entity"
+import {
+  IsEnum,
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsObject,
+  IsDateString,
+  IsNumber,
+  Min,
+  Max,
+} from 'class-validator';
+import {
+  NotificationType,
+  NotificationChannel,
+  NotificationPriority,
+} from '../entities/notification.entity';
 
 export class CreateNotificationDto {
   @IsEnum(NotificationType)
-  type: NotificationType
+  type: NotificationType;
 
   @IsEnum(NotificationChannel)
-  channel: NotificationChannel
+  channel: NotificationChannel;
 
   @IsOptional()
   @IsEnum(NotificationPriority)
-  priority?: NotificationPriority
+  priority?: NotificationPriority;
 
   @IsUUID()
-  recipientId: string
+  recipientId: string;
 
   @IsString()
-  recipientEmail: string
+  recipientEmail: string;
 
   @IsOptional()
   @IsString()
-  recipientName?: string
+  recipientName?: string;
 
   @IsString()
-  title: string
+  title: string;
 
   @IsString()
-  message: string
+  message: string;
 
   @IsOptional()
   @IsObject()
-  data?: Record<string, any>
+  data?: Record<string, any>;
 
   @IsOptional()
   @IsObject()
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
 
   @IsOptional()
   @IsUUID()
-  relatedEntityId?: string
+  relatedEntityId?: string;
 
   @IsOptional()
   @IsString()
-  relatedEntityType?: string
+  relatedEntityType?: string;
 
   @IsOptional()
   @IsString()
-  actionUrl?: string
+  actionUrl?: string;
 
   @IsOptional()
   @IsString()
-  actionText?: string
+  actionText?: string;
 
   @IsOptional()
   @IsUUID()
-  senderId?: string
+  senderId?: string;
 
   @IsOptional()
   @IsString()
-  senderName?: string
+  senderName?: string;
 
   @IsOptional()
   @IsDateString()
-  scheduledAt?: string
+  scheduledAt?: string;
 
   @IsOptional()
   @IsDateString()
-  expiresAt?: string
+  expiresAt?: string;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(10)
-  maxRetries?: number
+  maxRetries?: number;
 }

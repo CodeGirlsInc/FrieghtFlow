@@ -1,45 +1,52 @@
-import { IsOptional, IsString, IsDateString, IsEnum, IsNumber, Min } from "class-validator"
-import { Transform, Type } from "class-transformer"
-import { WebhookStatus } from "../entities/webhook-event.entity"
+import {
+  IsOptional,
+  IsString,
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  Min,
+} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { WebhookStatus } from '../entities/webhook-event.entity';
 
 export class FilterWebhookEventsDto {
   @IsOptional()
   @IsString()
-  source?: string
+  source?: string;
 
   @IsOptional()
   @IsString()
-  eventType?: string
+  eventType?: string;
 
   @IsOptional()
   @IsString()
-  eventId?: string
+  eventId?: string;
 
   @IsOptional()
   @IsEnum(WebhookStatus)
-  status?: WebhookStatus
+  status?: WebhookStatus;
 
   @IsOptional()
   @IsDateString()
-  startDate?: string
+  startDate?: string;
 
   @IsOptional()
   @IsDateString()
-  endDate?: string
+  endDate?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(1)
-  page?: number = 1
+  page?: number = 1;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(1)
-  limit?: number = 50
+  limit?: number = 50;
 
   @IsOptional()
-  @Transform(({ value }) => value === "true")
-  sortByDateDesc?: boolean = true
+  @Transform(({ value }) => value === 'true')
+  sortByDateDesc?: boolean = true;
 }

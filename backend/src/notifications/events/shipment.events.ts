@@ -9,9 +9,9 @@ export class ShipmentCreatedEvent {
     public readonly destination: string,
     public readonly estimatedDelivery: Date,
     public readonly items: Array<{
-      name: string
-      quantity: number
-      value: number
+      name: string;
+      quantity: number;
+      value: number;
     }>,
     public readonly metadata?: Record<string, any>,
   ) {}

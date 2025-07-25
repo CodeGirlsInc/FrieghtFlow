@@ -1,103 +1,111 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsArray, Min, Max } from "class-validator"
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsArray,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class SetCacheDto {
   @IsString()
-  key: string
+  key: string;
 
-  value: any
+  value: any;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
-  ttl?: number
+  ttl?: number;
 
   @IsOptional()
   @IsString()
-  namespace?: string
+  namespace?: string;
 
   @IsOptional()
   @IsBoolean()
-  nx?: boolean
+  nx?: boolean;
 }
 
 export class GetCacheDto {
   @IsString()
-  key: string
+  key: string;
 
   @IsOptional()
   @IsString()
-  namespace?: string
+  namespace?: string;
 }
 
 export class DeleteCacheDto {
   @IsArray()
   @IsString({ each: true })
-  keys: string[]
+  keys: string[];
 
   @IsOptional()
   @IsString()
-  namespace?: string
+  namespace?: string;
 }
 
 export class ExpireCacheDto {
   @IsString()
-  key: string
+  key: string;
 
   @IsNumber()
   @Min(1)
-  seconds: number
+  seconds: number;
 
   @IsOptional()
   @IsString()
-  namespace?: string
+  namespace?: string;
 }
 
 export class KeysDto {
   @IsString()
-  pattern: string
+  pattern: string;
 
   @IsOptional()
   @IsString()
-  namespace?: string
+  namespace?: string;
 }
 
 export class ClearCacheDto {
   @IsOptional()
   @IsString()
-  namespace?: string
+  namespace?: string;
 }
 
 export class WarmupCacheDto {
   @IsArray()
   @IsString({ each: true })
-  shipmentIds: string[]
+  shipmentIds: string[];
 }
 
 export class ShipmentQueryDto {
   @IsOptional()
   @IsString()
-  userId?: string
+  userId?: string;
 
   @IsOptional()
   @IsString()
-  status?: string
+  status?: string;
 
   @IsOptional()
   @IsString()
-  startDate?: string
+  startDate?: string;
 
   @IsOptional()
   @IsString()
-  endDate?: string
+  endDate?: string;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(100)
-  limit?: number
+  limit?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
-  offset?: number
+  offset?: number;
 }
