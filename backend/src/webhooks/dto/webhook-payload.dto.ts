@@ -1,35 +1,41 @@
-import { IsString, IsNotEmpty, IsOptional, IsObject, MaxLength } from "class-validator"
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsObject,
+  MaxLength,
+} from 'class-validator';
 
 export class WebhookPayloadDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  source: string
+  source: string;
 
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  eventType: string
+  eventType: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  eventId?: string
+  eventId?: string;
 
   @IsObject()
-  payload: Record<string, any>
+  payload: Record<string, any>;
 
   @IsOptional()
   @IsObject()
-  headers?: Record<string, string>
+  headers?: Record<string, string>;
 
   @IsOptional()
   @IsString()
   @MaxLength(45)
-  ipAddress?: string
+  ipAddress?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(1000)
-  userAgent?: string
+  userAgent?: string;
 }

@@ -1,59 +1,70 @@
-import { IsEnum, IsString, IsOptional, IsUUID, IsObject, IsArray } from "class-validator"
-import { NotificationType, NotificationChannel, NotificationPriority } from "../entities/notification.entity"
+import {
+  IsEnum,
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsObject,
+  IsArray,
+} from 'class-validator';
+import {
+  NotificationType,
+  NotificationChannel,
+  NotificationPriority,
+} from '../entities/notification.entity';
 
 export class SendNotificationDto {
   @IsEnum(NotificationType)
-  type: NotificationType
+  type: NotificationType;
 
   @IsArray()
   @IsEnum(NotificationChannel, { each: true })
-  channels: NotificationChannel[]
+  channels: NotificationChannel[];
 
   @IsOptional()
   @IsEnum(NotificationPriority)
-  priority?: NotificationPriority
+  priority?: NotificationPriority;
 
   @IsArray()
   @IsUUID(undefined, { each: true })
-  recipientIds: string[]
+  recipientIds: string[];
 
   @IsOptional()
   @IsString()
-  templateName?: string
+  templateName?: string;
 
   @IsOptional()
   @IsObject()
-  templateData?: Record<string, any>
+  templateData?: Record<string, any>;
 
   @IsOptional()
   @IsString()
-  customTitle?: string
+  customTitle?: string;
 
   @IsOptional()
   @IsString()
-  customMessage?: string
+  customMessage?: string;
 
   @IsOptional()
   @IsUUID()
-  relatedEntityId?: string
+  relatedEntityId?: string;
 
   @IsOptional()
   @IsString()
-  relatedEntityType?: string
+  relatedEntityType?: string;
 
   @IsOptional()
   @IsString()
-  actionUrl?: string
+  actionUrl?: string;
 
   @IsOptional()
   @IsString()
-  actionText?: string
+  actionText?: string;
 
   @IsOptional()
   @IsUUID()
-  senderId?: string
+  senderId?: string;
 
   @IsOptional()
   @IsString()
-  senderName?: string
+  senderName?: string;
 }

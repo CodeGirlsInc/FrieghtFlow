@@ -1,40 +1,46 @@
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength } from "class-validator"
-import { DocumentType } from "../entities/document.entity"
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
+import { DocumentType } from '../entities/document.entity';
 
 export class UploadDocumentDto {
   @IsEnum(DocumentType)
-  documentType: DocumentType
+  documentType: DocumentType;
 
   @IsOptional()
   @IsUUID()
-  shipmentId?: string
+  shipmentId?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  description?: string
+  description?: string;
 
   @IsOptional()
   @IsString()
-  uploadedBy?: string
+  uploadedBy?: string;
 }
 
 export class QueryDocumentsDto {
   @IsOptional()
   @IsEnum(DocumentType)
-  documentType?: DocumentType
+  documentType?: DocumentType;
 
   @IsOptional()
   @IsUUID()
-  shipmentId?: string
+  shipmentId?: string;
 
   @IsOptional()
   @IsString()
-  uploadedBy?: string
+  uploadedBy?: string;
 
   @IsOptional()
-  limit?: number = 20
+  limit?: number = 20;
 
   @IsOptional()
-  offset?: number = 0
+  offset?: number = 0;
 }

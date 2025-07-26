@@ -1,7 +1,11 @@
-import { Injectable, type NestMiddleware, BadRequestException } from "@nestjs/common"
-import type { Request, Response, NextFunction } from "express"
-import * as multer from "multer"
-import { UPLOAD_CONFIG } from "../config/upload.config"
+import {
+  Injectable,
+  type NestMiddleware,
+  BadRequestException,
+} from '@nestjs/common';
+import type { Request, Response, NextFunction } from 'express';
+import * as multer from 'multer';
+import { UPLOAD_CONFIG } from '../config/upload.config';
 
 @Injectable()
 export class FileUploadMiddleware implements NestMiddleware {
@@ -14,59 +18,80 @@ export class FileUploadMiddleware implements NestMiddleware {
     fileFilter: (req, file, callback) => {
       // Additional security checks
       if (!file.originalname) {
-        return callback(new Error("File must have a name"), false)
+        return callback(new Error('File must have a name'), false);
       }
 
       // Check for potentially dangerous file names
       if (this.isDangerousFileName(file.originalname)) {
-        return callback(new Error("File name contains invalid characters"), false)
+        return callback(
+          new Error('File name contains invalid characters'),
+          false,
+        );
       }
 
       // MIME type validation
       if (!UPLOAD_CONFIG.ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-        return callback(new Error(`File type ${file.mimetype} not allowed`), false)
+        return callback(
+          new Error(`File type ${file.mimetype} not allowed`),
+          false,
+        );
       }
 
-      callback(null, true)
+      callback(null, true);
     },
-  }).single("file")
+  }).single('file');
 
   use(req: Request, res: Response, next: NextFunction) {
     this.upload(req, res, (error) => {
       if (error instanceof multer.MulterError) {
-        if (error.code === "LIMIT_FILE_SIZE") {
+        if (error.code === 'LIMIT_FILE_SIZE') {
           throw new BadRequestException(
             `File too large. Maximum size is ${this.formatFileSize(UPLOAD_CONFIG.MAX_FILE_SIZE)}`,
-          )
+          );
         }
-        if (error.code === "LIMIT_FILE_COUNT") {
-          throw new BadRequestException("Too many files")
+        if (error.code === 'LIMIT_FILE_COUNT') {
+          throw new BadRequestException('Too many files');
         }
-        throw new BadRequestException(`Upload error: ${error.message}`)
+        throw new BadRequestException(`Upload error: ${error.message}`);
       } else if (error) {
-        throw new BadRequestException(error.message)
+        throw new BadRequestException(error.message);
       }
-      next()
-    })
+      next();
+    });
   }
 
   private isDangerousFileName(filename: string): boolean {
     // Check for path traversal attempts
-    if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
-      return true
+    if (
+      filename.includes('..') ||
+      filename.includes('/') ||
+      filename.includes('\\')
+    ) {
+      return true;
     }
 
     // Check for executable extensions
-    const dangerousExtensions = [".exe", ".bat", ".cmd", ".com", ".pif", ".scr", ".vbs", ".js"]
-    const extension = filename.toLowerCase().substring(filename.lastIndexOf("."))
+    const dangerousExtensions = [
+      '.exe',
+      '.bat',
+      '.cmd',
+      '.com',
+      '.pif',
+      '.scr',
+      '.vbs',
+      '.js',
+    ];
+    const extension = filename
+      .toLowerCase()
+      .substring(filename.lastIndexOf('.'));
 
-    return dangerousExtensions.includes(extension)
+    return dangerousExtensions.includes(extension);
   }
 
   private formatFileSize(bytes: number): string {
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    if (bytes === 0) return "0 Bytes"
-    const i = Math.floor(Math.log(bytes) / Math.log(1024))
-    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i]
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    if (bytes === 0) return '0 Bytes';
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
   }
 }

@@ -1,11 +1,11 @@
-import { Injectable } from "@nestjs/common"
-import { OnEvent } from "@nestjs/event-emitter"
-import { NotificationChannel } from "../entities/notification.entity"
-import type { Notification } from "../entities/notification.entity"
-import type { NotificationService } from "./notification.service"
-import type { EmailService } from "./email.service"
-import type { InAppNotificationService } from "./in-app-notification.service"
-import type { NotificationPreferenceService } from "./notification-preference.service"
+import { Injectable } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
+import { NotificationChannel } from '../entities/notification.entity';
+import type { Notification } from '../entities/notification.entity';
+import type { NotificationService } from './notification.service';
+import type { EmailService } from './email.service';
+import type { InAppNotificationService } from './in-app-notification.service';
+import type { NotificationPreferenceService } from './notification-preference.service';
 
 @Injectable()
 export class NotificationProcessorService {
@@ -16,7 +16,7 @@ export class NotificationProcessorService {
     private preferenceService: NotificationPreferenceService,
   ) {}
 
-  @OnEvent("notification.created")
+  @OnEvent('notification.created')
   async handleNotificationCreated(notification: Notification): Promise<void> {
     try {
       // Check if user has enabled this notification type for this channel
@@ -24,81 +24,108 @@ export class NotificationProcessorService {
         notification.recipientId,
         notification.type,
         notification.channel,
-      )
+      );
 
       if (!isEnabled) {
-        console.log(`Notification ${notification.id} skipped - user preference disabled`)
-        return
+        console.log(
+          `Notification ${notification.id} skipped - user preference disabled`,
+        );
+        return;
       }
 
       // Process based on channel
       switch (notification.channel) {
         case NotificationChannel.EMAIL:
-          await this.processEmailNotification(notification)
-          break
+          await this.processEmailNotification(notification);
+          break;
         case NotificationChannel.IN_APP:
-          await this.processInAppNotification(notification)
-          break
+          await this.processInAppNotification(notification);
+          break;
         case NotificationChannel.SMS:
-          await this.processSMSNotification(notification)
-          break
+          await this.processSMSNotification(notification);
+          break;
         case NotificationChannel.PUSH:
-          await this.processPushNotification(notification)
-          break
+          await this.processPushNotification(notification);
+          break;
         default:
-          console.warn(`Unsupported notification channel: ${notification.channel}`)
+          console.warn(
+            `Unsupported notification channel: ${notification.channel}`,
+          );
       }
     } catch (error) {
-      console.error(`Failed to process notification ${notification.id}:`, error)
-      await this.notificationService.markAsFailed(notification.id, error.message)
+      console.error(
+        `Failed to process notification ${notification.id}:`,
+        error,
+      );
+      await this.notificationService.markAsFailed(
+        notification.id,
+        error.message,
+      );
     }
   }
 
-  private async processEmailNotification(notification: Notification): Promise<void> {
+  private async processEmailNotification(
+    notification: Notification,
+  ): Promise<void> {
     try {
       const result = await this.emailService.sendEmail({
         to: notification.recipientEmail,
         subject: notification.title,
         text: notification.message,
         html: this.generateEmailHTML(notification),
-      })
+      });
 
       if (result.success) {
-        await this.notificationService.markAsDelivered(notification.id)
+        await this.notificationService.markAsDelivered(notification.id);
       } else {
-        await this.notificationService.markAsFailed(notification.id, result.error || "Email sending failed")
+        await this.notificationService.markAsFailed(
+          notification.id,
+          result.error || 'Email sending failed',
+        );
       }
     } catch (error) {
-      await this.notificationService.markAsFailed(notification.id, error.message)
+      await this.notificationService.markAsFailed(
+        notification.id,
+        error.message,
+      );
     }
   }
 
-  private async processInAppNotification(notification: Notification): Promise<void> {
+  private async processInAppNotification(
+    notification: Notification,
+  ): Promise<void> {
     try {
-      await this.inAppNotificationService.sendInAppNotification(notification)
-      await this.notificationService.markAsDelivered(notification.id)
+      await this.inAppNotificationService.sendInAppNotification(notification);
+      await this.notificationService.markAsDelivered(notification.id);
     } catch (error) {
-      await this.notificationService.markAsFailed(notification.id, error.message)
+      await this.notificationService.markAsFailed(
+        notification.id,
+        error.message,
+      );
     }
   }
 
-  private async processSMSNotification(notification: Notification): Promise<void> {
+  private async processSMSNotification(
+    notification: Notification,
+  ): Promise<void> {
     // Mock SMS processing
-    console.log(`📱 SMS notification sent to ${notification.recipientId}:`)
-    console.log(`   Message: ${notification.message}`)
-    console.log(`   Timestamp: ${new Date().toISOString()}`)
+    console.log(`📱 SMS notification sent to ${notification.recipientId}:`);
+    console.log(`   Message: ${notification.message}`);
+    console.log(`   Timestamp: ${new Date().toISOString()}`);
 
-    await this.notificationService.markAsDelivered(notification.id)
+    await this.notificationService.markAsDelivered(notification.id);
   }
 
-  private async processPushNotification(notification: Notification): Promise<void> {
+  private async processPushNotification(
+    notification: Notification,
+  ): Promise<void> {
     // Mock push notification processing
-    console.log(`📲 Push notification sent to ${notification.recipientId}:`)
-    console.log(`   Title: ${notification.title}`)
-    console.log(`   Message: ${notification.message}`)
-    console.log(`   Timestamp: ${new Date().toISOString()}`)
+    console.log(`📲 Push notification sent to ${notification.recipientId}:`);
+    console.log(`   Title: ${notification.title}`);
+    console.log(`   Message: ${notification.message}`);
+    console.log(`   Timestamp: ${new Date().toISOString()}`);
 
-    await this.notificationService.markAsDelivered(notification.id)
+    await this.notificationService.markAsDelivered(notification.id);
   }
 
   private generateEmailHTML(notification: Notification): string {
@@ -126,12 +153,12 @@ export class NotificationProcessorService {
         </div>
         
         <div class="content">
-            <p>Hello ${notification.recipientName || "there"},</p>
+            <p>Hello ${notification.recipientName || 'there'},</p>
             <p>${notification.message}</p>
             
-            ${notification.actionUrl ? `<p><a href="${notification.actionUrl}" class="button">${notification.actionText || "View Details"}</a></p>` : ""}
+            ${notification.actionUrl ? `<p><a href="${notification.actionUrl}" class="button">${notification.actionText || 'View Details'}</a></p>` : ''}
             
-            ${notification.data ? `<div class="metadata"><strong>Additional Information:</strong><br>${JSON.stringify(notification.data, null, 2)}</div>` : ""}
+            ${notification.data ? `<div class="metadata"><strong>Additional Information:</strong><br>${JSON.stringify(notification.data, null, 2)}</div>` : ''}
         </div>
         
         <div class="footer">
@@ -141,6 +168,6 @@ export class NotificationProcessorService {
     </div>
 </body>
 </html>
-    `
+    `;
   }
 }

@@ -1,44 +1,53 @@
-import { IsEnum, IsString, IsOptional, IsBoolean, IsArray } from "class-validator"
-import { NotificationType, NotificationChannel } from "../entities/notification.entity"
+import {
+  IsEnum,
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+} from 'class-validator';
+import {
+  NotificationType,
+  NotificationChannel,
+} from '../entities/notification.entity';
 
 export class CreateNotificationTemplateDto {
   @IsString()
-  name: string
+  name: string;
 
   @IsEnum(NotificationType)
-  type: NotificationType
+  type: NotificationType;
 
   @IsEnum(NotificationChannel)
-  channel: NotificationChannel
+  channel: NotificationChannel;
 
   @IsString()
-  subject: string
+  subject: string;
 
   @IsString()
-  template: string
+  template: string;
 
   @IsOptional()
   @IsString()
-  htmlTemplate?: string
+  htmlTemplate?: string;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  variables?: string[]
+  variables?: string[];
 
   @IsOptional()
   @IsString()
-  defaultData?: Record<string, any>
+  defaultData?: Record<string, any>;
 
   @IsOptional()
   @IsBoolean()
-  isActive?: boolean
+  isActive?: boolean;
 
   @IsOptional()
   @IsString()
-  language?: string
+  language?: string;
 
   @IsOptional()
   @IsString()
-  description?: string
+  description?: string;
 }
