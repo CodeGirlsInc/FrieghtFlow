@@ -21,6 +21,9 @@ import { UpdateOneUserProvider } from './updateOneUser.provider';
 import { FindAllUsersProvider } from './findAllUsers.provider';
 import { DeleteOneUserProvider } from './deleteOneUser.provider';
 
+import { ChangeUserPasswordProvider } from './providers/changeUserPassword.provider';
+
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -51,6 +54,9 @@ export class UsersService {
     private readonly findAllUsersProvider: FindAllUsersProvider,
 
     private readonly deleteOneUserProvider: DeleteOneUserProvider,
+
+    private readonly changeUserPasswordProvider: ChangeUserPasswordProvider,
+
   ) {}
 
   // FIND ONE USER BY EMAIL
@@ -131,5 +137,9 @@ export class UsersService {
   // DELETE A SINGLE USER - ADMIN
   public async deleteSingleUser(userId: string) {
     return await this.deleteOneUserProvider.deleteUser(userId);
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    await this.changeUserPasswordProvider.execute(userId, currentPassword, newPassword);
   }
 }
