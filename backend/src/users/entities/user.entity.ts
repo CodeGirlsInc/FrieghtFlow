@@ -1,37 +1,132 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
+export enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user',
+  MODERATOR = 'moderator',
+}
 
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
-  email: string;
-
-  @Column()
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: false,
+  })
   firstName: string;
 
-  @Column()
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: false,
+  })
   lastName: string;
 
-  @Column()
+  @Column({
+    type: 'varchar',
+    length: 320,
+    nullable: false,
+    unique: true,
+  })
+  email: string;
+
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: false,
+  })
   password: string;
 
-  @Column({ default: false })
-  isEmailVerified: boolean;
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    default: UserRole.USER,
+  })
+  role: UserRole;
 
-  @Column({ nullable: true })
+  @Column({
+    type: 'boolean',
+    default: false,
+  })
+  emailVerified: boolean;
+
+  @Column({
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   emailVerificationToken?: string;
 
-  @Column({ nullable: true })
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+  })
+  emailVerificationTokenExpiry?: Date;
+
+  @Column({
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   passwordResetToken?: string;
 
-  @Column({ nullable: true })
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+  })
   passwordResetTokenExpiry?: Date;
 
-  @CreateDateColumn()
-  createdAt: Date;
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  phoneNumber?: string;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
-}
+  @Column({
+    type: 'text',
+    nullable: true,
+  })
+  address?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  city?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  country?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  postalCode?: string;
+
+  @Column({
+    type: 'date',
+    nullable: true,
+  })
+  dateOfBirth?: Date;
+
+  @Column({
+    type: 'boolean',
+    default: true,
+  })
+  isActive: boolean;
