@@ -20,10 +20,19 @@ import { GetUserProfileProvider } from './getUserProfile.provider';
 import { UpdateOneUserProvider } from './updateOneUser.provider';
 import { FindAllUsersProvider } from './findAllUsers.provider';
 import { DeleteOneUserProvider } from './deleteOneUser.provider';
+import { InjectRepository } from '@nestjs/typeorm';
+import { EmailVerificationToken } from 'src/email/emailVerificationToken.enttity';
+import { Repository } from 'typeorm';
+
+import { ChangeUserPasswordProvider } from './providers/changeUserPassword.provider';
+
 
 @Injectable()
 export class UsersService {
   constructor(
+    @InjectRepository(EmailVerificationToken)
+    private readonly emailVerificationRepository: Repository<EmailVerificationToken>, 
+
     private readonly userCrudActivities: UserCrudActivitiesProvider,
 
     private readonly emailVerificationTokenProvider: EmailVerificationTokenProvider,
@@ -51,6 +60,9 @@ export class UsersService {
     private readonly findAllUsersProvider: FindAllUsersProvider,
 
     private readonly deleteOneUserProvider: DeleteOneUserProvider,
+
+    private readonly changeUserPasswordProvider: ChangeUserPasswordProvider,
+
   ) {}
 
   // FIND ONE USER BY EMAIL
@@ -66,6 +78,15 @@ export class UsersService {
   // CREATE A SINGLE USER
   public async createSingleUser(createUserDto: CreateUserDto) {
     const user = await this.userCrudActivities.createSingleUser(createUserDto);
+
+    const { token, expiresAt } = this.emailService.emailVerificationToken();
+
+     // Save token in DB or related store
+    await this.emailVerificationRepository.save({
+      userId: user.id,
+      token,
+      expiresAt,
+    });
 
     const emailVerificationToken =
       await this.emailVerificationTokenProvider.getEmailVerificationToken(user);
@@ -131,5 +152,9 @@ export class UsersService {
   // DELETE A SINGLE USER - ADMIN
   public async deleteSingleUser(userId: string) {
     return await this.deleteOneUserProvider.deleteUser(userId);
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    await this.changeUserPasswordProvider.execute(userId, currentPassword, newPassword);
   }
 }

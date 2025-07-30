@@ -20,6 +20,8 @@ import { FindAllUsersProvider } from './providers/findAllUsers.provider';
 import { DeleteOneUserProvider } from './providers/deleteOneUser.provider';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { GenerateRandomTokenProvider } from './providers/generateRandomToken.provider';
+import { ChangeUserPasswordProvider } from './providers/changeUserPassword.provider';
+
 
 @Module({
   imports: [
@@ -45,7 +47,8 @@ import { GenerateRandomTokenProvider } from './providers/generateRandomToken.pro
     UpdateOneUserProvider,
     FindAllUsersProvider,
     DeleteOneUserProvider,
+    ChangeUserPasswordProvider,
   ],
-  exports: [UsersService],
+  exports: [UsersService, ChangeUserPasswordProvider],
 })
 export class UsersModule {}
