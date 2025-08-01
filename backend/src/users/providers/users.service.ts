@@ -69,6 +69,14 @@ export class UsersService {
   public async findOneUserByEmail(email: string) {
     return await this.findOneUserByEmailProvider.findUserByEmail(email);
   }
+  // Used by AuthService for authentication
+async findByEmail(email: string): Promise<User | null> {
+  return this.findOneUserByEmail(email); // reusing existing method
+}
+
+async create(data: Partial<User>): Promise<User> {
+  return this.createSingleUser(data as any); // Reuse your existing method
+}
 
   // FIND ONE USER BY ID
   public async findOneUserById(id: string) {
