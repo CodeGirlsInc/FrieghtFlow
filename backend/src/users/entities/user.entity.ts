@@ -130,3 +130,4 @@ export class User {
     default: true,
   })
   isActive: boolean;
+}
