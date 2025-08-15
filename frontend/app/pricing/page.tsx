@@ -4,6 +4,7 @@ import PricingComparison from "@/components/PricingComparison";
 export default function PricingPage() {
   const plans = [
     {
+      id: "small-businesses",
       title: "Small Businesses",
       price: "$49",
       description: "Perfect for small freight companies and startups.",
@@ -15,6 +16,7 @@ export default function PricingPage() {
       cta: "Get Started",
     },
     {
+      id: "enterprises",
       title: "Enterprises",
       price: "$199",
       description: "Advanced tools for large-scale operations.",
@@ -27,6 +29,7 @@ export default function PricingPage() {
       cta: "Choose Plan",
     },
     {
+      id: "independent-shippers",
       title: "Independent Shippers",
       price: "$99",
       description: "Flexible tools for solo or small team shippers.",
@@ -49,8 +52,8 @@ export default function PricingPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {plans.map((plan, index) => (
-          <PricingCard key={index} {...plan} />
+        {plans.map((plan) => (
+          <PricingCard key={plan.id} {...plan} />
         ))}
       </div>
 
