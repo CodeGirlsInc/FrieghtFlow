@@ -1,3 +1,5 @@
+import PropTypes from "prop-types";
+
 export default function PolicySection({ title, children }) {
   return (
     <section className="mb-8">
@@ -6,3 +8,8 @@ export default function PolicySection({ title, children }) {
     </section>
   );
 }
+
+PolicySection.propTypes = {
+  title: PropTypes.string.isRequired,
+  children: PropTypes.node.isRequired,
+};
