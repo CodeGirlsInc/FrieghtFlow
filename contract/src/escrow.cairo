@@ -154,4 +154,19 @@ func DisputeResolved(escrow_id: felt252, payee_amount: u256, payer_amount: u256)
 @event
 func RefundProcessed(escrow_id: felt252, amount: u256);
 
-// ...Implementation will follow, including storage, access control, and function logic...
+// Storage
+@storage_var
+func escrows(escrow_id: felt252) -> (details: EscrowDetails) {}
+
+@storage_var
+func escrow_milestones(escrow_id: felt252, milestone_index: u32) -> (milestone: EscrowMilestone) {}
+
+@storage_var
+func escrow_milestones_count(escrow_id: felt252) -> (count: u32) {}
+
+// Role-based access control
+@storage_var
+func platform_owner() -> (owner: ContractAddress) {}
+
+@storage_var
+func dispute_resolvers(resolver: ContractAddress) -> (is_resolver: bool) {}
