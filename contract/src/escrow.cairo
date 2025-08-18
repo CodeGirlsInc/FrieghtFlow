@@ -1,3 +1,16 @@
+// Reentrancy Guard
+@storage_var
+func reentrancy_lock() -> (locked: bool) {}
+
+func non_reentrant_enter() {
+    let (locked) = reentrancy_lock.read();
+    assert(!locked, 'Reentrancy detected');
+    reentrancy_lock.write(true);
+}
+
+func non_reentrant_exit() {
+    reentrancy_lock.write(false);
+}
 // Main Function Logicc
 @external
 func create_escrow(
@@ -64,6 +77,7 @@ func deposit_funds(escrow_id: felt252, amount: u256) {
 
 @external
 func release_milestone(escrow_id: felt252, milestone_index: u32) {
+    non_reentrant_enter();
     only_payer(escrow_id);
     let (details) = escrows.read(escrow_id);
     assert(details.status == EscrowStatus::Funded, 'Escrow not funded');
@@ -82,10 +96,12 @@ func release_milestone(escrow_id: felt252, milestone_index: u32) {
     );
     escrows.write(escrow_id, updated);
     emit_event MilestoneReleased(escrow_id, milestone_index, milestone.amount);
+    non_reentrant_exit();
 }
 
 @external
 func release_all_funds(escrow_id: felt252) {
+    non_reentrant_enter();
     only_payer(escrow_id);
     let (details) = escrows.read(escrow_id);
     assert(details.status == EscrowStatus::Funded, 'Escrow not funded');
@@ -98,6 +114,7 @@ func release_all_funds(escrow_id: felt252) {
         }
         i += 1;
     }
+    non_reentrant_exit();
 }
 
 @external
@@ -135,6 +152,7 @@ func resolve_dispute(escrow_id: felt252, payee_amount: u256, payer_amount: u256)
 
 @external
 func request_refund(escrow_id: felt252) {
+    non_reentrant_enter();
     only_payer(escrow_id);
     let (details) = escrows.read(escrow_id);
     assert(details.status == EscrowStatus::Pending || details.status == EscrowStatus::Funded, 'Refund not allowed');
@@ -146,6 +164,7 @@ func request_refund(escrow_id: felt252) {
     );
     escrows.write(escrow_id, updated);
     emit_event RefundProcessed(escrow_id, refund_amount);
+    non_reentrant_exit();
 }
 
 @view
@@ -294,26 +313,28 @@ namespace IEscrow {
 }
 
 // Enums
-@enum
-namespace EscrowStatus {
-    variant Pending;
-    variant Funded;
-    variant InDispute;
-    variant Completed;
-    variant Refunded;
+@external
+func resolve_dispute(escrow_id: felt252, payee_amount: u256, payer_amount: u256) {
+    non_reentrant_enter();
+    only_resolver(escrow_id);
+    let (details) = escrows.read(escrow_id);
+    assert(details.status == EscrowStatus::InDispute, 'Not in dispute');
+    let total = payee_amount + payer_amount;
+    assert(total <= details.available_balance, 'Resolution exceeds balance');
+    // Payouts
+    if payee_amount > 0 {
+        IERC20Dispatcher{address=details.token}.transfer(details.payee, payee_amount);
+    }
+    if payer_amount > 0 {
+        IERC20Dispatcher{address=details.token}.transfer(details.payer, payer_amount);
+    }
+    let updated = EscrowDetails(
+        details.payer, details.payee, details.token, details.resolver, ArrayTrait::default(), EscrowStatus::Completed, details.total_amount, details.released_amount + payee_amount, details.available_balance - total, DisputeResolution::Split
+    );
+    escrows.write(escrow_id, updated);
+    emit_event DisputeResolved(escrow_id, payee_amount, payer_amount);
+    non_reentrant_exit();
 }
-
-@enum
-namespace DisputeResolution {
-    variant None;
-    variant Payee;
-    variant Payer;
-    variant Split;
-}
-
-// Structs
-struct EscrowMilestone {
-    amount: u256,
     released: bool,
 }
 
