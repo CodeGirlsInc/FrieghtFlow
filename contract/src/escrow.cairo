@@ -1,3 +1,32 @@
+// Access Control Helpers
+// Only platform owner
+func only_owner() {
+    let (caller) = get_caller_address();
+    let (owner) = platform_owner.read();
+    assert(caller == owner, 'Only platform owner can call this function');
+}
+
+// Only payer of a given escrow
+func only_payer(escrow_id: felt252) {
+    let (caller) = get_caller_address();
+    let (details) = escrows.read(escrow_id);
+    assert(caller == details.payer, 'Only payer can call this function');
+}
+
+// Only payee of a given escrow
+func only_payee(escrow_id: felt252) {
+    let (caller) = get_caller_address();
+    let (details) = escrows.read(escrow_id);
+    assert(caller == details.payee, 'Only payee can call this function');
+}
+
+// Only dispute resolver for a given escrow
+func only_resolver(escrow_id: felt252) {
+    let (caller) = get_caller_address();
+    let (details) = escrows.read(escrow_id);
+    let (is_resolver) = dispute_resolvers.read(caller);
+    assert(caller == details.resolver && is_resolver, 'Only assigned dispute resolver can call this function');
+}
 // SPDX-License-Identifier: MIT
 // Starknet Escrow Smart Contract with Milestone-Based Payments
 // Cairo 1.0
