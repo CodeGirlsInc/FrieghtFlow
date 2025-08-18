@@ -33,7 +33,7 @@ func create_escrow(
         payee,
         token,
         resolver,
-        ArrayTrait::default(), // milestones not stored here, but in storage var
+        ArrayTrait::default(), // milestones not stored here, but in storage varr
         EscrowStatus::Pending,
         total,
         0,
