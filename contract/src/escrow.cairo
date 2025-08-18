@@ -74,7 +74,7 @@ func release_milestone(escrow_id: felt252, milestone_index: u32) {
     IERC20Dispatcher{address=details.token}.transfer(details.payee, milestone.amount);
     // Mark milestone as released
     escrow_milestones.write(escrow_id, milestone_index, EscrowMilestone(milestone.amount, true));
-    // Update escrow
+    // Update escroww
     let new_released = details.released_amount + milestone.amount;
     let new_balance = details.available_balance - milestone.amount;
     let updated = EscrowDetails(
