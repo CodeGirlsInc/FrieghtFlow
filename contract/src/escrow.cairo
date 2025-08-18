@@ -1,3 +1,164 @@
+// Main Function Logic
+@external
+func create_escrow(
+    payer: ContractAddress,
+    payee: ContractAddress,
+    token: ContractAddress,
+    milestones: Array<u256>,
+    resolver: ContractAddress
+) -> (escrow_id: felt252) {
+    // Only payer can create
+    let (caller) = get_caller_address();
+    assert(caller == payer, 'Only payer can create escrow');
+
+    // Generate escrow_id (simple: hash of (payer, payee, block number, timestamp))
+    let (block_num) = get_block_number();
+    let (timestamp) = get_block_timestamp();
+    let escrow_id = hash2(hash2(payer, payee), hash2(block_num, timestamp));
+
+    // Calculate total amount
+    let mut total: u256 = 0;
+    let mut i: u32 = 0;
+    let milestones_len = milestones.len();
+    while i < milestones_len {
+        let amount = milestones[i];
+        total = total + amount;
+        escrow_milestones.write(escrow_id, i, EscrowMilestone(amount, false));
+        i += 1;
+    }
+    escrow_milestones_count.write(escrow_id, milestones_len);
+
+    let details = EscrowDetails(
+        payer,
+        payee,
+        token,
+        resolver,
+        ArrayTrait::default(), // milestones not stored here, but in storage var
+        EscrowStatus::Pending,
+        total,
+        0,
+        0,
+        DisputeResolution::None
+    );
+    escrows.write(escrow_id, details);
+    emit_event EscrowCreated(escrow_id, payer, payee, token, total, resolver);
+    return (escrow_id,);
+}
+
+@external
+func deposit_funds(escrow_id: felt252, amount: u256) {
+    only_payer(escrow_id);
+    let (details) = escrows.read(escrow_id);
+    assert(details.status == EscrowStatus::Pending || details.status == EscrowStatus::Funded, 'Escrow not fundable');
+    // Transfer tokens from payer to contract
+    IERC20Dispatcher{address=details.token}.transferFrom(details.payer, get_contract_address(), amount);
+    // Update available balance
+    let new_balance = details.available_balance + amount;
+    let new_status = if new_balance >= details.total_amount { EscrowStatus::Funded } else { details.status };
+    let updated = EscrowDetails(
+        details.payer, details.payee, details.token, details.resolver, ArrayTrait::default(), new_status, details.total_amount, details.released_amount, new_balance, details.dispute
+    );
+    escrows.write(escrow_id, updated);
+    emit_event FundsDeposited(escrow_id, amount);
+}
+
+@external
+func release_milestone(escrow_id: felt252, milestone_index: u32) {
+    only_payer(escrow_id);
+    let (details) = escrows.read(escrow_id);
+    assert(details.status == EscrowStatus::Funded, 'Escrow not funded');
+    let (milestone) = escrow_milestones.read(escrow_id, milestone_index);
+    assert(!milestone.released, 'Milestone already released');
+    assert(details.available_balance >= milestone.amount, 'Insufficient balance');
+    // Transfer to payee
+    IERC20Dispatcher{address=details.token}.transfer(details.payee, milestone.amount);
+    // Mark milestone as released
+    escrow_milestones.write(escrow_id, milestone_index, EscrowMilestone(milestone.amount, true));
+    // Update escrow
+    let new_released = details.released_amount + milestone.amount;
+    let new_balance = details.available_balance - milestone.amount;
+    let updated = EscrowDetails(
+        details.payer, details.payee, details.token, details.resolver, ArrayTrait::default(), details.status, details.total_amount, new_released, new_balance, details.dispute
+    );
+    escrows.write(escrow_id, updated);
+    emit_event MilestoneReleased(escrow_id, milestone_index, milestone.amount);
+}
+
+@external
+func release_all_funds(escrow_id: felt252) {
+    only_payer(escrow_id);
+    let (details) = escrows.read(escrow_id);
+    assert(details.status == EscrowStatus::Funded, 'Escrow not funded');
+    let (count) = escrow_milestones_count.read(escrow_id);
+    let mut i: u32 = 0;
+    while i < count {
+        let (milestone) = escrow_milestones.read(escrow_id, i);
+        if !milestone.released {
+            release_milestone(escrow_id, i);
+        }
+        i += 1;
+    }
+}
+
+@external
+func initiate_dispute(escrow_id: felt252) {
+    let (caller) = get_caller_address();
+    let (details) = escrows.read(escrow_id);
+    assert(caller == details.payer || caller == details.payee, 'Only payer or payee can dispute');
+    let updated = EscrowDetails(
+        details.payer, details.payee, details.token, details.resolver, ArrayTrait::default(), EscrowStatus::InDispute, details.total_amount, details.released_amount, details.available_balance, details.dispute
+    );
+    escrows.write(escrow_id, updated);
+    emit_event DisputeInitiated(escrow_id);
+}
+
+@external
+func resolve_dispute(escrow_id: felt252, payee_amount: u256, payer_amount: u256) {
+    only_resolver(escrow_id);
+    let (details) = escrows.read(escrow_id);
+    assert(details.status == EscrowStatus::InDispute, 'Not in dispute');
+    let total = payee_amount + payer_amount;
+    assert(total <= details.available_balance, 'Resolution exceeds balance');
+    // Payouts
+    if payee_amount > 0 {
+        IERC20Dispatcher{address=details.token}.transfer(details.payee, payee_amount);
+    }
+    if payer_amount > 0 {
+        IERC20Dispatcher{address=details.token}.transfer(details.payer, payer_amount);
+    }
+    let updated = EscrowDetails(
+        details.payer, details.payee, details.token, details.resolver, ArrayTrait::default(), EscrowStatus::Completed, details.total_amount, details.released_amount + payee_amount, details.available_balance - total, DisputeResolution::Split
+    );
+    escrows.write(escrow_id, updated);
+    emit_event DisputeResolved(escrow_id, payee_amount, payer_amount);
+}
+
+@external
+func request_refund(escrow_id: felt252) {
+    only_payer(escrow_id);
+    let (details) = escrows.read(escrow_id);
+    assert(details.status == EscrowStatus::Pending || details.status == EscrowStatus::Funded, 'Refund not allowed');
+    let refund_amount = details.available_balance;
+    assert(refund_amount > 0, 'Nothing to refund');
+    IERC20Dispatcher{address=details.token}.transfer(details.payer, refund_amount);
+    let updated = EscrowDetails(
+        details.payer, details.payee, details.token, details.resolver, ArrayTrait::default(), EscrowStatus::Refunded, details.total_amount, details.released_amount, 0, details.dispute
+    );
+    escrows.write(escrow_id, updated);
+    emit_event RefundProcessed(escrow_id, refund_amount);
+}
+
+@view
+func get_escrow_details(escrow_id: felt252) -> (details: EscrowDetails) {
+    let (details) = escrows.read(escrow_id);
+    return (details,);
+}
+
+@view
+func get_available_balance(escrow_id: felt252) -> (balance: u256) {
+    let (details) = escrows.read(escrow_id);
+    return (details.available_balance,);
+}
 // Access Control Helpers
 // Only platform owner
 func only_owner() {
