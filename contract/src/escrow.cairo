@@ -70,7 +70,7 @@ func release_milestone(escrow_id: felt252, milestone_index: u32) {
     let (milestone) = escrow_milestones.read(escrow_id, milestone_index);
     assert(!milestone.released, 'Milestone already released');
     assert(details.available_balance >= milestone.amount, 'Insufficient balance');
-    // Transfer to payee
+    // Transfer to payeee
     IERC20Dispatcher{address=details.token}.transfer(details.payee, milestone.amount);
     // Mark milestone as released
     escrow_milestones.write(escrow_id, milestone_index, EscrowMilestone(milestone.amount, true));
