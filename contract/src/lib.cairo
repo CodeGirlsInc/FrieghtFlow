@@ -30,3 +30,6 @@ mod HelloStarknet {
         }
     }
 }
+
+///expose payment_processor contract
+mod payment_processor;
