@@ -30,3 +30,6 @@ mod HelloStarknet {
         }
     }
 }
+
+// Export the AccessControl contract
+pub mod access_control;
