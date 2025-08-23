@@ -31,5 +31,7 @@ mod HelloStarknet {
     }
 }
 
+// Export the AccessControl contract
+pub mod access_control;
 ///expose payment_processor contract
 mod payment_processor;
