@@ -63,3 +63,79 @@ const blogPosts = [
     featured: false,
   },
 ];
+
+const categories = ["All", "Security", "Platform Updates", "Development", "Design"]
+
+export default function BlogPage() {
+  const featuredPost = blogPosts.find((post) => post.featured)
+  const regularPosts = blogPosts.filter((post) => !post.featured)
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-card">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Button variant="ghost" size="sm" asChild className="mb-4">
+                <Link href="/" className="flex items-center gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Home
+                </Link>
+              </Button>
+              <h1 className="text-3xl font-bold text-balance">Blog & Resources</h1>
+              <p className="text-muted-foreground mt-2">
+                Educational articles, platform updates, and development insights
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        {/* Categories */}
+        <div className="flex flex-wrap gap-2 mb-8">
+          {categories.map((category) => (
+            <Badge
+              key={category}
+              variant={category === "All" ? "default" : "secondary"}
+              className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+            >
+              {category}
+            </Badge>
+          ))}
+        </div>
+
+        {/* Featured Post */}
+        {featuredPost && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold mb-4">Featured Article</h2>
+            <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="outline">{featuredPost.category}</Badge>
+                  <Badge className="bg-primary/10 text-primary border-primary/20">Featured</Badge>
+                </div>
+                <CardTitle className="text-2xl text-balance">{featuredPost.title}</CardTitle>
+                <CardDescription className="text-base leading-relaxed">{featuredPost.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <CalendarDays className="h-4 w-4" />
+                    {new Date(featuredPost.date).toLocaleDateString("en-US", {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    {featuredPost.readTime}
+                  </div>
+                </div>
+                <Button className="mt-4">Read Article</Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
