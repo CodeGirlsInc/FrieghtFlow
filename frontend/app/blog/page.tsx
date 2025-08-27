@@ -64,11 +64,17 @@ const blogPosts = [
   },
 ];
 
-const categories = ["All", "Security", "Platform Updates", "Development", "Design"]
+const categories = [
+  "All",
+  "Security",
+  "Platform Updates",
+  "Development",
+  "Design",
+];
 
 export default function BlogPage() {
-  const featuredPost = blogPosts.find((post) => post.featured)
-  const regularPosts = blogPosts.filter((post) => !post.featured)
+  const featuredPost = blogPosts.find((post) => post.featured);
+  const regularPosts = blogPosts.filter((post) => !post.featured);
 
   return (
     <div className="min-h-screen bg-background">
@@ -83,7 +89,9 @@ export default function BlogPage() {
                   Back to Home
                 </Link>
               </Button>
-              <h1 className="text-3xl font-bold text-balance">Blog & Resources</h1>
+              <h1 className="text-3xl font-bold text-balance">
+                Blog & Resources
+              </h1>
               <p className="text-muted-foreground mt-2">
                 Educational articles, platform updates, and development insights
               </p>
@@ -114,10 +122,16 @@ export default function BlogPage() {
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Badge variant="outline">{featuredPost.category}</Badge>
-                  <Badge className="bg-primary/10 text-primary border-primary/20">Featured</Badge>
+                  <Badge className="bg-primary/10 text-primary border-primary/20">
+                    Featured
+                  </Badge>
                 </div>
-                <CardTitle className="text-2xl text-balance">{featuredPost.title}</CardTitle>
-                <CardDescription className="text-base leading-relaxed">{featuredPost.description}</CardDescription>
+                <CardTitle className="text-2xl text-balance">
+                  {featuredPost.title}
+                </CardTitle>
+                <CardDescription className="text-base leading-relaxed">
+                  {featuredPost.description}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -139,3 +153,54 @@ export default function BlogPage() {
             </Card>
           </div>
         )}
+
+        {/* Regular Posts Grid */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-6">Latest Articles</h2>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {regularPosts.map((post) => (
+              <Card
+                key={post.id}
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+              >
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge variant="outline">{post.category}</Badge>
+                  </div>
+                  <CardTitle className="text-lg text-balance leading-tight">
+                    {post.title}
+                  </CardTitle>
+                  <CardDescription className="leading-relaxed">
+                    {post.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <CalendarDays className="h-4 w-4" />
+                      {new Date(post.date).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      {post.readTime}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Load More */}
+        <div className="text-center">
+          <Button variant="outline" size="lg">
+            Load More Articles
+          </Button>
+        </div>
+      </main>
+    </div>
+  );
+}
