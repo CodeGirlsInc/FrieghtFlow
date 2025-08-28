@@ -301,3 +301,49 @@ mod CompanyManagerContract {
                 added_by: caller
             });
         }
+
+        fn remove_member(
+            ref self: ContractState,
+            company_id: u256,
+            member: ContractAddress
+        ) {
+            let caller = get_caller_address();
+            
+            // Check if company exists
+            let company = self.companies.read(company_id);
+            assert(company.id == company_id, 'Company does not exist');
+            
+            // Check if caller has permission (owner or admin)
+            let caller_role = self.company_members.read((company_id, caller));
+            assert(
+                matches!(caller_role, CompanyRole::Owner) || 
+                matches!(caller_role, CompanyRole::Admin),
+                'Insufficient permissions'
+            );
+            
+            // Check if member exists
+            let member_role = self.company_members.read((company_id, member));
+            assert(self._role_exists(member_role), 'Member does not exist');
+            
+            // Cannot remove the last owner
+            if matches!(member_role, CompanyRole::Owner) {
+                let owner_count = self.company_owner_count.read(company_id);
+                assert(owner_count > 1, 'Cannot remove last owner');
+                self.company_owner_count.write(company_id, owner_count - 1);
+            }
+            
+            // Remove member
+            self.company_members.write((company_id, member), CompanyRole::Viewer); // Reset to default
+            self.user_companies.write((member, company_id), false);
+            
+            // Update counter
+            let current_count = self.company_member_count.read(company_id);
+            self.company_member_count.write(company_id, current_count - 1);
+            
+            // Emit event
+            self.emit(MemberRemoved {
+                company_id,
+                member,
+                removed_by: caller
+            });
+        }
