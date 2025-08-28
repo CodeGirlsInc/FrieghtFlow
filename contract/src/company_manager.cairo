@@ -144,3 +144,61 @@ mod CompanyManagerContract {
         company_type: CompanyType,
         admin: ContractAddress
     }
+
+    
+    #[derive(Drop, starknet::Event)]
+    struct MemberAdded {
+        #[key]
+        company_id: u256,
+        #[key]
+        member: ContractAddress,
+        role: CompanyRole,
+        added_by: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct MemberRemoved {
+        #[key]
+        company_id: u256,
+        #[key]
+        member: ContractAddress,
+        removed_by: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct RoleUpdated {
+        #[key]
+        company_id: u256,
+        #[key]
+        member: ContractAddress,
+        old_role: CompanyRole,
+        new_role: CompanyRole,
+        updated_by: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct CompanyVerified {
+        #[key]
+        company_id: u256,
+        verification_level: CompanyVerificationLevel,
+        verified_by: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct CompanySuspended {
+        #[key]
+        company_id: u256,
+        reason: felt252,
+        suspended_by: ContractAddress
+    }
+
+    #[constructor]
+    fn constructor(
+        ref self: ContractState,
+        owner: ContractAddress,
+        verifier: ContractAddress
+    ) {
+        self.owner.write(owner);
+        self.verifier.write(verifier);
+        self.next_company_id.write(1);
+    }
