@@ -99,3 +99,48 @@ struct Company {
     created_at: u64,
     admin: ContractAddress
 }
+
+#[starknet::contract]
+mod CompanyManagerContract {
+    use super::{
+        ICompanyManager, Company, CompanyType, CompanyRole, 
+        CompanyVerificationLevel, CompanyStatus
+    };
+    use starknet::{
+        ContractAddress, get_caller_address, get_block_timestamp,
+        storage::{Map, StorageMapReadAccess, StorageMapWriteAccess}
+    };
+
+    #[storage]
+    struct Storage {
+        owner: ContractAddress,
+        verifier: ContractAddress,
+        next_company_id: u256,
+        companies: Map<u256, Company>,
+        company_members: Map<(u256, ContractAddress), CompanyRole>,
+        user_companies: Map<(ContractAddress, u256), bool>,
+        company_member_count: Map<u256, u32>,
+        company_owner_count: Map<u256, u32>
+    }
+
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        CompanyRegistered: CompanyRegistered,
+        MemberAdded: MemberAdded,
+        MemberRemoved: MemberRemoved,
+        RoleUpdated: RoleUpdated,
+        CompanyVerified: CompanyVerified,
+        CompanySuspended: CompanySuspended
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct CompanyRegistered {
+        #[key]
+        company_id: u256,
+        name: felt252,
+        registration_number: felt252,
+        country_code: felt252,
+        company_type: CompanyType,
+        admin: ContractAddress
+    }
