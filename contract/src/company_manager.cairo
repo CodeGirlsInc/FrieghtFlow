@@ -347,3 +347,58 @@ mod CompanyManagerContract {
                 removed_by: caller
             });
         }
+
+        fn update_member_role(
+            ref self: ContractState,
+            company_id: u256,
+            member: ContractAddress,
+            new_role: CompanyRole
+        ) {
+            let caller = get_caller_address();
+            
+            // Check if company exists
+            let company = self.companies.read(company_id);
+            assert(company.id == company_id, 'Company does not exist');
+            
+            // Check if caller has permission (owner or admin)
+            let caller_role = self.company_members.read((company_id, caller));
+            assert(
+                matches!(caller_role, CompanyRole::Owner) || 
+                matches!(caller_role, CompanyRole::Admin),
+                'Insufficient permissions'
+            );
+            
+            // Check if member exists
+            let old_role = self.company_members.read((company_id, member));
+            assert(self._role_exists(old_role), 'Member does not exist');
+            
+            // Handle owner count changes
+            if matches!(old_role, CompanyRole::Owner) && !matches!(new_role, CompanyRole::Owner) {
+                let owner_count = self.company_owner_count.read(company_id);
+                assert(owner_count > 1, 'Cannot remove last owner');
+                self.company_owner_count.write(company_id, owner_count - 1);
+            } else if !matches!(old_role, CompanyRole::Owner) && matches!(new_role, CompanyRole::Owner) {
+                let owner_count = self.company_owner_count.read(company_id);
+                self.company_owner_count.write(company_id, owner_count + 1);
+            }
+            
+            // Update role
+            self.company_members.write((company_id, member), new_role);
+            
+            // Emit event
+            self.emit(RoleUpdated {
+                company_id,
+                member,
+                old_role,
+                new_role,
+                updated_by: caller
+            });
+        }
+
+        fn get_company_details(self: @ContractState, company_id: u256) -> Company {
+            self.companies.read(company_id)
+        }
+
+        fn get_member_role(self: @ContractState, company_id: u256, member: ContractAddress) -> CompanyRole {
+            self.company_members.read((company_id, member))
+        }
