@@ -47,3 +47,55 @@ trait ICompanyManager<TContractState> {
         company_id: u256,
         reason: felt252
     );
+
+     fn get_owner(self: @TContractState) -> ContractAddress;
+    fn get_verifier(self: @TContractState) -> ContractAddress;
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+enum CompanyType {
+    Shipper,
+    Carrier,
+    Broker,
+    Warehouse,
+    Port,
+    Other
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+enum CompanyRole {
+    Owner,
+    Admin,
+    Manager,
+    Employee,
+    Viewer
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+enum CompanyVerificationLevel {
+    Unverified,
+    Basic,
+    Standard,
+    Premium,
+    Enterprise
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+enum CompanyStatus {
+    Active,
+    Suspended,
+    Inactive
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+struct Company {
+    id: u256,
+    name: felt252,
+    registration_number: felt252,
+    country_code: felt252,
+    company_type: CompanyType,
+    verification_level: CompanyVerificationLevel,
+    status: CompanyStatus,
+    created_at: u64,
+    admin: ContractAddress
+}
