@@ -202,3 +202,55 @@ mod CompanyManagerContract {
         self.verifier.write(verifier);
         self.next_company_id.write(1);
     }
+
+    
+    #[abi(embed_v0)]
+    impl CompanyManagerImpl of ICompanyManager<ContractState> {
+        fn register_company(
+            ref self: ContractState,
+            name: felt252,
+            registration_number: felt252,
+            country_code: felt252,
+            company_type: CompanyType,
+            admin: ContractAddress
+        ) -> u256 {
+            let caller = get_caller_address();
+            let company_id = self.next_company_id.read();
+            
+            // Create new company
+            let company = Company {
+                id: company_id,
+                name,
+                registration_number,
+                country_code,
+                company_type,
+                verification_level: CompanyVerificationLevel::Unverified,
+                status: CompanyStatus::Active,
+                created_at: get_block_timestamp(),
+                admin
+            };
+            
+            // Store company
+            self.companies.write(company_id, company);
+            
+            // Add admin as owner
+            self.company_members.write((company_id, admin), CompanyRole::Owner);
+            self.user_companies.write((admin, company_id), true);
+            self.company_member_count.write(company_id, 1);
+            self.company_owner_count.write(company_id, 1);
+            
+            // Increment next company ID
+            self.next_company_id.write(company_id + 1);
+            
+            // Emit event
+            self.emit(CompanyRegistered {
+                company_id,
+                name,
+                registration_number,
+                country_code,
+                company_type,
+                admin
+            });
+            
+            company_id
+        }
