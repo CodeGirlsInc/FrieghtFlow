@@ -254,3 +254,50 @@ mod CompanyManagerContract {
             
             company_id
         }
+
+        
+        fn add_member(
+            ref self: ContractState,
+            company_id: u256,
+            member: ContractAddress,
+            role: CompanyRole
+        ) {
+            let caller = get_caller_address();
+            
+            // Check if company exists
+            let company = self.companies.read(company_id);
+            assert(company.id == company_id, 'Company does not exist');
+            
+            // Check if caller has permission (owner or admin)
+            let caller_role = self.company_members.read((company_id, caller));
+            assert(
+                matches!(caller_role, CompanyRole::Owner) || 
+                matches!(caller_role, CompanyRole::Admin),
+                'Insufficient permissions'
+            );
+            
+            // Check if member is not already in company
+            let existing_role = self.company_members.read((company_id, member));
+            assert(!self._role_exists(existing_role), 'Member already exists');
+            
+            // Add member
+            self.company_members.write((company_id, member), role);
+            self.user_companies.write((member, company_id), true);
+            
+            // Update counters
+            let current_count = self.company_member_count.read(company_id);
+            self.company_member_count.write(company_id, current_count + 1);
+            
+            if matches!(role, CompanyRole::Owner) {
+                let owner_count = self.company_owner_count.read(company_id);
+                self.company_owner_count.write(company_id, owner_count + 1);
+            }
+            
+            // Emit event
+            self.emit(MemberAdded {
+                company_id,
+                member,
+                role,
+                added_by: caller
+            });
+        }
