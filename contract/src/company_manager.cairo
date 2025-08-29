@@ -453,3 +453,53 @@ mod CompanyManagerContract {
                 verified_by: caller
             });
         }
+
+        fn suspend_company(
+            ref self: ContractState,
+            company_id: u256,
+            reason: felt252
+        ) {
+            let caller = get_caller_address();
+            let owner = self.owner.read();
+            
+            // Only owner can suspend companies
+            assert(caller == owner, 'Only owner can suspend');
+            
+            // Check if company exists
+            let mut company = self.companies.read(company_id);
+            assert(company.id == company_id, 'Company does not exist');
+            
+            // Update status to suspended
+            company.status = CompanyStatus::Suspended;
+            self.companies.write(company_id, company);
+            
+            // Emit event
+            self.emit(CompanySuspended {
+                company_id,
+                reason,
+                suspended_by: caller
+            });
+        }
+
+        fn get_owner(self: @ContractState) -> ContractAddress {
+            self.owner.read()
+        }
+
+        fn get_verifier(self: @ContractState) -> ContractAddress {
+            self.verifier.read()
+        }
+    }
+
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn _role_exists(self: @ContractState, role: CompanyRole) -> bool {
+            match role {
+                CompanyRole::Owner => true,
+                CompanyRole::Admin => true,
+                CompanyRole::Manager => true,
+                CompanyRole::Employee => true,
+                CompanyRole::Viewer => false, // Default/unset role
+            }
+        }
+    }
+}
