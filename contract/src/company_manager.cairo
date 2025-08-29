@@ -402,3 +402,54 @@ mod CompanyManagerContract {
         fn get_member_role(self: @ContractState, company_id: u256, member: ContractAddress) -> CompanyRole {
             self.company_members.read((company_id, member))
         }
+
+        fn is_member(self: @ContractState, company_id: u256, member: ContractAddress) -> bool {
+            self.user_companies.read((member, company_id))
+        }
+
+        fn get_user_companies(self: @ContractState, user: ContractAddress) -> Array<u256> {
+            let mut companies = ArrayTrait::new();
+            let max_company_id = self.next_company_id.read();
+            
+            let mut i = 1_u256;
+            loop {
+                if i >= max_company_id {
+                    break;
+                }
+                
+                if self.user_companies.read((user, i)) {
+                    companies.append(i);
+                }
+                
+                i += 1;
+            };
+            
+            companies
+        }
+
+        fn verify_company(
+            ref self: ContractState,
+            company_id: u256,
+            verification_level: CompanyVerificationLevel
+        ) {
+            let caller = get_caller_address();
+            let verifier = self.verifier.read();
+            
+            // Only verifier can verify companies
+            assert(caller == verifier, 'Only verifier can verify');
+            
+            // Check if company exists
+            let mut company = self.companies.read(company_id);
+            assert(company.id == company_id, 'Company does not exist');
+            
+            // Update verification level
+            company.verification_level = verification_level;
+            self.companies.write(company_id, company);
+            
+            // Emit event
+            self.emit(CompanyVerified {
+                company_id,
+                verification_level,
+                verified_by: caller
+            });
+        }
