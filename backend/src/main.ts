@@ -1,14 +1,19 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
+
   try {
     // Start NestJS application
     const app = await NestFactory.create(AppModule);
 
-    //GLOBAL VALIDATION PIPES
+    // GLOBAL PREFIX (optional, keeps API versioned/clean)
+    app.setGlobalPrefix('api/v1');
+
+    // GLOBAL VALIDATION PIPES
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -19,29 +24,33 @@ async function bootstrap() {
 
     // ENABLE CORS
     app.enableCors({
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+      origin: process.env.FRONTEND_URL?.split(',') || [
+        'http://localhost:3000',
+      ],
       credentials: true,
     });
 
     // SWAGGER DOCUMENTATION
     const config = new DocumentBuilder()
       .setTitle('FreightFlow')
-      .setDescription('Swagger API Docs for FreightFlow Project')
+      .setDescription('API Documentation for FreightFlow Project')
+      .setVersion('1.0')
       .setTermsOfService('terms-of-service')
       .setLicense('MIT License', 'mit')
       .addServer('http://localhost:6000')
-      .setVersion('1.0')
+      .addBearerAuth() // 🚀 for future auth-secured endpoints
       .build();
+
     const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api', app, document);
+    SwaggerModule.setup('docs', app, document);
 
-    await app.listen(process.env.PORT ?? 6000);
+    const port = process.env.PORT ?? 6000;
+    await app.listen(port);
 
-    console.log(
-      `Application is running on: http://localhost:${process.env.PORT ?? 6000}`,
-    );
+    logger.log(`🚀 Application running on: http://localhost:${port}`);
+    logger.log(`📘 Swagger docs: http://localhost:${port}/docs`);
   } catch (error) {
-    console.error('Database connection error:', error);
+    console.error('❌ Application startup error:', error);
     process.exit(1);
   }
 }
