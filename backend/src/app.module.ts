@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PartnerModule } from './partner/partner.module';
+import { InvoiceModule } from './invoice/invoice.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { PartnerModule } from './partner/partner.module';
       }),
     }),
     PartnerModule,
+    InvoiceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
