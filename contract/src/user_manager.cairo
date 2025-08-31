@@ -199,3 +199,64 @@ pub mod UserManager {
         pub timestamp: u64,
     }
 
+
+    #[derive(Drop, starknet::Event)]
+    pub struct AdminAdded {
+        pub admin_address: ContractAddress,
+        pub added_by: ContractAddress,
+        pub timestamp: u64,
+    }
+
+    #[constructor]
+    fn constructor(ref self: ContractState, owner: ContractAddress) {
+        self.owner.write(owner);
+        self.admins.entry(owner).write(true);
+        self.total_users.write(0);
+    }
+
+    #[abi(embed_v0)]
+    impl UserManagerImpl of IUserManager<ContractState> {
+        fn register_user(
+            ref self: ContractState,
+            user_type: UserType,
+            name: felt252,
+            email_hash: felt252,
+            phone_hash: felt252,
+            business_license: felt252,
+            metadata_uri: felt252
+        ) {
+            let caller = get_caller_address();
+            let timestamp = get_block_timestamp();
+            
+            // Check if user is already registered
+            let existing_profile = self.user_profiles.entry(caller).read();
+            assert(existing_profile.user_address.is_zero(), 'User already registered');
+
+            // Create user profile
+            let profile = UserProfile {
+                user_address: caller,
+                user_type,
+                name,
+                email_hash,
+                phone_hash,
+                business_license,
+                registration_timestamp: timestamp,
+                verification_level: VerificationLevel::None,
+                status: UserStatus::PendingVerification,
+                metadata_uri,
+            };
+
+            // Store profile
+            self.user_profiles.entry(caller).write(profile);
+
+            // Initialize reputation score
+            let initial_reputation = ReputationScore {
+                total_score: 100, // Starting score
+                completed_shipments: 0,
+                dispute_count: 0,
+                positive_reviews: 0,
+                negative_reviews: 0,
+                last_updated: timestamp,
+            };
+            self.reputation_scores.entry(caller).write(initial_reputation);
+
