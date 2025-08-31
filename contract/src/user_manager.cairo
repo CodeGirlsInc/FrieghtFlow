@@ -98,3 +98,56 @@ pub trait IUserManager<TContractState> {
     ) -> bool;
     
     fn get_user_reputation(self: @TContractState, user_address: ContractAddress) -> ReputationScore;
+
+    
+    fn update_reputation(
+        ref self: TContractState,
+        user_address: ContractAddress,
+        score_change: i32,
+        reason: felt252
+    );
+    
+    fn add_verifier(ref self: TContractState, verifier_address: ContractAddress);
+    
+    fn add_admin(ref self: TContractState, admin_address: ContractAddress);
+    
+    fn get_total_users(self: @TContractState) -> u32;
+}
+
+#[starknet::contract]
+pub mod UserManager {
+    use super::{
+        UserType, VerificationLevel, UserStatus, UserProfile, ReputationScore, ReputationUpdate,
+        IUserManager
+    };
+    use starknet::{
+        ContractAddress, get_caller_address, get_block_timestamp,
+        storage::{
+            StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry, Map
+        }
+    };
+
+    #[storage]
+    struct Storage {
+        owner: ContractAddress,
+        total_users: u32,
+        user_profiles: Map<ContractAddress, UserProfile>,
+        reputation_scores: Map<ContractAddress, ReputationScore>,
+        reputation_history: Map<(ContractAddress, u32), ReputationUpdate>,
+        reputation_history_count: Map<ContractAddress, u32>,
+        verified_users: Map<VerificationLevel, Map<ContractAddress, bool>>,
+        admins: Map<ContractAddress, bool>,
+        verifiers: Map<ContractAddress, bool>,
+    }
+
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    pub enum Event {
+        UserRegistered: UserRegistered,
+        UserVerified: UserVerified,
+        UserSuspended: UserSuspended,
+        ProfileUpdated: ProfileUpdated,
+        ReputationUpdated: ReputationUpdated,
+        VerifierAdded: VerifierAdded,
+        AdminAdded: AdminAdded,
+    }
