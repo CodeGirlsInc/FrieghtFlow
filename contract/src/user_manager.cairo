@@ -260,3 +260,45 @@ pub mod UserManager {
             };
             self.reputation_scores.entry(caller).write(initial_reputation);
 
+
+            // Increment total users
+            let current_total = self.total_users.read();
+            self.total_users.write(current_total + 1);
+
+            // Emit event
+            self.emit(UserRegistered {
+                user_address: caller,
+                user_type,
+                name,
+                timestamp,
+            });
+        }
+
+        fn update_user_profile(
+            ref self: ContractState,
+            name: felt252,
+            email_hash: felt252,
+            phone_hash: felt252,
+            metadata_uri: felt252
+        ) {
+            let caller = get_caller_address();
+            let timestamp = get_block_timestamp();
+            
+            let mut profile = self.user_profiles.entry(caller).read();
+            assert(!profile.user_address.is_zero(), 'User not registered');
+            assert(profile.status != UserStatus::Banned, 'User is banned');
+
+            // Update profile fields
+            profile.name = name;
+            profile.email_hash = email_hash;
+            profile.phone_hash = phone_hash;
+            profile.metadata_uri = metadata_uri;
+
+            self.user_profiles.entry(caller).write(profile);
+
+            self.emit(ProfileUpdated {
+                user_address: caller,
+                timestamp,
+            });
+        }
+
