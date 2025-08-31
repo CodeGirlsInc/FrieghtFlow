@@ -405,3 +405,92 @@ pub mod UserManager {
             assert(self.admins.entry(caller).read(), 'Not authorized');
 
             let mut reputation = self.reputation_scores.entry(user_address).read();
+
+            
+            // Apply score change (ensure it doesn't go below 0)
+            let new_score = if score_change < 0 {
+                let abs_change: u32 = (-score_change).try_into().unwrap();
+                if reputation.total_score > abs_change {
+                    reputation.total_score - abs_change
+                } else {
+                    0
+                }
+            } else {
+                reputation.total_score + score_change.try_into().unwrap()
+            };
+
+            reputation.total_score = new_score;
+            reputation.last_updated = timestamp;
+
+            // Update specific metrics based on reason
+            if reason == 'shipment_completed' {
+                reputation.completed_shipments += 1;
+            } else if reason == 'dispute_raised' {
+                reputation.dispute_count += 1;
+            } else if reason == 'positive_review' {
+                reputation.positive_reviews += 1;
+            } else if reason == 'negative_review' {
+                reputation.negative_reviews += 1;
+            }
+
+            self.reputation_scores.entry(user_address).write(reputation);
+
+            // Store reputation update history
+            let history_count = self.reputation_history_count.entry(user_address).read();
+            let update_record = ReputationUpdate {
+                user_address,
+                score_change,
+                reason,
+                timestamp,
+                updated_by: caller,
+            };
+            self.reputation_history.entry((user_address, history_count)).write(update_record);
+            self.reputation_history_count.entry(user_address).write(history_count + 1);
+
+            self.emit(ReputationUpdated {
+                user_address,
+                score_change,
+                new_total_score: new_score,
+                reason,
+                updated_by: caller,
+                timestamp,
+            });
+        }
+
+        fn add_verifier(ref self: ContractState, verifier_address: ContractAddress) {
+            let caller = get_caller_address();
+            let timestamp = get_block_timestamp();
+            
+            // Only owner can add verifiers
+            assert(caller == self.owner.read(), 'Only owner can add verifiers');
+
+            self.verifiers.entry(verifier_address).write(true);
+
+            self.emit(VerifierAdded {
+                verifier_address,
+                added_by: caller,
+                timestamp,
+            });
+        }
+
+        fn add_admin(ref self: ContractState, admin_address: ContractAddress) {
+            let caller = get_caller_address();
+            let timestamp = get_block_timestamp();
+            
+            // Only owner can add admins
+            assert(caller == self.owner.read(), 'Only owner can add admins');
+
+            self.admins.entry(admin_address).write(true);
+
+            self.emit(AdminAdded {
+                admin_address,
+                added_by: caller,
+                timestamp,
+            });
+        }
+
+        fn get_total_users(self: @ContractState) -> u32 {
+            self.total_users.read()
+        }
+    }
+}
