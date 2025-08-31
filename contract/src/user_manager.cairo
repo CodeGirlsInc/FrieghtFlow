@@ -302,3 +302,54 @@ pub mod UserManager {
             });
         }
 
+
+        fn verify_user(
+            ref self: ContractState,
+            user_address: ContractAddress,
+            verification_level: VerificationLevel
+        ) {
+            let caller = get_caller_address();
+            let timestamp = get_block_timestamp();
+            
+            // Check if caller is a verifier
+            assert(self.verifiers.entry(caller).read(), 'Not authorized verifier');
+
+            let mut profile = self.user_profiles.entry(user_address).read();
+            assert(!profile.user_address.is_zero(), 'User not registered');
+
+            // Update verification level
+            profile.verification_level = verification_level;
+            profile.status = UserStatus::Active;
+            self.user_profiles.entry(user_address).write(profile);
+
+            // Mark user as verified for this level
+            self.verified_users.entry(verification_level).entry(user_address).write(true);
+
+            self.emit(UserVerified {
+                user_address,
+                verification_level,
+                verified_by: caller,
+                timestamp,
+            });
+        }
+
+        fn suspend_user(ref self: ContractState, user_address: ContractAddress) {
+            let caller = get_caller_address();
+            let timestamp = get_block_timestamp();
+            
+            // Check if caller is an admin
+            assert(self.admins.entry(caller).read(), 'Not authorized admin');
+
+            let mut profile = self.user_profiles.entry(user_address).read();
+            assert(!profile.user_address.is_zero(), 'User not registered');
+
+            profile.status = UserStatus::Suspended;
+            self.user_profiles.entry(user_address).write(profile);
+
+            self.emit(UserSuspended {
+                user_address,
+                suspended_by: caller,
+                timestamp,
+            });
+        }
+
