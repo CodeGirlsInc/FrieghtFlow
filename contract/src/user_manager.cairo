@@ -151,3 +151,51 @@ pub mod UserManager {
         VerifierAdded: VerifierAdded,
         AdminAdded: AdminAdded,
     }
+
+    
+    #[derive(Drop, starknet::Event)]
+    pub struct UserRegistered {
+        pub user_address: ContractAddress,
+        pub user_type: UserType,
+        pub name: felt252,
+        pub timestamp: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct UserVerified {
+        pub user_address: ContractAddress,
+        pub verification_level: VerificationLevel,
+        pub verified_by: ContractAddress,
+        pub timestamp: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct UserSuspended {
+        pub user_address: ContractAddress,
+        pub suspended_by: ContractAddress,
+        pub timestamp: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct ProfileUpdated {
+        pub user_address: ContractAddress,
+        pub timestamp: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct ReputationUpdated {
+        pub user_address: ContractAddress,
+        pub score_change: i32,
+        pub new_total_score: u32,
+        pub reason: felt252,
+        pub updated_by: ContractAddress,
+        pub timestamp: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct VerifierAdded {
+        pub verifier_address: ContractAddress,
+        pub added_by: ContractAddress,
+        pub timestamp: u64,
+    }
+
