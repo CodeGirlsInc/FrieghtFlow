@@ -353,3 +353,55 @@ pub mod UserManager {
             });
         }
 
+
+        fn get_user_profile(self: @ContractState, user_address: ContractAddress) -> UserProfile {
+            self.user_profiles.entry(user_address).read()
+        }
+
+        fn is_user_verified(
+            self: @ContractState,
+            user_address: ContractAddress,
+            min_level: VerificationLevel
+        ) -> bool {
+            let profile = self.user_profiles.entry(user_address).read();
+            if profile.user_address.is_zero() {
+                return false;
+            }
+
+            // Check if user meets minimum verification level
+            let user_level_value = match profile.verification_level {
+                VerificationLevel::None => 0,
+                VerificationLevel::Basic => 1,
+                VerificationLevel::Enhanced => 2,
+                VerificationLevel::Premium => 3,
+                VerificationLevel::Enterprise => 4,
+            };
+
+            let min_level_value = match min_level {
+                VerificationLevel::None => 0,
+                VerificationLevel::Basic => 1,
+                VerificationLevel::Enhanced => 2,
+                VerificationLevel::Premium => 3,
+                VerificationLevel::Enterprise => 4,
+            };
+
+            user_level_value >= min_level_value
+        }
+
+        fn get_user_reputation(self: @ContractState, user_address: ContractAddress) -> ReputationScore {
+            self.reputation_scores.entry(user_address).read()
+        }
+
+        fn update_reputation(
+            ref self: ContractState,
+            user_address: ContractAddress,
+            score_change: i32,
+            reason: felt252
+        ) {
+            let caller = get_caller_address();
+            let timestamp = get_block_timestamp();
+            
+            // Check if caller is an admin or the platform contract
+            assert(self.admins.entry(caller).read(), 'Not authorized');
+
+            let mut reputation = self.reputation_scores.entry(user_address).read();
