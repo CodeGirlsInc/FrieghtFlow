@@ -458,3 +458,48 @@ mod QualityControl {
                 valid_until,
                 is_valid: true
             };
+
+            
+            self.certificates.entry(certificate_id).write(certificate);
+            self.next_certificate_id.write(certificate_id + 1);
+            
+            self.emit(CertificateIssued {
+                certificate_id,
+                item_id,
+                certificate_type,
+                issued_by,
+                valid_until
+            });
+            
+            certificate_id
+        }
+
+        fn authorize_inspector(ref self: ContractState, inspector: ContractAddress) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can authorize');
+            self.authorized_inspectors.entry(inspector).write(true);
+            
+            self.emit(InspectorAuthorized {
+                inspector,
+                authorized_by: get_caller_address()
+            });
+        }
+
+        fn authorize_certified_lab(ref self: ContractState, lab: ContractAddress) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can certify labs');
+            self.certified_labs.entry(lab).write(true);
+            
+            self.emit(LabCertified {
+                lab,
+                certified_by: get_caller_address()
+            });
+        }
+
+        fn is_authorized_inspector(self: @ContractState, inspector: ContractAddress) -> bool {
+            self.authorized_inspectors.entry(inspector).read()
+        }
+
+        fn is_certified_lab(self: @ContractState, lab: ContractAddress) -> bool {
+            self.certified_labs.entry(lab).read()
+        }
+    }
+}
