@@ -201,3 +201,55 @@ mod QualityControl {
         InspectorAuthorized: InspectorAuthorized,
         LabCertified: LabCertified,
     }
+
+    
+    #[derive(Drop, starknet::Event)]
+    struct InspectionCreated {
+        #[key]
+        inspection_id: u256,
+        #[key]
+        item_id: u256,
+        inspection_type: InspectionType,
+        inspector: ContractAddress,
+        scheduled_date: u64
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct InspectionCompleted {
+        #[key]
+        inspection_id: u256,
+        #[key]
+        item_id: u256,
+        result: InspectionResult,
+        compliance_status: ComplianceStatus,
+        completion_date: u64
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct QualityStandardCreated {
+        #[key]
+        standard_id: u256,
+        name: ByteArray,
+        created_by: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct CertificateIssued {
+        #[key]
+        certificate_id: u256,
+        #[key]
+        item_id: u256,
+        certificate_type: CertificateType,
+        issued_by: ContractAddress,
+        valid_until: u64
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct NonComplianceDetected {
+        #[key]
+        inspection_id: u256,
+        #[key]
+        item_id: u256,
+        compliance_status: ComplianceStatus,
+        findings_count: u32
+    }
