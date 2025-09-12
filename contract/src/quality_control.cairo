@@ -49,3 +49,50 @@ trait IQualityControl<TContractState> {
     
     fn is_certified_lab(self: @TContractState, lab: ContractAddress) -> bool;
 }
+
+#[derive(Drop, Serde, starknet::Store)]
+enum InspectionType {
+    PreShipment,
+    InTransit,
+    Arrival,
+    Periodic,
+    Compliance,
+    Safety,
+    Quality
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+enum InspectionResult {
+    Passed,
+    Failed,
+    ConditionalPass,
+    Pending,
+    Cancelled
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+enum ComplianceStatus {
+    Compliant,
+    NonCompliant,
+    ConditionalCompliance,
+    UnderReview,
+    NotApplicable
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+enum CertificateType {
+    QualityAssurance,
+    ComplianceCertificate,
+    SafetyCertificate,
+    OriginCertificate,
+    TestingCertificate
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+enum FindingType {
+    Critical,
+    Major,
+    Minor,
+    Observation,
+    Recommendation
+}
