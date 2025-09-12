@@ -409,3 +409,52 @@ mod QualityControl {
         fn get_item_quality_history(self: @ContractState, item_id: u256) -> Array<u256> {
             self.item_inspections.entry(item_id).read()
         }
+
+        
+        fn check_compliance(self: @ContractState, item_id: u256, standard_id: u256) -> ComplianceStatus {
+            let item_history = self.item_inspections.entry(item_id).read();
+            let mut latest_compliance = ComplianceStatus::NotApplicable;
+            
+            let mut i = 0;
+            while i < item_history.len() {
+                let inspection = self.inspections.entry(*item_history.at(i)).read();
+                if inspection.standard_id == standard_id && inspection.is_completed {
+                    latest_compliance = inspection.compliance_status;
+                }
+                i += 1;
+            };
+            
+            latest_compliance
+        }
+
+        fn issue_quality_certificate(
+            ref self: ContractState,
+            item_id: u256,
+            certificate_type: CertificateType,
+            standard_id: u256,
+            valid_until: u64,
+            issued_by: ContractAddress
+        ) -> u256 {
+            let caller = get_caller_address();
+            assert(
+                self.authorized_inspectors.entry(caller).read() || 
+                self.certified_labs.entry(caller).read(),
+                'Unauthorized to issue certificate'
+            );
+            
+            // Check if item is compliant with the standard
+            let compliance = self.check_compliance(item_id, standard_id);
+            assert(compliance == ComplianceStatus::Compliant, 'Item not compliant');
+            
+            let certificate_id = self.next_certificate_id.read();
+            
+            let certificate = QualityCertificate {
+                id: certificate_id,
+                item_id,
+                certificate_type,
+                standard_id,
+                issued_by,
+                issued_at: get_block_timestamp(),
+                valid_until,
+                is_valid: true
+            };
