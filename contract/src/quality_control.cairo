@@ -96,3 +96,58 @@ enum FindingType {
     Observation,
     Recommendation
 }
+
+#[derive(Drop, Serde, starknet::Store)]
+enum MeasurementType {
+    Numerical,
+    Boolean,
+    Categorical,
+    Range,
+    Percentage
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+struct QualityFinding {
+    finding_type: FindingType,
+    description: ByteArray,
+    severity_level: u8,
+    corrective_action_required: bool,
+    corrective_action: ByteArray
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+struct QualityCriteria {
+    name: ByteArray,
+    measurement_type: MeasurementType,
+    min_value: u256,
+    max_value: u256,
+    target_value: u256,
+    tolerance: u256,
+    is_mandatory: bool
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+struct InspectionRecord {
+    id: u256,
+    item_id: u256,
+    inspection_type: InspectionType,
+    standard_id: u256,
+    inspector: ContractAddress,
+    scheduled_date: u64,
+    completion_date: u64,
+    result: InspectionResult,
+    findings: Array<QualityFinding>,
+    compliance_status: ComplianceStatus,
+    is_completed: bool
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+struct QualityStandard {
+    id: u256,
+    name: ByteArray,
+    description: ByteArray,
+    criteria: Array<QualityCriteria>,
+    created_by: ContractAddress,
+    created_at: u64,
+    is_active: bool
+}
