@@ -253,3 +253,56 @@ mod QualityControl {
         compliance_status: ComplianceStatus,
         findings_count: u32
     }
+
+    
+    #[derive(Drop, starknet::Event)]
+    struct InspectorAuthorized {
+        #[key]
+        inspector: ContractAddress,
+        authorized_by: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct LabCertified {
+        #[key]
+        lab: ContractAddress,
+        certified_by: ContractAddress
+    }
+
+    #[constructor]
+    fn constructor(ref self: ContractState, owner: ContractAddress) {
+        self.owner.write(owner);
+        self.next_inspection_id.write(1);
+        self.next_standard_id.write(1);
+        self.next_certificate_id.write(1);
+    }
+
+    #[abi(embed_v0)]
+    impl QualityControlImpl of IQualityControl<ContractState> {
+        fn create_inspection(
+            ref self: ContractState,
+            item_id: u256,
+            inspection_type: InspectionType,
+            standard_id: u256,
+            scheduled_date: u64,
+            inspector: ContractAddress
+        ) -> u256 {
+            // Access control: only authorized inspectors can create inspections
+            assert(self.authorized_inspectors.entry(get_caller_address()).read(), 'Unauthorized inspector');
+            
+            let inspection_id = self.next_inspection_id.read();
+            
+            let inspection = InspectionRecord {
+                id: inspection_id,
+                item_id,
+                inspection_type,
+                standard_id,
+                inspector,
+                scheduled_date,
+                completion_date: 0,
+                result: InspectionResult::Pending,
+                findings: array![],
+                compliance_status: ComplianceStatus::UnderReview,
+                is_completed: false
+            };
+            
