@@ -357,3 +357,55 @@ mod QualityControl {
                 completion_date: inspection.completion_date
             });
             
+            
+            // Emit non-compliance event if needed
+            if compliance_status == ComplianceStatus::NonCompliant {
+                self.emit(NonComplianceDetected {
+                    inspection_id,
+                    item_id: inspection.item_id,
+                    compliance_status,
+                    findings_count: findings.len()
+                });
+            }
+        }
+
+        fn create_quality_standard(
+            ref self: ContractState,
+            name: ByteArray,
+            description: ByteArray,
+            criteria: Array<QualityCriteria>
+        ) -> u256 {
+            // Only owner can create quality standards
+            assert(get_caller_address() == self.owner.read(), 'Only owner can create standards');
+            
+            let standard_id = self.next_standard_id.read();
+            
+            let standard = QualityStandard {
+                id: standard_id,
+                name: name.clone(),
+                description,
+                criteria,
+                created_by: get_caller_address(),
+                created_at: get_block_timestamp(),
+                is_active: true
+            };
+            
+            self.quality_standards.entry(standard_id).write(standard);
+            self.next_standard_id.write(standard_id + 1);
+            
+            self.emit(QualityStandardCreated {
+                standard_id,
+                name,
+                created_by: get_caller_address()
+            });
+            
+            standard_id
+        }
+
+        fn get_inspection_details(self: @ContractState, inspection_id: u256) -> InspectionRecord {
+            self.inspections.entry(inspection_id).read()
+        }
+
+        fn get_item_quality_history(self: @ContractState, item_id: u256) -> Array<u256> {
+            self.item_inspections.entry(item_id).read()
+        }
