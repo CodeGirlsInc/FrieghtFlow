@@ -151,3 +151,53 @@ struct QualityStandard {
     created_at: u64,
     is_active: bool
 }
+
+#[derive(Drop, Serde, starknet::Store)]
+struct QualityCertificate {
+    id: u256,
+    item_id: u256,
+    certificate_type: CertificateType,
+    standard_id: u256,
+    issued_by: ContractAddress,
+    issued_at: u64,
+    valid_until: u64,
+    is_valid: bool
+}
+
+#[starknet::contract]
+mod QualityControl {
+    use super::{
+        IQualityControl, InspectionType, InspectionResult, ComplianceStatus, CertificateType,
+        FindingType, MeasurementType, QualityFinding, QualityCriteria, InspectionRecord,
+        QualityStandard, QualityCertificate
+    };
+    use starknet::{ContractAddress, get_caller_address, get_block_timestamp};
+    use starknet::storage::{
+        StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry, Map
+    };
+
+    #[storage]
+    struct Storage {
+        owner: ContractAddress,
+        next_inspection_id: u256,
+        next_standard_id: u256,
+        next_certificate_id: u256,
+        inspections: Map<u256, InspectionRecord>,
+        quality_standards: Map<u256, QualityStandard>,
+        certificates: Map<u256, QualityCertificate>,
+        item_inspections: Map<u256, Array<u256>>,
+        authorized_inspectors: Map<ContractAddress, bool>,
+        certified_labs: Map<ContractAddress, bool>,
+    }
+
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        InspectionCreated: InspectionCreated,
+        InspectionCompleted: InspectionCompleted,
+        QualityStandardCreated: QualityStandardCreated,
+        CertificateIssued: CertificateIssued,
+        NonComplianceDetected: NonComplianceDetected,
+        InspectorAuthorized: InspectorAuthorized,
+        LabCertified: LabCertified,
+    }
