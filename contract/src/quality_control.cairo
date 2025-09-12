@@ -306,3 +306,54 @@ mod QualityControl {
                 is_completed: false
             };
             
+            
+            self.inspections.entry(inspection_id).write(inspection);
+            
+            // Update item inspection history
+            let mut item_history = self.item_inspections.entry(item_id).read();
+            item_history.append(inspection_id);
+            self.item_inspections.entry(item_id).write(item_history);
+            
+            self.next_inspection_id.write(inspection_id + 1);
+            
+            self.emit(InspectionCreated {
+                inspection_id,
+                item_id,
+                inspection_type,
+                inspector,
+                scheduled_date
+            });
+            
+            inspection_id
+        }
+
+        fn complete_inspection(
+            ref self: ContractState,
+            inspection_id: u256,
+            result: InspectionResult,
+            findings: Array<QualityFinding>,
+            compliance_status: ComplianceStatus
+        ) {
+            let caller = get_caller_address();
+            assert(self.authorized_inspectors.entry(caller).read(), 'Unauthorized inspector');
+            
+            let mut inspection = self.inspections.entry(inspection_id).read();
+            assert(!inspection.is_completed, 'Inspection already completed');
+            assert(inspection.inspector == caller, 'Not assigned inspector');
+            
+            inspection.result = result;
+            inspection.findings = findings.clone();
+            inspection.compliance_status = compliance_status;
+            inspection.completion_date = get_block_timestamp();
+            inspection.is_completed = true;
+            
+            self.inspections.entry(inspection_id).write(inspection);
+            
+            self.emit(InspectionCompleted {
+                inspection_id,
+                item_id: inspection.item_id,
+                result,
+                compliance_status,
+                completion_date: inspection.completion_date
+            });
+            
