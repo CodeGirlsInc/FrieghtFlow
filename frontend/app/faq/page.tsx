@@ -96,3 +96,47 @@ export default function FAQPage() {
                 <HelpCircle className="h-8 w-8 text-primary" />
               </div>
             </div>
+             <h1 className="text-4xl font-bold text-balance">Frequently Asked Questions</h1>
+            <p className="text-xl text-muted-foreground text-pretty max-w-2xl mx-auto">
+              Everything you need to know about FreightFlow, Web3 logistics, smart contracts, and the Starknet
+              blockchain.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* FAQ Content */}
+      <div className="container mx-auto px-4 py-12 max-w-4xl">
+        <div className="space-y-8">
+          {faqCategories.map((category, categoryIndex) => (
+            <Card key={categoryIndex} className="border-border/50">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg text-primary">{category.icon}</div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CardTitle className="text-xl">{category.title}</CardTitle>
+                      <Badge variant="secondary" className="text-xs">
+                        {category.badge}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Accordion type="single" collapsible className="w-full">
+                  {category.questions.map((faq, faqIndex) => (
+                    <AccordionItem key={faqIndex} value={`${categoryIndex}-${faqIndex}`} className="border-border/30">
+                      <AccordionTrigger className="text-left hover:text-primary transition-colors">
+                        <span className="text-pretty">{faq.question}</span>
+                      </AccordionTrigger>
+                      <AccordionContent className="text-muted-foreground leading-relaxed">
+                        <div className="pt-2 text-pretty">{faq.answer}</div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
