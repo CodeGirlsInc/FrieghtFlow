@@ -1,8 +1,21 @@
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { HelpCircle, Truck, Shield, Zap, Globe, Users, Mail } from "lucide-react"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  HelpCircle,
+  Truck,
+  Shield,
+  Zap,
+  Globe,
+  Users,
+  Mail,
+} from "lucide-react";
 
 export default function FAQPage() {
   const faqCategories = [
@@ -29,7 +42,8 @@ export default function FAQPage() {
       badge: "Technology",
       questions: [
         {
-          question: "What are smart contracts and why are they important for logistics?",
+          question:
+            "What are smart contracts and why are they important for logistics?",
           answer:
             "Smart contracts are self-executing contracts with terms directly written into code. In logistics, they automatically trigger payments when delivery conditions are met, enforce service level agreements, and eliminate the need for manual verification. This reduces human error, speeds up transactions, and ensures all parties fulfill their obligations.",
         },
@@ -44,18 +58,21 @@ export default function FAQPage() {
             "FreightFlow includes built-in dispute resolution mechanisms within our smart contracts. We have oracle integrations for real-world data verification and a governance system where stakeholders can vote on dispute resolutions. Additionally, we maintain emergency pause functions for critical issues while preserving the integrity of the system.",
         },
       ],
-    },{
+    },
+    {
       title: "Starknet Blockchain",
       icon: <Zap className="h-5 w-5" />,
       badge: "Blockchain",
       questions: [
         {
-          question: "Why did FreightFlow choose Starknet over other blockchains?",
+          question:
+            "Why did FreightFlow choose Starknet over other blockchains?",
           answer:
             "Starknet offers superior scalability through zero-knowledge rollups, significantly lower transaction costs compared to Ethereum mainnet, and enhanced privacy features. These benefits are crucial for logistics operations that require high-frequency, low-cost transactions while maintaining data privacy and security.",
         },
         {
-          question: "What are the benefits of zero-knowledge proofs in logistics?",
+          question:
+            "What are the benefits of zero-knowledge proofs in logistics?",
           answer:
             "Zero-knowledge proofs allow FreightFlow to verify transactions and data integrity without revealing sensitive business information. This means companies can prove compliance, delivery status, and payment completion while keeping proprietary logistics data private from competitors.",
         },
@@ -83,7 +100,7 @@ export default function FAQPage() {
         },
       ],
     },
-  ]
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,10 +113,12 @@ export default function FAQPage() {
                 <HelpCircle className="h-8 w-8 text-primary" />
               </div>
             </div>
-             <h1 className="text-4xl font-bold text-balance">Frequently Asked Questions</h1>
+            <h1 className="text-4xl font-bold text-balance">
+              Frequently Asked Questions
+            </h1>
             <p className="text-xl text-muted-foreground text-pretty max-w-2xl mx-auto">
-              Everything you need to know about FreightFlow, Web3 logistics, smart contracts, and the Starknet
-              blockchain.
+              Everything you need to know about FreightFlow, Web3 logistics,
+              smart contracts, and the Starknet blockchain.
             </p>
           </div>
         </div>
@@ -112,10 +131,14 @@ export default function FAQPage() {
             <Card key={categoryIndex} className="border-border/50">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary">{category.icon}</div>
+                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                    {category.icon}
+                  </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <CardTitle className="text-xl">{category.title}</CardTitle>
+                      <CardTitle className="text-xl">
+                        {category.title}
+                      </CardTitle>
                       <Badge variant="secondary" className="text-xs">
                         {category.badge}
                       </Badge>
@@ -126,7 +149,11 @@ export default function FAQPage() {
               <CardContent>
                 <Accordion type="single" collapsible className="w-full">
                   {category.questions.map((faq, faqIndex) => (
-                    <AccordionItem key={faqIndex} value={`${categoryIndex}-${faqIndex}`} className="border-border/30">
+                    <AccordionItem
+                      key={faqIndex}
+                      value={`${categoryIndex}-${faqIndex}`}
+                      className="border-border/30"
+                    >
                       <AccordionTrigger className="text-left hover:text-primary transition-colors">
                         <span className="text-pretty">{faq.question}</span>
                       </AccordionTrigger>
@@ -140,3 +167,35 @@ export default function FAQPage() {
             </Card>
           ))}
         </div>
+
+        {/* Contact Section */}
+        <Card className="mt-12 bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20">
+          <CardContent className="p-8 text-center">
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-primary/10 rounded-full">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-semibold mb-2 text-balance">
+              Still have questions?
+            </h3>
+            <p className="text-muted-foreground mb-6 text-pretty max-w-md mx-auto">
+              Our support team is here to help you get the most out of
+              FreightFlow's Web3 logistics platform.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button className="gap-2">
+                <Mail className="h-4 w-4" />
+                Contact Support
+              </Button>
+              <Button variant="outline" className="gap-2 bg-transparent">
+                <Globe className="h-4 w-4" />
+                Join Community
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
