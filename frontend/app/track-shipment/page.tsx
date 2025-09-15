@@ -46,4 +46,47 @@ const mockShipmentData: ShipmentData = {
       timestamp: "Dec 11, 2024 at 8:15 AM",
       status: "completed",
       location: "Distribution Center - Chicago",
+    },{
+      id: "3",
+      title: "Out for Delivery",
+      description: "Package is out for delivery and will arrive soon",
+      timestamp: "Dec 12, 2024 at 9:00 AM",
+      status: "current",
+      location: "Local Distribution Center",
     },
+    {
+      id: "4",
+      title: "Delivered",
+      description: "Package has been successfully delivered",
+      timestamp: "Expected today by 6:00 PM",
+      status: "pending",
+    },
+  ],
+}
+
+export default function TrackShipmentPage() {
+  const [trackingId, setTrackingId] = useState("")
+  const [shipmentData, setShipmentData] = useState<ShipmentData | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleTrack = async () => {
+    if (!trackingId.trim()) {
+      setError("Please enter a tracking ID")
+      return
+    }
+
+    setIsLoading(true)
+    setError("")
+
+    // Simulate API call
+    setTimeout(() => {
+      if (trackingId.toLowerCase().includes("trk")) {
+        setShipmentData(mockShipmentData)
+      } else {
+        setError("Tracking ID not found. Please check and try again.")
+        setShipmentData(null)
+      }
+      setIsLoading(false)
+    }, 1000)
+  }
