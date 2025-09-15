@@ -147,4 +147,52 @@ export default function TrackShipmentPage() {
                   onKeyPress={(e) => e.key === "Enter" && handleTrack()}
                   className="flex-1"
                 />
+<Button onClick={handleTrack} disabled={isLoading} className="px-6">
+                  {isLoading ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
+                  ) : (
+                    <>
+                      <Search className="h-4 w-4 mr-2" />
+                      Track
+                    </>
+                  )}
+                </Button>
+              </div>
+              {error && <p className="text-destructive text-sm mt-2">{error}</p>}
+            </CardContent>
+          </Card>
+        </div>
 
+        {/* Shipment Results */}
+        {shipmentData && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* Status Overview */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-xl">Tracking ID: {shipmentData.trackingId}</CardTitle>
+                    <CardDescription className="flex items-center gap-2 mt-2">
+                      <MapPin className="h-4 w-4" />
+                      Current Location: {shipmentData.currentLocation}
+                    </CardDescription>
+                  </div>
+                  <Badge className={getStatusColor(shipmentData.status)} variant="secondary">
+                    {shipmentData.status.replace("-", " ").toUpperCase()}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 text-lg font-medium">
+                  <Truck className="h-5 w-5 text-primary" />
+                  Estimated Delivery: {shipmentData.estimatedDelivery}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Timeline */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Shipment Timeline</CardTitle>
+                <CardDescription>Track your package journey from start to finish</CardDescription>
+              </CardHeader>
