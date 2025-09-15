@@ -90,3 +90,61 @@ export default function TrackShipmentPage() {
       setIsLoading(false)
     }, 1000)
   }
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "delivered":
+        return "bg-primary text-primary-foreground"
+      case "out-for-delivery":
+        return "bg-secondary text-secondary-foreground"
+      case "in-transit":
+        return "bg-accent text-accent-foreground"
+      default:
+        return "bg-muted text-muted-foreground"
+    }
+  }
+
+  const getStepIcon = (status: "completed" | "current" | "pending") => {
+    switch (status) {
+      case "completed":
+        return <CheckCircle className="h-5 w-5 text-primary" />
+      case "current":
+        return <Clock className="h-5 w-5 text-secondary" />
+      default:
+        return <div className="h-5 w-5 rounded-full border-2 border-muted-foreground" />
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-card shadow-sm">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Package className="h-8 w-8 text-primary" />
+              <h1 className="text-2xl font-bold text-foreground">ShipTracker</h1>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        {/* Tracking Input Section */}
+        <div className="max-w-2xl mx-auto mb-8">
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="text-3xl font-bold text-balance">Track Your Shipment</CardTitle>
+              <CardDescription className="text-lg">
+                Enter your tracking ID to get real-time updates on your package
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter tracking ID (e.g., TRK123456789)"
+                  value={trackingId}
+                  onChange={(e) => setTrackingId(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && handleTrack()}
+                  className="flex-1"
+                />
+
