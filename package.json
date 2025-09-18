@@ -1,8 +1,0 @@
-{
-  "dependencies": {
-    "pdfkit": "^0.17.1"
-  },
-  "devDependencies": {
-    "@types/pdfkit": "^0.17.2"
-  }
-}
