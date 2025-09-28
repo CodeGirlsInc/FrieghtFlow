@@ -45,4 +45,36 @@ export class CustomsComplianceService {
   async getComplianceHistory(shipmentId: string) {
     return this.complianceRepo.find({ where: { shipmentId } });
   }
+
+  /**
+   * Determines whether a shipment has satisfied customs compliance
+   * by verifying documents and checks.
+   * Rules:
+   * - There must be at least one customs document for the shipment and
+   *   every document must have status 'approved'.
+   * - There must be at least one compliance check and every check must have
+   *   status 'passed'.
+   */
+  async isShipmentCompliant(shipmentId: string): Promise<{ compliant: boolean; reasons: string[] }>{
+    const [documents, checks] = await Promise.all([
+      this.customsDocRepo.find({ where: { shipmentId } }),
+      this.complianceRepo.find({ where: { shipmentId } }),
+    ]);
+
+    const reasons: string[] = [];
+
+    if (documents.length === 0) {
+      reasons.push('No customs documents uploaded');
+    } else if (documents.some((d) => d.status !== 'approved')) {
+      reasons.push('All customs documents must be approved');
+    }
+
+    if (checks.length === 0) {
+      reasons.push('No compliance checks recorded');
+    } else if (checks.some((c) => c.status !== 'passed')) {
+      reasons.push('All compliance checks must be passed');
+    }
+
+    return { compliant: reasons.length === 0, reasons };
+  }
 }
