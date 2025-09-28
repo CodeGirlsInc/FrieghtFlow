@@ -9,6 +9,7 @@ import { ShipmentModule } from './shipment/shipment.module';
 import { InsuranceModule } from './insurance/insurance.module';
 import { CustomsComplianceModule } from './customs/customs-complaince.module';
 import { DocumentManagementModule } from './document-management/document-management.module';
+import { RouteOptimizationModule } from './route-optimization/route-optimization.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { DocumentManagementModule } from './document-management/document-managem
     InsuranceModule,
     CustomsComplianceModule,
     DocumentManagementModule,
+    RouteOptimizationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
