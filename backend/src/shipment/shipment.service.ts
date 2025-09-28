@@ -6,6 +6,7 @@ import { ShipmentStatusHistory } from "./shipment-status-history.entity";
 import { CreateShipmentDto } from "./dto/create-shipment.dto";
 import { UpdateShipmentDto } from "./dto/update-shipment.dto";
 import { UpdateShipmentStatusDto } from "./dto/update-shipment-status.dto";
+import { CustomsComplianceService } from "../customs/customs-complaince.service";
 
 @Injectable()
 export class ShipmentService {
@@ -13,7 +14,8 @@ export class ShipmentService {
     @InjectRepository(Shipment)
     private readonly shipmentRepo: Repository<Shipment>,
     @InjectRepository(ShipmentStatusHistory)
-    private readonly statusHistoryRepo: Repository<ShipmentStatusHistory>
+    private readonly statusHistoryRepo: Repository<ShipmentStatusHistory>,
+    private readonly customsComplianceService: CustomsComplianceService
   ) {}
 
   private generateTrackingId(): string {
@@ -97,6 +99,22 @@ export class ShipmentService {
       throw new BadRequestException("Cannot update status for delivered or cancelled shipments");
     }
     
+    // Enforce customs compliance before progressing beyond PENDING/PICKED_UP
+    const requiresCompliance = [
+      ShipmentStatus.IN_TRANSIT,
+      ShipmentStatus.OUT_FOR_DELIVERY,
+      ShipmentStatus.DELIVERED,
+    ].includes(updateStatusDto.status);
+
+    if (requiresCompliance) {
+      const { compliant, reasons } = await this.customsComplianceService.isShipmentCompliant(shipment.id);
+      if (!compliant) {
+        throw new BadRequestException(
+          `Shipment is not customs compliant: ${reasons.join(", ")}`
+        );
+      }
+    }
+
     // Update shipment status
     shipment.status = updateStatusDto.status;
     await this.shipmentRepo.save(shipment);
