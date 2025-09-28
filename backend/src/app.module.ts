@@ -8,6 +8,7 @@ import { InvoiceModule } from './invoice/invoice.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { InsuranceModule } from './insurance/insurance.module';
 import { CustomsComplianceModule } from './customs/customs-complaince.module';
+import { DocumentManagementModule } from './document-management/document-management.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { CustomsComplianceModule } from './customs/customs-complaince.module';
     ShipmentModule,
     InsuranceModule,
     CustomsComplianceModule,
+    DocumentManagementModule,
   ],
   controllers: [AppController],
   providers: [AppService],
