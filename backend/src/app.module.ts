@@ -6,6 +6,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PartnerModule } from './partner/partner.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { ShipmentModule } from './shipment/shipment.module';
+import { InsuranceModule } from './insurance/insurance.module';
+import { CustomsComplianceModule } from './customs/customs-complaince.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { ShipmentModule } from './shipment/shipment.module';
     PartnerModule,
     InvoiceModule,
     ShipmentModule,
+    InsuranceModule,
+    CustomsComplianceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
