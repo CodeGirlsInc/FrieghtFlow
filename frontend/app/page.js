@@ -1,4 +1,5 @@
 import { Button } from "../components/ui/button";
+import BookShipmentForm from "../components/BookShipmentForm";
 import {
   Card,
   CardContent,
@@ -77,7 +78,13 @@ export default function HomePage() {
       </header>
 
       <main className="flex-1">
-        {/* Hero Section */}
+  {/* Hero Section */}
+        {/* Shipment Booking Form Section */}
+        <section className="w-full py-12 md:py-24 bg-white">
+          <div className="container px-4 md:px-6">
+            <BookShipmentForm />
+          </div>
+        </section>
         <section className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-br from-blue-50 via-white to-purple-50">
           <div className="container px-4 md:px-6">
             <div className="grid gap-6 lg:grid-cols-[1fr_400px] lg:gap-12 xl:grid-cols-[1fr_600px]">
