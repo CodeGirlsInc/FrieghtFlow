@@ -1,6 +1,9 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from "@nestjs/common"
 import type { Repository, FindOptionsWhere } from "typeorm"
 import { FreightQuote, QuoteStatus } from "../entities/freight-quote.entity"
+import { Bid } from '../entities/bid.entity';
+import { CreateBidDto } from '../dto/create-bid.dto';
+import { AcceptBidDto } from '../dto/accept-bid.dto';
 import type { PricingService } from "./pricing.service"
 import type { CreateQuoteRequestDto } from "../dto/create-quote-request.dto"
 import type { UpdateQuoteDto } from "../dto/update-quote.dto"
@@ -28,11 +31,34 @@ export interface PaginatedResult<T> {
 
 @Injectable()
 export class FreightQuotationService {
+  async submitBid(dto: CreateBidDto): Promise<Bid> {
+  const quote = await this.findQuoteById(dto.freightQuoteId.toString());
+    if (!quote) throw new NotFoundException('Quote not found');
+    const bid = this.bidRepo.create({
+      carrierId: dto.carrierId,
+      price: dto.price,
+      details: dto.details,
+      freightQuote: quote,
+    });
+    return this.bidRepo.save(bid);
+  }
+
+  async getBids(quoteId: string): Promise<Bid[]> {
+    return this.bidRepo.find({ where: { freightQuote: { id: quoteId } } });
+  }
+
+  async acceptBid(dto: AcceptBidDto): Promise<FreightQuote> {
+  const quote = await this.findQuoteById(dto.freightQuoteId.toString());
+    if (!quote) throw new NotFoundException('Quote not found');
+    quote.acceptedBidId = dto.bidId;
+    return this.freightQuoteRepository.save(quote);
+  }
   private readonly logger = new Logger(FreightQuotationService.name)
 
   constructor(
     private readonly freightQuoteRepository: Repository<FreightQuote>,
     private readonly pricingService: PricingService,
+    private readonly bidRepo: Repository<Bid>,
   ) {}
 
   async createQuote(createQuoteDto: CreateQuoteRequestDto): Promise<FreightQuote> {

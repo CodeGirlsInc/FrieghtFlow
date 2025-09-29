@@ -13,6 +13,8 @@ import {
   UsePipes,
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody } from "@nestjs/swagger"
+import { CreateBidDto } from '../dto/create-bid.dto';
+import { AcceptBidDto } from '../dto/accept-bid.dto';
 import type { FreightQuotationService } from "../services/freight-quotation.service"
 import type { CreateQuoteRequestDto } from "../dto/create-quote-request.dto"
 import type { UpdateQuoteDto } from "../dto/update-quote.dto"
@@ -23,6 +25,20 @@ import { QuoteStatus } from "../entities/freight-quote.entity"
 @Controller("freight-quotes")
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class FreightQuotationController {
+  @Post('bid')
+  async submitBid(@Body() dto: CreateBidDto) {
+    return this.freightQuotationService.submitBid(dto);
+  }
+
+  @Get(':id/bids')
+  async getBids(@Param('id') id: string) {
+    return this.freightQuotationService.getBids(id);
+  }
+
+  @Post('accept')
+  async acceptBid(@Body() dto: AcceptBidDto) {
+    return this.freightQuotationService.acceptBid(dto);
+  }
   constructor(private readonly freightQuotationService: FreightQuotationService) {}
 
   @Post()
