@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PartnerModule } from './partner/partner.module';
 import { DisputesModule } from './disputes/disputes.module';
+import { StellarPaymentsModule } from './stellar/stellar-payments.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { DisputesModule } from './disputes/disputes.module';
     }),
     PartnerModule,
     DisputesModule,
+    StellarPaymentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

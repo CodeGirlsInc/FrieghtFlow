@@ -51,7 +51,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.20",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "@stellar/stellar-sdk": "^12.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
