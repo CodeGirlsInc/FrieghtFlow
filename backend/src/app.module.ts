@@ -8,8 +8,7 @@ import { InvoiceModule } from './invoice/invoice.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { InsuranceModule } from './insurance/insurance.module';
 import { CustomsComplianceModule } from './customs/customs-complaince.module';
-import { DocumentManagementModule } from './document-management/document-management.module';
-import { RouteOptimizationModule } from './route-optimization/route-optimization.module';
+import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
 
 @Module({
   imports: [
@@ -30,13 +29,12 @@ import { RouteOptimizationModule } from './route-optimization/route-optimization
         synchronize: true,
       }),
     }),
-    PartnerModule,
-    InvoiceModule,
-    ShipmentModule,
-    InsuranceModule,
-    CustomsComplianceModule,
-    DocumentManagementModule,
-    RouteOptimizationModule,
+  PartnerModule,
+  InvoiceModule,
+  ShipmentModule,
+  InsuranceModule,
+  CustomsComplianceModule,
+  GoodsTrackingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
