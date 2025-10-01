@@ -4,8 +4,11 @@ import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PartnerModule } from './partner/partner.module';
-import { DisputesModule } from './disputes/disputes.module';
-import { StellarPaymentsModule } from './stellar/stellar-payments.module';
+import { InvoiceModule } from './invoice/invoice.module';
+import { ShipmentModule } from './shipment/shipment.module';
+import { InsuranceModule } from './insurance/insurance.module';
+import { CustomsComplianceModule } from './customs/customs-complaince.module';
+import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
 
 @Module({
   imports: [
@@ -26,9 +29,12 @@ import { StellarPaymentsModule } from './stellar/stellar-payments.module';
         synchronize: true,
       }),
     }),
-    PartnerModule,
-    DisputesModule,
-    StellarPaymentsModule,
+  PartnerModule,
+  InvoiceModule,
+  ShipmentModule,
+  InsuranceModule,
+  CustomsComplianceModule,
+  GoodsTrackingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
