@@ -167,10 +167,6 @@ export default function InputPage() {
                   onChange={handleInputChange("search")}
                 />
               </div>
-              /** * Utility function to merge Tailwind CSS classes with proper
-              precedence. * Combines clsx for conditional classes and
-              tailwind-merge for deduplication. * * @param inputs - Class values
-              to merge * @returns Merged class string */
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-2">
                   Disabled Input
