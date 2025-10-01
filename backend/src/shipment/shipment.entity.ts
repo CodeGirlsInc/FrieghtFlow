@@ -6,65 +6,75 @@ import {
   UpdateDateColumn,
   Index,
   OneToMany,
-} from "typeorm";
-import { ShipmentStatusHistory } from "./shipment-status-history.entity";
+} from 'typeorm';
+import { ShipmentStatusHistory } from './shipment-status-history.entity';
 
 export enum ShipmentStatus {
-  PENDING = "pending",
-  PICKED_UP = "picked_up",
-  IN_TRANSIT = "in_transit",
-  OUT_FOR_DELIVERY = "out_for_delivery",
-  DELIVERED = "delivered",
-  CANCELLED = "cancelled",
-  EXCEPTION = "exception",
+  PENDING = 'pending',
+  PICKED_UP = 'picked_up',
+  IN_TRANSIT = 'in_transit',
+  OUT_FOR_DELIVERY = 'out_for_delivery',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+  EXCEPTION = 'exception',
 }
 
-@Entity({ name: "shipments" })
+@Entity({ name: 'shipments' })
 export class Shipment {
-  @PrimaryGeneratedColumn("uuid")
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Index({ unique: true })
-  @Column({ type: "varchar", length: 50, unique: true })
+  @Column({ type: 'varchar', length: 50, unique: true })
   trackingId: string;
 
-  @Column({ type: "varchar", length: 255 })
+  @Column({ type: 'varchar', length: 255 })
   origin: string;
 
-  @Column({ type: "varchar", length: 255 })
+  @Column({ type: 'varchar', length: 255 })
   destination: string;
 
-  @Column({ type: "varchar", length: 100 })
+  @Column({ type: 'varchar', length: 100 })
   carrier: string;
 
-  @Column({ type: "enum", enum: ShipmentStatus, default: ShipmentStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: ShipmentStatus,
+    default: ShipmentStatus.PENDING,
+  })
   status: ShipmentStatus;
 
-  @Column({ type: "timestamptz", nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   estimatedDelivery?: Date;
 
-  @Column({ type: "text", nullable: true })
+  @Column({ type: 'text', nullable: true })
   freightDetails?: string;
 
-  @Column({ type: "decimal", precision: 10, scale: 2, nullable: true })
-  weight?: number;
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  weightKg: number;
 
-  @Column({ type: "varchar", length: 20, nullable: true })
+  @Column({  nullable: true })
+  distanceKm: number;
+  
+  @Column()
+  mode: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
   weightUnit?: string;
 
-  @Column({ type: "decimal", precision: 10, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   dimensions?: number;
 
-  @Column({ type: "varchar", length: 20, nullable: true })
+  @Column({ type: 'varchar', length: 20, nullable: true })
   dimensionUnit?: string;
 
-  @Column({ type: "text", nullable: true })
+  @Column({ type: 'text', nullable: true })
   notes?: string;
 
-  @CreateDateColumn({ type: "timestamptz" })
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: "timestamptz" })
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
   @OneToMany(() => ShipmentStatusHistory, (history) => history.shipment)

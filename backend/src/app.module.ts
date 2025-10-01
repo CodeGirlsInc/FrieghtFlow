@@ -6,6 +6,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PartnerModule } from './partner/partner.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { ShipmentModule } from './shipment/shipment.module';
+import { InsuranceModule } from './insurance/insurance.module';
+import { CustomsComplianceModule } from './customs/customs-complaince.module';
+import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
+import { FleetModule } from './fleet/fleet.module';
 
 @Module({
   imports: [
@@ -26,9 +30,13 @@ import { ShipmentModule } from './shipment/shipment.module';
         synchronize: true,
       }),
     }),
-    PartnerModule,
-    InvoiceModule,
-    ShipmentModule,
+  PartnerModule,
+  InvoiceModule,
+  ShipmentModule,
+  InsuranceModule,
+  CustomsComplianceModule,
+  GoodsTrackingModule,
+  FleetModule,
   ],
   controllers: [AppController],
   providers: [AppService],
