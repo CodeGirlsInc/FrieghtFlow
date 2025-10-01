@@ -35,8 +35,6 @@ import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
   InsuranceModule,
   CustomsComplianceModule,
   GoodsTrackingModule,
-  // Goods tracking for shippers and warehouses
-  require('./goods-tracking/goods-tracking.module').GoodsTrackingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
