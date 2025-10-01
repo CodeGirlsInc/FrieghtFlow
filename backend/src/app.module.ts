@@ -9,6 +9,7 @@ import { ShipmentModule } from './shipment/shipment.module';
 import { InsuranceModule } from './insurance/insurance.module';
 import { CustomsComplianceModule } from './customs/customs-complaince.module';
 import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
+import { FleetModule } from './fleet/fleet.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
   InsuranceModule,
   CustomsComplianceModule,
   GoodsTrackingModule,
+  FleetModule,
   ],
   controllers: [AppController],
   providers: [AppService],
