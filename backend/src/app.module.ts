@@ -8,8 +8,7 @@ import { InvoiceModule } from './invoice/invoice.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { InsuranceModule } from './insurance/insurance.module';
 import { CustomsComplianceModule } from './customs/customs-complaince.module';
-import { SustainabilityModule } from './sustainability/sustainability.module';
-import { EmissionModule } from './emission/emission.module';
+import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
 
 @Module({
   imports: [
@@ -30,13 +29,12 @@ import { EmissionModule } from './emission/emission.module';
         synchronize: true,
       }),
     }),
-    PartnerModule,
-    InvoiceModule,
-    ShipmentModule,
-    InsuranceModule,
-    CustomsComplianceModule,
-    SustainabilityModule,
-    EmissionModule,
+  PartnerModule,
+  InvoiceModule,
+  ShipmentModule,
+  InsuranceModule,
+  CustomsComplianceModule,
+  GoodsTrackingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

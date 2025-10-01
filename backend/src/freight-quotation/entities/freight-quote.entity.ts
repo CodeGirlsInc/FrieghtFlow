@@ -1,4 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from "typeorm"
+import { OneToMany } from 'typeorm';
+import { Bid } from './bid.entity';
 
 export enum CargoType {
   GENERAL = "general",
@@ -68,4 +70,11 @@ export class FreightQuote {
 
   @UpdateDateColumn({ name: "updated_at" })
   updatedAt: Date
+
+    // Relations for bidding system
+    @OneToMany(() => Bid, bid => bid.freightQuote)
+    bids: Bid[];
+
+    @Column({ nullable: true })
+    acceptedBidId?: number;
 }
