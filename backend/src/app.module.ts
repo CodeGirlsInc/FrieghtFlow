@@ -10,6 +10,8 @@ import { InsuranceModule } from './insurance/insurance.module';
 import { CustomsComplianceModule } from './customs/customs-complaince.module';
 import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
 import { StellarFreightModule } from './stellar-freight/stellar-freight.module';
+import { FleetModule } from './fleet/fleet.module';
+
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { StellarFreightModule } from './stellar-freight/stellar-freight.module';
   CustomsComplianceModule,
   GoodsTrackingModule,
   StellarFreightModule,
+  FleetModule,
+
   ],
   controllers: [AppController],
   providers: [AppService],
