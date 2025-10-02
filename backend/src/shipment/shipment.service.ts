@@ -6,6 +6,8 @@ import { ShipmentStatusHistory } from "./shipment-status-history.entity";
 import { CreateShipmentDto } from "./dto/create-shipment.dto";
 import { UpdateShipmentDto } from "./dto/update-shipment.dto";
 import { UpdateShipmentStatusDto } from "./dto/update-shipment-status.dto";
+import { UpdateShipmentLocationDto } from "./dto/update-shipment-location.dto";
+import { ShipmentLocationHistory } from "./entities/shipment-location-history.entity";
 import { CustomsComplianceService } from "../customs/customs-complaince.service";
 
 @Injectable()
@@ -15,8 +17,51 @@ export class ShipmentService {
     private readonly shipmentRepo: Repository<Shipment>,
     @InjectRepository(ShipmentStatusHistory)
     private readonly statusHistoryRepo: Repository<ShipmentStatusHistory>,
+      @InjectRepository(ShipmentLocationHistory)
+      private readonly locationHistoryRepo: Repository<ShipmentLocationHistory>,
     private readonly customsComplianceService: CustomsComplianceService
   ) {}
+  async updateLocation(id: string, dto: UpdateShipmentLocationDto): Promise<Shipment> {
+    const shipment = await this.findOne(id);
+    if (typeof dto.latitude !== 'number' || typeof dto.longitude !== 'number') {
+      throw new BadRequestException('Latitude and longitude are required and must be numbers');
+    }
+
+    shipment.currentLatitude = dto.latitude;
+    shipment.currentLongitude = dto.longitude;
+    shipment.currentLocationTimestamp = dto.timestamp ? new Date(dto.timestamp) : new Date();
+    shipment.currentLocationSource = dto.source || 'unknown';
+    await this.shipmentRepo.save(shipment);
+
+    // Log location history
+    await this.locationHistoryRepo.save({
+      shipment: shipment,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      accuracy: dto.accuracy,
+      speed: dto.speed,
+      heading: dto.heading,
+      source: dto.source,
+      timestamp: dto.timestamp ? new Date(dto.timestamp) : new Date(),
+    });
+    return shipment;
+  }
+  async getLatestLocation(id: string): Promise<ShipmentLocationHistory | null> {
+    const shipment = await this.findOne(id);
+    const latest = await this.locationHistoryRepo.findOne({
+      where: { shipment: { id: shipment.id } },
+      order: { timestamp: 'DESC' },
+    });
+    return latest || null;
+  }
+
+  async getLocationHistory(id: string): Promise<ShipmentLocationHistory[]> {
+    const shipment = await this.findOne(id);
+    return this.locationHistoryRepo.find({
+      where: { shipment: { id: shipment.id } },
+      order: { timestamp: "DESC" },
+    });
+  }
 
   private generateTrackingId(): string {
     // Generate a unique tracking ID with format: FF-YYYYMMDD-XXXXX
@@ -91,9 +136,7 @@ export class ShipmentService {
   async update(id: string, updateDto: UpdateShipmentDto): Promise<Shipment> {
     const shipment = await this.findOne(id);
     
-    if (updateDto.estimatedDelivery) {
-      updateDto.estimatedDelivery = new Date(updateDto.estimatedDelivery);
-    }
+    // estimatedDelivery is a string, so no need to convert to Date
     
     Object.assign(shipment, updateDto);
     return this.shipmentRepo.save(shipment);

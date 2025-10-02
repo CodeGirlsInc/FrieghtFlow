@@ -72,6 +72,18 @@ export class Shipment {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
+  @Column('float', { nullable: true })
+  currentLatitude?: number;
+
+  @Column('float', { nullable: true })
+  currentLongitude?: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  currentLocationTimestamp?: Date;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  currentLocationSource?: string;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
