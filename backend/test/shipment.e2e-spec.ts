@@ -179,7 +179,35 @@ describe("Shipment (e2e)", () => {
     });
   });
 
-  describe("/shipments/:id (PATCH)", () => {
+  describe("/shipments/:id/location (PATCH) and /shipments/:id/latest-location (GET)", () => {
+    it("should update shipment location", async () => {
+      const locationDto = {
+        shipmentId: createdShipmentId,
+        latitude: 34.0522,
+        longitude: -118.2437,
+        accuracy: 10,
+        speed: 50,
+        heading: 180,
+        source: "test-device",
+        timestamp: new Date().toISOString(),
+      };
+      const res = await request(app.getHttpServer())
+        .patch(`/shipments/${createdShipmentId}/location`)
+        .send(locationDto);
+      expect(res.status).toBe(200);
+      expect(res.body.currentLatitude).toBe(locationDto.latitude);
+      expect(res.body.currentLongitude).toBe(locationDto.longitude);
+    });
+
+    it("should get latest shipment location", async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/shipments/${createdShipmentId}/latest-location`);
+      expect(res.status).toBe(200);
+      expect(res.body.latitude).toBe(34.0522);
+      expect(res.body.longitude).toBe(-118.2437);
+      expect(res.body.source).toBe("test-device");
+    });
+  });
     it("should update shipment details", () => {
       const updateDto = {
         notes: "Updated notes - package is fragile",
