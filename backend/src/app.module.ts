@@ -11,6 +11,7 @@ import { CustomsComplianceModule } from './customs/customs-complaince.module';
 import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
 import { StellarFreightModule } from './stellar-freight/stellar-freight.module';
 import { FleetModule } from './fleet/fleet.module';
+import { TrackingModule } from './tracking/tracking.module';
 
 
 @Module({
@@ -40,6 +41,7 @@ import { FleetModule } from './fleet/fleet.module';
   GoodsTrackingModule,
   StellarFreightModule,
   FleetModule,
+  TrackingModule,
 
   ],
   controllers: [AppController],
