@@ -9,20 +9,44 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  ParseEnumPipe,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from "@nestjs/swagger";
 import { ShipmentService } from "./shipment.service";
 import { CreateShipmentDto } from "./dto/create-shipment.dto";
 import { UpdateShipmentDto } from "./dto/update-shipment.dto";
 import { UpdateShipmentStatusDto } from "./dto/update-shipment-status.dto";
-import { Shipment } from "./shipment.entity";
+import { Shipment, ShipmentStatus } from "./shipment.entity";
 import { ShipmentStatusHistory } from "./shipment-status-history.entity";
+import { UpdateShipmentLocationDto } from "./dto/update-shipment-location.dto";
+import { ShipmentLocationHistory } from "./entities/shipment-location-history.entity";
 
 @ApiTags("shipments")
 @Controller("shipments")
 export class ShipmentController {
   constructor(private readonly shipmentService: ShipmentService) {}
+  @Patch(":id/location")
+  @ApiOperation({ summary: "Update shipment location" })
+  @ApiParam({ name: "id", description: "Shipment ID" })
+  @ApiResponse({ status: 200, description: "Location updated successfully", type: Shipment })
+  @ApiResponse({ status: 404, description: "Shipment not found" })
+  async updateLocation(
+    @Param("id") id: string,
+    @Body() updateLocationDto: UpdateShipmentLocationDto
+  ): Promise<Shipment> {
+    return this.shipmentService.updateLocation(id, updateLocationDto);
+  }
 
+  @Get(":id/location-history")
+  @ApiOperation({ summary: "Get shipment location history" })
+  @ApiParam({ name: "id", description: "Shipment ID" })
+  @ApiResponse({ status: 200, description: "Location history", type: [ShipmentLocationHistory] })
+  @ApiResponse({ status: 404, description: "Shipment not found" })
+  async getLocationHistory(@Param("id") id: string): Promise<ShipmentLocationHistory[]> {
+    return this.shipmentService.getLocationHistory(id);
+  }
+
+  // ...existing code...
   @Post()
   @ApiOperation({ summary: "Create a new shipment" })
   @ApiResponse({ status: 201, description: "Shipment created successfully", type: Shipment })
@@ -33,8 +57,14 @@ export class ShipmentController {
 
   @Get()
   @ApiOperation({ summary: "Get all shipments" })
+  @ApiQuery({ name: "status", required: false, enum: ShipmentStatus, description: "Filter by status" })
   @ApiResponse({ status: 200, description: "List of all shipments", type: [Shipment] })
-  async findAll(): Promise<Shipment[]> {
+  async findAll(
+    @Query("status", new ParseEnumPipe(ShipmentStatus, { optional: true })) status?: ShipmentStatus,
+  ): Promise<Shipment[]> {
+    if (status) {
+      return this.shipmentService.findByStatus(status);
+    }
     return this.shipmentService.findAll();
   }
 

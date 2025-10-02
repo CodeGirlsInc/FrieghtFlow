@@ -9,7 +9,11 @@ import { ShipmentModule } from './shipment/shipment.module';
 import { InsuranceModule } from './insurance/insurance.module';
 import { CustomsComplianceModule } from './customs/customs-complaince.module';
 import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
+import { StellarFreightModule } from './stellar-freight/stellar-freight.module';
 import { FleetModule } from './fleet/fleet.module';
+import { TrackingModule } from './tracking/tracking.module';
+import { InvoicesModule } from './invoices/invoices.module';
+
 
 @Module({
   imports: [
@@ -36,7 +40,11 @@ import { FleetModule } from './fleet/fleet.module';
   InsuranceModule,
   CustomsComplianceModule,
   GoodsTrackingModule,
+  StellarFreightModule,
   FleetModule,
+  TrackingModule,
+  InvoicesModule,
+
   ],
   controllers: [AppController],
   providers: [AppService],
