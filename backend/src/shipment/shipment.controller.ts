@@ -9,13 +9,14 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  ParseEnumPipe,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from "@nestjs/swagger";
 import { ShipmentService } from "./shipment.service";
 import { CreateShipmentDto } from "./dto/create-shipment.dto";
 import { UpdateShipmentDto } from "./dto/update-shipment.dto";
 import { UpdateShipmentStatusDto } from "./dto/update-shipment-status.dto";
-import { Shipment } from "./shipment.entity";
+import { Shipment, ShipmentStatus } from "./shipment.entity";
 import { ShipmentStatusHistory } from "./shipment-status-history.entity";
 import { UpdateShipmentLocationDto } from "./dto/update-shipment-location.dto";
 import { ShipmentLocationHistory } from "./entities/shipment-location-history.entity";
@@ -56,8 +57,14 @@ export class ShipmentController {
 
   @Get()
   @ApiOperation({ summary: "Get all shipments" })
+  @ApiQuery({ name: "status", required: false, enum: ShipmentStatus, description: "Filter by status" })
   @ApiResponse({ status: 200, description: "List of all shipments", type: [Shipment] })
-  async findAll(): Promise<Shipment[]> {
+  async findAll(
+    @Query("status", new ParseEnumPipe(ShipmentStatus, { optional: true })) status?: ShipmentStatus,
+  ): Promise<Shipment[]> {
+    if (status) {
+      return this.shipmentService.findByStatus(status);
+    }
     return this.shipmentService.findAll();
   }
 

@@ -99,6 +99,14 @@ export class ShipmentService {
     });
   }
 
+  async findByStatus(status: ShipmentStatus): Promise<Shipment[]> {
+    return this.shipmentRepo.find({
+      where: { status },
+      order: { createdAt: "DESC" },
+      relations: ["statusHistory"],
+    });
+  }
+
   async findOne(id: string): Promise<Shipment> {
     const shipment = await this.shipmentRepo.findOne({
       where: { id },
