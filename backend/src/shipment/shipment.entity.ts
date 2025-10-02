@@ -8,6 +8,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { ShipmentStatusHistory } from './shipment-status-history.entity';
+import { ShipmentLocationHistory } from './entities/shipment-location-history.entity';
 
 export enum ShipmentStatus {
   PENDING = 'pending',
@@ -71,6 +72,12 @@ export class Shipment {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
+  @Column('float', { nullable: true })
+  currentLatitude?: number;
+
+  @Column('float', { nullable: true })
+  currentLongitude?: number;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
@@ -79,4 +86,7 @@ export class Shipment {
 
   @OneToMany(() => ShipmentStatusHistory, (history) => history.shipment)
   statusHistory: ShipmentStatusHistory[];
+
+  @OneToMany(() => ShipmentLocationHistory, (location) => location.shipment)
+  locationHistory: ShipmentLocationHistory[];
 }

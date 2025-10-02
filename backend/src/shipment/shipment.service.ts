@@ -6,6 +6,8 @@ import { ShipmentStatusHistory } from "./shipment-status-history.entity";
 import { CreateShipmentDto } from "./dto/create-shipment.dto";
 import { UpdateShipmentDto } from "./dto/update-shipment.dto";
 import { UpdateShipmentStatusDto } from "./dto/update-shipment-status.dto";
+import { UpdateShipmentLocationDto } from "./dto/update-shipment-location.dto";
+import { ShipmentLocationHistory } from "./entities/shipment-location-history.entity";
 import { CustomsComplianceService } from "../customs/customs-complaince.service";
 
 @Injectable()
@@ -15,8 +17,32 @@ export class ShipmentService {
     private readonly shipmentRepo: Repository<Shipment>,
     @InjectRepository(ShipmentStatusHistory)
     private readonly statusHistoryRepo: Repository<ShipmentStatusHistory>,
+      @InjectRepository(ShipmentLocationHistory)
+      private readonly locationHistoryRepo: Repository<ShipmentLocationHistory>,
     private readonly customsComplianceService: CustomsComplianceService
   ) {}
+  async updateLocation(id: string, dto: UpdateShipmentLocationDto): Promise<Shipment> {
+    const shipment = await this.findOne(id);
+    shipment.currentLatitude = dto.latitude;
+    shipment.currentLongitude = dto.longitude;
+    await this.shipmentRepo.save(shipment);
+
+    // Log location history
+    await this.locationHistoryRepo.save({
+      shipment: shipment,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+    });
+    return shipment;
+  }
+
+  async getLocationHistory(id: string): Promise<ShipmentLocationHistory[]> {
+    const shipment = await this.findOne(id);
+    return this.locationHistoryRepo.find({
+      where: { shipment: { id: shipment.id } },
+      order: { timestamp: "DESC" },
+    });
+  }
 
   private generateTrackingId(): string {
     // Generate a unique tracking ID with format: FF-YYYYMMDD-XXXXX
