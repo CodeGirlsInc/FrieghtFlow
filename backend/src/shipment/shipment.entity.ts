@@ -8,6 +8,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { ShipmentStatusHistory } from './shipment-status-history.entity';
+import { TrackingEvent } from '../tracking/tracking-event.entity';
 
 export enum ShipmentStatus {
   PENDING = 'pending',
@@ -77,6 +78,10 @@ export class Shipment {
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
-  @OneToMany(() => ShipmentStatusHistory, (history) => history.shipment)
+  @OneToMany(() => ShipmentStatusHistory, (history: ShipmentStatusHistory) => history.shipment)
   statusHistory: ShipmentStatusHistory[];
+
+  // Tracking events relation (real-time/historical checkpoints)
+  @OneToMany(() => TrackingEvent, (trackingEvent: TrackingEvent) => trackingEvent.shipment, { cascade: false })
+  trackingEvents: TrackingEvent[];
 }
