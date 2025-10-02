@@ -128,9 +128,7 @@ export class ShipmentService {
   async update(id: string, updateDto: UpdateShipmentDto): Promise<Shipment> {
     const shipment = await this.findOne(id);
     
-    if (updateDto.estimatedDelivery) {
-      updateDto.estimatedDelivery = new Date(updateDto.estimatedDelivery);
-    }
+    // estimatedDelivery is a string, so no need to convert to Date
     
     Object.assign(shipment, updateDto);
     return this.shipmentRepo.save(shipment);
