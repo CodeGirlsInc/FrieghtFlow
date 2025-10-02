@@ -12,6 +12,7 @@ import { GoodsTrackingModule } from './goods-tracking/goods-tracking.module';
 import { StellarFreightModule } from './stellar-freight/stellar-freight.module';
 import { FleetModule } from './fleet/fleet.module';
 import { TrackingModule } from './tracking/tracking.module';
+import { InvoicesModule } from './invoices/invoices.module';
 
 
 @Module({
@@ -42,6 +43,7 @@ import { TrackingModule } from './tracking/tracking.module';
   StellarFreightModule,
   FleetModule,
   TrackingModule,
+  InvoicesModule,
 
   ],
   controllers: [AppController],
