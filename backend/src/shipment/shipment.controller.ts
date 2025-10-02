@@ -1,3 +1,11 @@
+  @Get(":id/latest-location")
+  @ApiOperation({ summary: "Get latest shipment location" })
+  @ApiParam({ name: "id", description: "Shipment ID" })
+  @ApiResponse({ status: 200, description: "Latest location", type: ShipmentLocationHistory })
+  @ApiResponse({ status: 404, description: "Shipment not found" })
+  async getLatestLocation(@Param("id") id: string): Promise<ShipmentLocationHistory | null> {
+    return this.shipmentService.getLatestLocation(id);
+  }
 import {
   Controller,
   Get,
@@ -45,6 +53,7 @@ export class ShipmentController {
     return this.shipmentService.getLocationHistory(id);
   }
 
+  // ...existing code...
   @Post()
   @ApiOperation({ summary: "Create a new shipment" })
   @ApiResponse({ status: 201, description: "Shipment created successfully", type: Shipment })

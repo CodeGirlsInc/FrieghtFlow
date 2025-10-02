@@ -1,4 +1,4 @@
-import { IsNumber, IsUUID } from 'class-validator';
+import { IsNumber, IsUUID, IsOptional, IsString, IsDateString } from 'class-validator';
 
 export class UpdateShipmentLocationDto {
   @IsUUID()
@@ -9,4 +9,24 @@ export class UpdateShipmentLocationDto {
 
   @IsNumber()
   longitude: number;
+
+  @IsOptional()
+  @IsNumber()
+  accuracy?: number;
+
+  @IsOptional()
+  @IsNumber()
+  speed?: number;
+
+  @IsOptional()
+  @IsNumber()
+  heading?: number;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @IsOptional()
+  @IsDateString()
+  timestamp?: string;
 }

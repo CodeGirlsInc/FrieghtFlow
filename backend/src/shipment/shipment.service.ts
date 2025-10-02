@@ -23,8 +23,14 @@ export class ShipmentService {
   ) {}
   async updateLocation(id: string, dto: UpdateShipmentLocationDto): Promise<Shipment> {
     const shipment = await this.findOne(id);
+    if (typeof dto.latitude !== 'number' || typeof dto.longitude !== 'number') {
+      throw new BadRequestException('Latitude and longitude are required and must be numbers');
+    }
+
     shipment.currentLatitude = dto.latitude;
     shipment.currentLongitude = dto.longitude;
+    shipment.currentLocationTimestamp = dto.timestamp ? new Date(dto.timestamp) : new Date();
+    shipment.currentLocationSource = dto.source || 'unknown';
     await this.shipmentRepo.save(shipment);
 
     // Log location history
@@ -32,8 +38,21 @@ export class ShipmentService {
       shipment: shipment,
       latitude: dto.latitude,
       longitude: dto.longitude,
+      accuracy: dto.accuracy,
+      speed: dto.speed,
+      heading: dto.heading,
+      source: dto.source,
+      timestamp: dto.timestamp ? new Date(dto.timestamp) : new Date(),
     });
     return shipment;
+  }
+  async getLatestLocation(id: string): Promise<ShipmentLocationHistory | null> {
+    const shipment = await this.findOne(id);
+    const latest = await this.locationHistoryRepo.findOne({
+      where: { shipment: { id: shipment.id } },
+      order: { timestamp: 'DESC' },
+    });
+    return latest || null;
   }
 
   async getLocationHistory(id: string): Promise<ShipmentLocationHistory[]> {
