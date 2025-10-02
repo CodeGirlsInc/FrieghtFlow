@@ -150,7 +150,7 @@ describe("Shipment (e2e)", () => {
         .expect(200)
         .expect((res) => {
           expect(Array.isArray(res.body)).toBe(true);
-          expect(res.body.some(s => s.carrier === "FedEx")).toBe(true);
+          expect(res.body.some((s: any) => s.carrier === "FedEx")).toBe(true);
         });
     });
 
@@ -160,7 +160,7 @@ describe("Shipment (e2e)", () => {
         .expect(200)
         .expect((res) => {
           expect(Array.isArray(res.body)).toBe(true);
-          expect(res.body.some(s => s.origin.includes("New York"))).toBe(true);
+          expect(res.body.some((s: any) => s.origin.includes("New York"))).toBe(true);
         });
     });
   });
@@ -208,6 +208,7 @@ describe("Shipment (e2e)", () => {
       expect(res.body.source).toBe("test-device");
     });
   });
+  describe("/shipments/:id (PATCH)", () => {
     it("should update shipment details", () => {
       const updateDto = {
         notes: "Updated notes - package is fragile",
