@@ -62,7 +62,6 @@ const Table = <T extends {}>({
     return sortedData.slice(start, start + rowsPerPage);
   }, [sortedData, currentPage, rowsPerPage, pagination]);
 
-
   return (
     <div>
       <table className={`w-full border-collapse ${striped ? 'striped' : ''}`}>
