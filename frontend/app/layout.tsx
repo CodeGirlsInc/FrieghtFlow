@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import QueryProviders from "./providers";
 
@@ -30,7 +31,13 @@ export default function RootLayout({
       > 
       <QueryProviders>
         {children}
-      </QueryProviders>
+        <Toaster 
+          position="top-right" 
+          expand={false}
+          richColors
+          closeButton
+          duration={4000}
+        />
       </body>
     </html>
   );
