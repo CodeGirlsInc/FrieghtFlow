@@ -20,6 +20,22 @@ export enum ShipmentStatus {
   EXCEPTION = 'exception',
 }
 
+export enum CargoType {
+  GENERAL = 'general',
+  PERISHABLE = 'perishable',
+  HAZARDOUS = 'hazardous',
+  FRAGILE = 'fragile',
+  HIGH_VALUE = 'high_value',
+  LIVE_ANIMALS = 'live_animals',
+}
+
+export enum RiskLevel {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+  CRITICAL = 'critical',
+}
+
 @Entity({ name: 'shipments' })
 export class Shipment {
   @PrimaryGeneratedColumn('uuid')
@@ -83,6 +99,27 @@ export class Shipment {
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   currentLocationSource?: string;
+
+  // Risk scoring fields
+  @Column({
+    type: 'enum',
+    enum: CargoType,
+    default: CargoType.GENERAL,
+  })
+  cargoType: CargoType;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  riskScore: number;
+
+  @Column({
+    type: 'enum',
+    enum: RiskLevel,
+    default: RiskLevel.LOW,
+  })
+  riskLevel: RiskLevel;
+
+  @Column({ type: 'json', nullable: true })
+  riskFactors: Record<string, any>;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
