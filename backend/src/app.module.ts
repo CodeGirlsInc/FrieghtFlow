@@ -3,8 +3,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { PartnerModule } from './partner/partner.module';
-import { Notifications2Module } from './notifications2/notifications2.module';
 
 @Module({
   imports: [
@@ -25,8 +23,6 @@ import { Notifications2Module } from './notifications2/notifications2.module';
         synchronize: true,
       }),
     }),
-    PartnerModule,
-    Notifications2Module,
   ],
   controllers: [AppController],
   providers: [AppService],
