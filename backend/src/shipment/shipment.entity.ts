@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { ShipmentStatusHistory } from './shipment-status-history.entity';
 import { Cargo } from 'src/cargo/entities/cargo.entity';
+import { TrackingEvent } from '../tracking/tracking-event.entity';
 
 export enum ShipmentStatus {
   PENDING = 'pending',
@@ -18,6 +19,22 @@ export enum ShipmentStatus {
   DELIVERED = 'delivered',
   CANCELLED = 'cancelled',
   EXCEPTION = 'exception',
+}
+
+export enum CargoType {
+  GENERAL = 'general',
+  PERISHABLE = 'perishable',
+  HAZARDOUS = 'hazardous',
+  FRAGILE = 'fragile',
+  HIGH_VALUE = 'high_value',
+  LIVE_ANIMALS = 'live_animals',
+}
+
+export enum RiskLevel {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+  CRITICAL = 'critical',
 }
 
 @Entity({ name: 'shipments' })
@@ -74,6 +91,38 @@ export class Shipment {
 
    @OneToMany(() => Cargo, (cargo) => cargo.shipment)
   cargoItems: Cargo[];
+  @Column('float', { nullable: true })
+  currentLatitude?: number;
+
+  @Column('float', { nullable: true })
+  currentLongitude?: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  currentLocationTimestamp?: Date;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  currentLocationSource?: string;
+
+  // Risk scoring fields
+  @Column({
+    type: 'enum',
+    enum: CargoType,
+    default: CargoType.GENERAL,
+  })
+  cargoType: CargoType;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  riskScore: number;
+
+  @Column({
+    type: 'enum',
+    enum: RiskLevel,
+    default: RiskLevel.LOW,
+  })
+  riskLevel: RiskLevel;
+
+  @Column({ type: 'json', nullable: true })
+  riskFactors: Record<string, any>;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
@@ -81,6 +130,10 @@ export class Shipment {
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
-  @OneToMany(() => ShipmentStatusHistory, (history) => history.shipment)
+  @OneToMany(() => ShipmentStatusHistory, (history: ShipmentStatusHistory) => history.shipment)
   statusHistory: ShipmentStatusHistory[];
+
+  // Tracking events relation (real-time/historical checkpoints)
+  @OneToMany(() => TrackingEvent, (trackingEvent: TrackingEvent) => trackingEvent.shipment, { cascade: false })
+  trackingEvents: TrackingEvent[];
 }
