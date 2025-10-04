@@ -8,6 +8,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { ShipmentStatusHistory } from './shipment-status-history.entity';
+import { Cargo } from 'src/cargo/entities/cargo.entity';
 import { TrackingEvent } from '../tracking/tracking-event.entity';
 
 export enum ShipmentStatus {
@@ -88,6 +89,8 @@ export class Shipment {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
+   @OneToMany(() => Cargo, (cargo) => cargo.shipment)
+  cargoItems: Cargo[];
   @Column('float', { nullable: true })
   currentLatitude?: number;
 
