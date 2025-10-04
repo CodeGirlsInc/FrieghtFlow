@@ -1,0 +1,14 @@
+{
+  "home": {
+    "title": "Page d'accueil FreightFlow",
+    "placeholder": "Entrez votre texte ici...",
+    "simulateError": "Simuler une erreur",
+    "errorSimulated": "Ceci est une erreur simulée.",
+    "characterLimitExceeded": "Vous avez dépassé la limite de caractères."
+  },
+  "common": {
+    "welcome": "Bienvenue",
+    "loading": "Chargement...",
+    "error": "Une erreur s'est produite"
+  }
+}
