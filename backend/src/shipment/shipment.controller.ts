@@ -17,11 +17,15 @@ import { UpdateShipmentDto } from "./dto/update-shipment.dto";
 import { UpdateShipmentStatusDto } from "./dto/update-shipment-status.dto";
 import { Shipment } from "./shipment.entity";
 import { ShipmentStatusHistory } from "./shipment-status-history.entity";
+import { CargoService } from "src/cargo/cargo.service";
 
 @ApiTags("shipments")
 @Controller("shipments")
 export class ShipmentController {
-  constructor(private readonly shipmentService: ShipmentService) {}
+  constructor(
+    private readonly shipmentService: ShipmentService,
+    private readonly cargoService: CargoService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: "Create a new shipment" })
@@ -38,6 +42,11 @@ export class ShipmentController {
     return this.shipmentService.findAll();
   }
 
+  @Get(':id/cargo')
+  findShipmentCargo(@Param('id') id: string) {
+    return this.cargoService.findByShipmentId(id);
+  }
+  
   @Get("search")
   @ApiOperation({ summary: "Search shipments by query" })
   @ApiQuery({ name: "q", description: "Search query for tracking ID, origin, destination, or carrier" })

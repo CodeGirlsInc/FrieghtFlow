@@ -8,6 +8,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { ShipmentStatusHistory } from './shipment-status-history.entity';
+import { Cargo } from 'src/cargo/entities/cargo.entity';
 
 export enum ShipmentStatus {
   PENDING = 'pending',
@@ -70,6 +71,9 @@ export class Shipment {
 
   @Column({ type: 'text', nullable: true })
   notes?: string;
+
+   @OneToMany(() => Cargo, (cargo) => cargo.shipment)
+  cargoItems: Cargo[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
