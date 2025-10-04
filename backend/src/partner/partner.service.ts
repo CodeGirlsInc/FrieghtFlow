@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import { CreatePartnerDto } from './Dto/create-partner.dto';
 import { FilterPartnerDto } from './dto/filter-partner.dto';
 import { UpdatePartnerDto } from './dto/update-partner.dto';
+// import { FilterPartnerDto } from './dto/filter-partner.dto';
+// import { UpdatePartnerDto } from './dto/update-partner.dto';
 
 @Injectable()
 export class PartnerService {
