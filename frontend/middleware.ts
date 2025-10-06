@@ -1,23 +1,33 @@
+// In middleware.ts
 import { NextRequest, NextResponse } from "next/server";
+import createMiddleware from "next-intl/middleware";
 
+// ✅ Internationalization middleware setup
+export default createMiddleware({
+  locales: ["en", "es", "fr"],
+  defaultLocale: "en",
+});
+
+// ✅ Middleware configuration
+export const config = {
+  // Match only internationalized pathnames
+  matcher: [
+    "/", // Match the root
+    "/(en|es|fr)/:path*", // Match all locale-specific paths
+    // Add a negative lookahead to exclude specific paths.
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
+};
+
+// ✅ Protected and guest routes
 const protectedRoutes = ["/dashboard", "/profile", "/settings"];
 const guestRoutes = ["/login", "/register"];
 
-// Helper function to verify JWT token
+// ✅ Helper function to verify JWT token
 async function verifyToken(token: string): Promise<boolean> {
   try {
-    // In a real application, you would verify the JWT token here
-    // For now, we'll just check if the token exists and is not empty
-    if (!token || token.trim() === "") {
-      return false;
-    }
-
-    // You can add actual JWT verification here
-    // For example, using a library like 'jsonwebtoken' or making a request to your auth service
-    // const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // return !!decoded;
-
-    // For now, just return true if token exists
+    if (!token || token.trim() === "") return false;
+    // Add real JWT verification here (e.g. jsonwebtoken)
     return true;
   } catch (error) {
     console.error("Token verification error:", error);
@@ -25,22 +35,19 @@ async function verifyToken(token: string): Promise<boolean> {
   }
 }
 
-// Helper function to check if a path matches any pattern in an array
+// ✅ Helper function to check if a path matches any pattern in an array
 function matchesPath(pathname: string, patterns: string[]): boolean {
   return patterns.some((pattern) => {
-    // Exact match
     if (pattern === pathname) return true;
-
-    // Wildcard match (e.g., '/dashboard/*')
     if (pattern.endsWith("/*")) {
       const basePath = pattern.slice(0, -2);
       return pathname.startsWith(basePath);
     }
-
     return false;
   });
 }
 
+// ✅ Main middleware function
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -48,7 +55,7 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
-    pathname.includes(".") // Static files (images, css, js, etc.)
+    pathname.includes(".")
   ) {
     return NextResponse.next();
   }
@@ -64,7 +71,6 @@ export async function middleware(request: NextRequest) {
   // Handle protected routes
   if (matchesPath(pathname, protectedRoutes)) {
     if (!isAuthenticated) {
-      // Redirect to login with return URL
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("returnUrl", pathname);
       return NextResponse.redirect(loginUrl);
@@ -74,7 +80,6 @@ export async function middleware(request: NextRequest) {
   // Handle guest routes (login, register)
   if (matchesPath(pathname, guestRoutes)) {
     if (isAuthenticated) {
-      // Redirect authenticated users to dashboard
       const dashboardUrl = new URL("/dashboard", request.url);
       return NextResponse.redirect(dashboardUrl);
     }
@@ -83,18 +88,3 @@ export async function middleware(request: NextRequest) {
   // Allow access to public routes and unmatched routes
   return NextResponse.next();
 }
-
-// Configure which paths the middleware should run on
-export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder files
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*$).*)",
-  ],
-};

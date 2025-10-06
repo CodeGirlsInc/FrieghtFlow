@@ -1,0 +1,14 @@
+{
+  "home": {
+    "title": "Página de inicio de FreightFlow",
+    "placeholder": "Ingrese su texto aquí...",
+    "simulateError": "Simular error",
+    "errorSimulated": "Este es un error simulado.",
+    "characterLimitExceeded": "Has excedido el límite de caracteres."
+  },
+  "common": {
+    "welcome": "Bienvenido",
+    "loading": "Cargando...",
+    "error": "Ocurrió un error"
+  }
+}
