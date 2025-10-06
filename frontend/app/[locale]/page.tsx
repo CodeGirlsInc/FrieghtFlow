@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Textarea } from "@/components/ui/Textarea";
 import { useTranslations } from "next-intl";
+import NewHome from "@/components/pages/Home";
 
 export default function Home() {
   const t = useTranslations("home");
@@ -20,25 +21,22 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      {/* Language Switcher */}
-      <div className="absolute top-8 right-8"></div>
-
-      <h1 className="text-4xl font-bold mb-8">{t("title")}</h1>
-
+      <h1 className="text-4xl font-bold mb-8">FreightFlow Homepage</h1>
       <div className="w-full max-w-md">
         <Textarea
           value={value}
           onChange={handleChange}
-          placeholder={t("placeholder")}
+          placeholder="Enter your text here..."
           maxLength={200}
           error={error}
         />
         <button
-          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-          onClick={() => setError(t("errorSimulated"))}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md"
+          onClick={() => setError("This is a simulated error.")}
         >
-          {t("simulateError")}
+          Simulate Error
         </button>
+        <NewHome />
       </div>
     </main>
   );

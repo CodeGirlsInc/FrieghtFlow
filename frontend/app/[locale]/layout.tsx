@@ -6,6 +6,7 @@ import QueryProviders from "../providers";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 import LanguageSwitcher from "@/components/language-switcher";
+import { AuthProvider } from "@/lib/auth-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,17 +40,19 @@ export default async function LocaleLayout(props: {
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <NextIntlClientProvider messages={messages} locale={locale}>
-          <QueryProviders>
-            <LanguageSwitcher locale={locale} />
-            {children}
-            <Toaster
-              position="top-right"
-              expand={false}
-              richColors
-              closeButton
-              duration={4000}
-            />
-          </QueryProviders>
+          <AuthProvider>
+            <QueryProviders>
+              <LanguageSwitcher locale={locale} />
+              {children}
+              <Toaster
+                position="top-right"
+                expand={false}
+                richColors
+                closeButton
+                duration={4000}
+              />
+            </QueryProviders>
+          </AuthProvider>
         </NextIntlClientProvider>
       </body>
     </html>
