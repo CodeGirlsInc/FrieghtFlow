@@ -4,6 +4,8 @@ import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationModule } from './notifications/notifications.module';
+import { FreightJobsModule } from './freight-jobs/freight-jobs.module';
+
 
 @Module({
   imports: [
@@ -25,6 +27,7 @@ import { NotificationModule } from './notifications/notifications.module';
       }),
     }),
     NotificationModule,
+    FreightJobsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
