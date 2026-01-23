@@ -3,7 +3,9 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { NotificationModule } from './notifications/notifications.module';
 import { FreightJobsModule } from './freight-jobs/freight-jobs.module';
+
 
 @Module({
   imports: [
@@ -24,6 +26,7 @@ import { FreightJobsModule } from './freight-jobs/freight-jobs.module';
         synchronize: true,
       }),
     }),
+    NotificationModule,
     FreightJobsModule,
   ],
   controllers: [AppController],
