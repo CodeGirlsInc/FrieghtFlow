@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { WebSocketModule } from './websocket/websocket.module';
 import { NotificationModule } from './notifications/notifications.module';
 import { FreightJobsModule } from './freight-jobs/freight-jobs.module';
 
@@ -26,6 +27,7 @@ import { FreightJobsModule } from './freight-jobs/freight-jobs.module';
         synchronize: true,
       }),
     }),
+    WebSocketModule,
     NotificationModule,
     FreightJobsModule,
   ],
