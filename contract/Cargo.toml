@@ -7,6 +7,15 @@ edition = "2021"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
+ink = { version = "5.0.0", default-features = false, features = ["std"] }
+ink_primitives = { version = "5.0.0", default-features = false, features = ["std"] }
+ink_prelude = { version = "5.0.0", default-features = false, features = ["std"] }
+scale = { package = "parity-scale-codec", version = "3", default-features = false, features = ["derive", "std"] }
+scale-info = { version = "2", default-features = false, features = ["derive", "std"] }
+
+[lib]
+name = "reputation_contract"
+path = "src/lib.rs"
 solana-program = "1.18"
 borsh = "0.10.3"
 thiserror = "1.0"
