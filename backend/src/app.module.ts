@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { WebSocketModule } from './websocket/websocket.module';
 import { NotificationModule } from './notifications/notifications.module';
 import { FreightJobsModule } from './freight-jobs/freight-jobs.module';
+import { CarrierModule } from './carriers/carrier.module';
 
 
 @Module({
@@ -30,6 +31,7 @@ import { FreightJobsModule } from './freight-jobs/freight-jobs.module';
     WebSocketModule,
     NotificationModule,
     FreightJobsModule,
+    CarrierModule,
   ],
   controllers: [AppController],
   providers: [AppService],
