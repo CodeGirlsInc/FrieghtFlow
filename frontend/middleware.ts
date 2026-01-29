@@ -21,7 +21,7 @@ export const config = {
 
 // ✅ Protected and guest routes
 const protectedRoutes = ["/dashboard", "/profile", "/settings"];
-const guestRoutes = ["/login", "/register"];
+const guestRoutes = ["/auth/*", "/login", "/register"];
 
 // ✅ Helper function to verify JWT token
 async function verifyToken(token: string): Promise<boolean> {
@@ -71,13 +71,13 @@ export async function middleware(request: NextRequest) {
   // Handle protected routes
   if (matchesPath(pathname, protectedRoutes)) {
     if (!isAuthenticated) {
-      const loginUrl = new URL("/login", request.url);
+      const loginUrl = new URL("/auth/login", request.url);
       loginUrl.searchParams.set("returnUrl", pathname);
       return NextResponse.redirect(loginUrl);
     }
   }
 
-  // Handle guest routes (login, register)
+  // Handle guest routes (login, register, /auth/*)
   if (matchesPath(pathname, guestRoutes)) {
     if (isAuthenticated) {
       const dashboardUrl = new URL("/dashboard", request.url);

@@ -26,6 +26,15 @@ export interface RefreshTokenResponse {
   access_token: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 class AuthApiError extends Error {
@@ -109,6 +118,30 @@ export const authApi = {
     });
 
     return handleApiResponse<RefreshTokenResponse>(response);
+  },
+
+  async forgotPassword(payload: ForgotPasswordRequest): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return handleApiResponse<{ message: string }>(response);
+  },
+
+  async resetPassword(payload: ResetPasswordRequest): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return handleApiResponse<{ message: string }>(response);
   },
 
   async logout(): Promise<{ message: string }> {

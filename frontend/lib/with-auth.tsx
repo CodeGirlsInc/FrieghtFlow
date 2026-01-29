@@ -27,7 +27,7 @@ export function withAuth<P extends object>(
   options: WithAuthOptions = {}
 ) {
   const {
-    redirectTo = "/login",
+    redirectTo = "/auth/login",
     loadingComponent: LoadingComponent = LoadingSpinner,
     requireAuth = true,
   } = options;
@@ -148,7 +148,7 @@ export function withRole<P extends object>(
       if (isLoading) return;
 
       if (!isAuthenticated) {
-        router.push("/login");
+        router.push("/auth/login");
         return;
       }
 

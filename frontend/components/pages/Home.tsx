@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import LogoutButton from "@/components/auth/LogoutButton";
 import { Package, ArrowRight, Users, TrendingUp } from "lucide-react";
 
 export default function NewHome() {
@@ -37,17 +38,18 @@ export default function NewHome() {
                   >
                     Dashboard
                   </Link>
+                  <LogoutButton className="px-3 py-2 bg-red-600 text-white rounded-md" />
                 </>
               ) : (
                 <>
                   <Link
-                    href="/login"
+                    href="/auth/login"
                     className="text-black hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium"
                   >
                     Sign In
                   </Link>
                   <Link
-                    href="/register"
+                    href="/auth/register"
                     className="bg-black bg-opacity-30 text-white px-4 py-2 rounded-md hover:bg-opacity-50 transition-colors text-sm font-medium"
                   >
                     Get Started
@@ -83,7 +85,7 @@ export default function NewHome() {
             ) : (
               <div className="flex justify-center flex-col md:flex-row max-w-2xl w-full gap-4">
                 <Link
-                  href="/register"
+                  href="/auth/register"
                   className="flex items-center justify-center px-8 py-4 border border-transparent text-lg font-semibold rounded-md text-yellow-300 bg-white bg-opacity-20 hover:bg-opacity-40 md:px-10 transition-colors"
                 >
                   Get Started Free
