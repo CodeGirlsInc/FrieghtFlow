@@ -14,7 +14,10 @@ export interface User {
   id: string;
   email: string;
   name?: string;
+  role?: UserRole;
 }
+
+export type UserRole = "SHIPPER" | "CARRIER" | "DISPATCHER";
 
 export interface AuthState {
   user: User | null;

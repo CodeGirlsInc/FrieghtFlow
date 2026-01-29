@@ -27,21 +27,25 @@ const Card: React.FC<CardProps> = ({
     flat: "shadow-none border-none",
   };
 
+  const isFlex = className?.includes("flex") || className?.includes("h-full");
+
   return (
     <div
-      className={clsx(baseStyles, variantStyles[variant], className)}
+      className={clsx(baseStyles, variantStyles[variant], isFlex && "flex flex-col", className)}
       {...props}
     >
       {header && (
-        <div className="border-b border-gray-100 dark:border-gray-800 p-4 font-semibold text-gray-800 dark:text-gray-100">
+        <div className="border-b border-gray-100 dark:border-gray-800 p-4 font-semibold text-gray-800 dark:text-gray-100 flex-shrink-0">
           {header}
         </div>
       )}
 
-      <div className="p-4 text-gray-700 dark:text-gray-200">{children}</div>
+      <div className={clsx("p-4 text-gray-700 dark:text-gray-200", isFlex && "flex flex-col flex-1 min-h-0")}>
+        {children}
+      </div>
 
       {footer && (
-        <div className="border-t border-gray-100 dark:border-gray-800 p-4 text-sm text-gray-600 dark:text-gray-400">
+        <div className="border-t border-gray-100 dark:border-gray-800 p-4 text-sm text-gray-600 dark:text-gray-400 flex-shrink-0">
           {footer}
         </div>
       )}

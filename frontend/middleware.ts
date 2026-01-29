@@ -20,7 +20,7 @@ export const config = {
 };
 
 // ✅ Protected and guest routes
-const protectedRoutes = ["/dashboard", "/profile", "/settings"];
+const protectedRoutes = [ "/profile", "/settings"];
 const guestRoutes = ["/login", "/register"];
 
 // ✅ Helper function to verify JWT token
@@ -78,12 +78,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // Handle guest routes (login, register)
-  if (matchesPath(pathname, guestRoutes)) {
-    if (isAuthenticated) {
-      const dashboardUrl = new URL("/dashboard", request.url);
-      return NextResponse.redirect(dashboardUrl);
-    }
-  }
+  // if (matchesPath(pathname, guestRoutes)) {
+  //   // if (isAuthenticated) {
+  //   //   const dashboardUrl = new URL("/dashboard", request.url);
+  //   //   return NextResponse.redirect(dashboardUrl);
+  //   // }
+  // }
 
   // Allow access to public routes and unmatched routes
   return NextResponse.next();

@@ -15,6 +15,7 @@ export interface AuthResponse {
     id: string;
     email: string;
     name?: string;
+    role?: "SHIPPER" | "CARRIER" | "DISPATCHER";
   };
 }
 
@@ -117,17 +118,28 @@ export const authApi = {
     });
   },
 
-  async getProfile(): Promise<{ id: string; email: string; name?: string }> {
+  async getProfile(): Promise<{
+    id: string;
+    email: string;
+    name?: string;
+    role?: "SHIPPER" | "CARRIER" | "DISPATCHER";
+  }> {
     return makeAuthenticatedRequest<{
       id: string;
       email: string;
       name?: string;
+      role?: "SHIPPER" | "CARRIER" | "DISPATCHER";
     }>("/auth/profile");
   },
 
   async verifyToken(): Promise<{
     valid: boolean;
-    user?: { id: string; email: string; name?: string };
+    user?: {
+      id: string;
+      email: string;
+      name?: string;
+      role?: "SHIPPER" | "CARRIER" | "DISPATCHER";
+    };
   }> {
     try {
       const user = await this.getProfile();
