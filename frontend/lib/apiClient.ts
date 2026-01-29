@@ -78,6 +78,18 @@ function requestFactory(): ApiClient["request"] {
     ): Promise<TResponse> => {
         const url = buildUrl(path, options?.query);
         const headers = new Headers(options?.headers);
+
+            // Attach Authorization header from localStorage when running in browser
+            try {
+                if (typeof window !== "undefined") {
+                    const token = localStorage.getItem("auth_token");
+                    if (token && !headers.has("Authorization")) {
+                        headers.set("Authorization", `Bearer ${token}`);
+                    }
+                }
+            } catch (err) {
+                // ignore storage errors
+            }
         const body = serializeBody(options?.body, headers);
         const shouldLog = (options?.log ?? true) && isDev;
 
