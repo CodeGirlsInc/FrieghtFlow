@@ -77,7 +77,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Handle guest routes (login, register, /auth/*)
+  // Handle guest routes (login, register)
   if (matchesPath(pathname, guestRoutes)) {
     if (isAuthenticated) {
       const dashboardUrl = new URL("/dashboard", request.url);
