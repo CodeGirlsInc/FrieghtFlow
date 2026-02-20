@@ -307,3 +307,116 @@ mod tests {
         assert!(!doc.is_verified);
         assert!(doc.verified_by.is_none());
     }
+
+    
+    #[test]
+    fn test_verify_document() {
+        let (env, admin, client) = setup();
+        let uploader = Address::generate(&env);
+
+        let (id, _) = register(&env, &client, &uploader, 1);
+
+        client.verify_document(&admin, &id);
+
+        let doc = client.get_document(&id);
+        assert!(doc.is_verified);
+        assert_eq!(doc.verified_by, Some(admin));
+    }
+
+    #[test]
+    fn test_double_verify_fails() {
+        let (env, admin, client) = setup();
+        let uploader = Address::generate(&env);
+        let (id, _) = register(&env, &client, &uploader, 1);
+
+        client.verify_document(&admin, &id);
+        let result = client.try_verify_document(&admin, &id);
+        assert_eq!(result, Err(Ok(DocumentError::AlreadyVerified)));
+    }
+
+    #[test]
+    fn test_non_admin_verify_fails() {
+        let (env, _, client) = setup();
+        let uploader = Address::generate(&env);
+        let (id, _) = register(&env, &client, &uploader, 1);
+
+        let stranger = Address::generate(&env);
+        let result = client.try_verify_document(&stranger, &id);
+        assert_eq!(result, Err(Ok(DocumentError::Unauthorized)));
+    }
+
+    #[test]
+    fn test_integrity_check_pass() {
+        let (env, _, client) = setup();
+        let uploader = Address::generate(&env);
+        let (id, original_hash) = register(&env, &client, &uploader, 1);
+
+        assert!(client.check_integrity(&id, &original_hash));
+    }
+
+    #[test]
+    fn test_integrity_check_tampered() {
+        let (env, _, client) = setup();
+        let uploader = Address::generate(&env);
+        let (id, _) = register(&env, &client, &uploader, 1);
+
+        let tampered_hash = BytesN::random(&env);
+        assert!(!client.check_integrity(&id, &tampered_hash));
+    }
+
+    #[test]
+    fn test_multiple_docs_per_shipment() {
+        let (env, _, client) = setup();
+        let uploader = Address::generate(&env);
+
+        let (id1, _) = register(&env, &client, &uploader, 7);
+        let hash2 = fake_hash(&env);
+        let id2 = client.register_document(
+            &uploader,
+            &7u64,
+            &DocumentType::ProofOfDelivery,
+            &hash2,
+            &fake_cid(&env),
+        );
+
+        let docs = client.get_documents_by_shipment(&7u64);
+        assert_eq!(docs.len(), 2);
+        assert_eq!(docs.get(0).unwrap(), id1);
+        assert_eq!(docs.get(1).unwrap(), id2);
+    }
+
+    #[test]
+    fn test_all_document_types() {
+        let (env, _, client) = setup();
+        let uploader = Address::generate(&env);
+
+        let types = [
+            DocumentType::BillOfLading,
+            DocumentType::ProofOfDelivery,
+            DocumentType::Invoice,
+            DocumentType::CustomsDeclaration,
+            DocumentType::InsuranceCertificate,
+            DocumentType::Photo,
+            DocumentType::Other,
+        ];
+
+        for doc_type in types {
+            let id = client.register_document(
+                &uploader,
+                &1u64,
+                &doc_type,
+                &fake_hash(&env),
+                &fake_cid(&env),
+            );
+            let doc = client.get_document(&id);
+            assert_eq!(doc.doc_type, doc_type);
+        }
+    }
+
+    #[test]
+    fn test_not_found_error() {
+        let (_, _, client) = setup();
+        let result = client.try_get_document(&404u64);
+        assert_eq!(result, Err(Ok(DocumentError::NotFound)));
+    }
+}
