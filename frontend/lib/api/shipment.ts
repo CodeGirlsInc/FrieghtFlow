@@ -1,9 +1,11 @@
-export type UserRole = 'shipper' | 'carrier';
+export type UserRole = 'shipper' | 'carrier' | 'admin';
+
+export type ShipmentStatus = 'pending' | 'accepted' | 'in_transit' | 'delivered' | 'completed' | 'cancelled';
 
 export interface Shipment {
   id: string;
   trackingNumber: string;
-  status: 'pending' | 'in_transit' | 'completed' | 'cancelled';
+  status: ShipmentStatus;
   origin: string;
   destination: string;
   date: string;
@@ -16,10 +18,12 @@ const mockShipments: Shipment[] = [
   { id: '3', trackingNumber: 'TRK-003', status: 'completed', origin: 'Seattle, WA', destination: 'Denver, CO', date: '2024-02-28' },
   { id: '4', trackingNumber: 'TRK-004', status: 'in_transit', origin: 'Austin, TX', destination: 'Boston, MA', date: '2024-03-10' },
   { id: '5', trackingNumber: 'TRK-005', status: 'pending', origin: 'Atlanta, GA', destination: 'Philadelphia, PA', date: '2024-03-12' },
+  { id: '6', trackingNumber: 'TRK-006', status: 'accepted', origin: 'Dallas, TX', destination: 'Phoenix, AZ', date: '2024-03-08' },
+  { id: '7', trackingNumber: 'TRK-007', status: 'delivered', origin: 'Houston, TX', destination: 'San Diego, CA', date: '2024-03-03' },
 ];
 
 export const shipmentApi = {
-  list: async (params?: { status?: Shipment['status']; limit?: number }): Promise<Shipment[]> => {
+  list: async (params?: { status?: ShipmentStatus; limit?: number }): Promise<Shipment[]> => {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 800));
     
