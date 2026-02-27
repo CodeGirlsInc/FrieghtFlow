@@ -24,7 +24,8 @@ const schema = z.object({
   estimatedDeliveryDate: z.string().optional(),
 });
 
-type FormValues = z.infer<typeof schema>;
+type FormInput = z.input<typeof schema>;
+type FormValues = z.output<typeof schema>;
 
 export default function NewShipmentPage() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function NewShipmentPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+  } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { currency: 'USD' },
   });
