@@ -26,7 +26,7 @@ const registerSchema = z.object({
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  role: z.enum(['shipper', 'carrier']).default('shipper'),
+  role: z.enum(['shipper', 'carrier']),
 });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
