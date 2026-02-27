@@ -139,7 +139,6 @@ impl DocumentContract {
         Ok(id)
     }
 
-    
     // ── Verification ──────────────────────────────────────────────────────
 
     /// Admin verifies that a document is authentic.
@@ -308,7 +307,6 @@ mod tests {
         assert!(doc.verified_by.is_none());
     }
 
-    
     #[test]
     fn test_verify_document() {
         let (env, admin, client) = setup();

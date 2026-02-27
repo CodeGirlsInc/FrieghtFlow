@@ -24,9 +24,7 @@ async function bootstrap() {
 
     // ENABLE CORS
     app.enableCors({
-      origin: process.env.FRONTEND_URL?.split(',') || [
-        'http://localhost:3000',
-      ],
+      origin: process.env.FRONTEND_URL?.split(',') || ['http://localhost:3000'],
       credentials: true,
     });
 
@@ -37,14 +35,14 @@ async function bootstrap() {
       .setVersion('1.0')
       .setTermsOfService('terms-of-service')
       .setLicense('MIT License', 'mit')
-      .addServer('http://localhost:6000')
+      .addServer('http://localhost:6006')
       .addBearerAuth() // 🚀 for future auth-secured endpoints
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('docs', app, document);
 
-    const port = process.env.PORT ?? 6000;
+    const port = process.env.PORT ?? 6006;
     await app.listen(port);
 
     logger.log(`🚀 Application running on: http://localhost:${port}`);
