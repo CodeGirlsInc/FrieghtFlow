@@ -1,118 +1,185 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from 'react';
-import { shipmentApi, Shipment, UserRole } from '@/lib/api/shipment';
-import { MetricCard } from '@/components/MetricCard';
-import { ShipmentCard } from '@/components/ShipmentCard';
-import { Map, Clock, CheckCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useAuthStore } from '../../../stores/auth.store';
+import { shipmentApi } from '../../../lib/api/shipment.api';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Button } from '../../../components/ui/button';
+import { ShipmentCard } from '../../../components/shipment/shipment-card';
+import { Shipment, ShipmentStatus } from '../../../types/shipment.types';
+
+interface Stats {
+  active: number;
+  completed: number;
+  pending: number;
+}
 
 export default function DashboardPage() {
-    const [role] = useState<UserRole>('shipper'); // Mock user role
-    const [activeCount, setActiveCount] = useState<number | null>(null);
-    const [pendingCount, setPendingCount] = useState<number | null>(null);
-    const [completedCount, setCompletedCount] = useState<number | null>(null);
-    const [recentShipments, setRecentShipments] = useState<Shipment[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+  const { user, fetchCurrentUser, isLoading } = useAuthStore();
+  const [recentShipments, setRecentShipments] = useState<Shipment[]>([]);
+  const [stats, setStats] = useState<Stats>({ active: 0, completed: 0, pending: 0 });
+  const [dataLoading, setDataLoading] = useState(true);
 
-    useEffect(() => {
-        async function fetchData() {
-            setIsLoading(true);
-            try {
-                const [active, pending, completed, recent] = await Promise.all([
-                    shipmentApi.list({ status: 'in_transit', limit: undefined }),
-                    shipmentApi.list({ status: 'pending', limit: undefined }),
-                    shipmentApi.list({ status: 'completed', limit: undefined }),
-                    shipmentApi.list({ limit: 4 })
-                ]);
+  useEffect(() => {
+    if (!user) fetchCurrentUser();
+  }, [user, fetchCurrentUser]);
 
-                // Using length of the results to simulate count
-                setActiveCount(active.length);
-                setPendingCount(pending.length);
-                setCompletedCount(completed.length);
-                setRecentShipments(recent);
-            } catch (error) {
-                console.error("Failed to fetch dashboard data:", error);
-                // Fallback or error state could be handled here
-            } finally {
-                setIsLoading(false);
-            }
-        }
+  useEffect(() => {
+    if (!user) return;
 
-        fetchData();
-    }, []);
+    setDataLoading(true);
+    Promise.all([
+      shipmentApi.list({ limit: 4 }),
+      shipmentApi.list({ status: ShipmentStatus.PENDING, limit: 1 }),
+      shipmentApi.list({ status: ShipmentStatus.IN_TRANSIT, limit: 1 }),
+      shipmentApi.list({ status: ShipmentStatus.COMPLETED, limit: 1 }),
+    ])
+      .then(([recent, pending, inTransit, completed]) => {
+        setRecentShipments(recent.data);
+        setStats({
+          pending: pending.total,
+          active: inTransit.total,
+          completed: completed.total,
+        });
+      })
+      .catch(() => {})
+      .finally(() => setDataLoading(false));
+  }, [user]);
 
-    const metricLabels = {
-        active: role === 'carrier' ? 'Active Jobs' : 'Active Shipments',
-        pending: role === 'carrier' ? 'Awaiting Pickup' : 'Awaiting Carrier'
-    };
-
+  if (isLoading || !user) {
     return (
-        <div className="p-8 space-y-8 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-                    <p className="text-muted-foreground mt-1">
-                        Welcome back. Here's what's happening today.
-                    </p>
-                </div>
-                <div>
-                    {role === 'shipper' ? (
-                        <Button>+ New Shipment</Button>
-                    ) : (
-                        <Button variant="default">Browse Marketplace</Button>
-                    )}
-                </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-                <MetricCard
-                    title={metricLabels.active}
-                    value={isLoading ? null : activeCount}
-                    icon={Map}
-                />
-                <MetricCard
-                    title={metricLabels.pending}
-                    value={isLoading ? null : pendingCount}
-                    icon={Clock}
-                />
-                <MetricCard
-                    title="Completed Shipments"
-                    value={isLoading ? null : completedCount}
-                    icon={CheckCircle}
-                />
-            </div>
-
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold tracking-tight">Recent Shipments</h2>
-                    <Button variant="link" className="px-0">View all &rarr;</Button>
-                </div>
-
-                {isLoading ? (
-                    <div className="text-center py-12 text-muted-foreground border rounded-lg bg-gray-50/50">
-                        Loading recent shipments...
-                    </div>
-                ) : recentShipments.length > 0 ? (
-                    <div className="grid gap-4 md:grid-cols-2">
-                        {recentShipments.map(shipment => (
-                            <ShipmentCard key={shipment.id} shipment={shipment} />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-12 border rounded-lg bg-gray-50/50">
-                        <h3 className="text-lg font-medium">No Recent Shipments</h3>
-                        <p className="text-muted-foreground mt-2 mb-4">
-                            {role === 'shipper' ? "You don't have any recent shipments." : "You haven't taken any jobs recently."}
-                        </p>
-                        {role === 'shipper' ? (
-                            <Button>Create your first shipment</Button>
-                        ) : (
-                            <Button>Open Marketplace</Button>
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
+      <div className="flex items-center justify-center h-full p-8">
+        <p className="text-muted-foreground">Loading…</p>
+      </div>
     );
+  }
+
+  const isShipper = user.role === 'shipper' || user.role === 'admin';
+  const isCarrier = user.role === 'carrier';
+
+  return (
+    <div className="p-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            Welcome, {user.firstName}!
+          </h1>
+          <p className="text-muted-foreground capitalize">{user.role} account</p>
+        </div>
+        {isShipper && (
+          <Button asChild>
+            <Link href="/shipments/new">+ New Shipment</Link>
+          </Button>
+        )}
+        {isCarrier && (
+          <Button asChild variant="outline">
+            <Link href="/marketplace">Browse Marketplace</Link>
+          </Button>
+        )}
+      </div>
+
+      {/* Email verification banner */}
+      {!user.isEmailVerified && (
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
+          <strong>Verify your email:</strong> We sent a verification link to{' '}
+          <span className="font-medium">{user.email}</span>. Please check your inbox to
+          unlock all features.
+        </div>
+      )}
+
+      {/* Metric cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {isCarrier ? 'Active Jobs' : 'Active Shipments'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">
+              {dataLoading ? '—' : stats.active}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">In transit</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Pending
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">
+              {dataLoading ? '—' : stats.pending}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {isCarrier ? 'Awaiting pickup' : 'Awaiting carrier'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Completed
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">
+              {dataLoading ? '—' : stats.completed}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">All time</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent shipments */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-foreground">Recent Shipments</h2>
+          <Link
+            href="/shipments"
+            className="text-sm text-primary hover:underline"
+          >
+            View all →
+          </Link>
+        </div>
+
+        {dataLoading ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-32 bg-muted rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : recentShipments.length === 0 ? (
+          <div className="text-center py-10 rounded-lg border border-dashed border-border">
+            <p className="text-muted-foreground text-sm">
+              {isShipper
+                ? 'No shipments yet. Create your first one!'
+                : 'No assigned shipments yet. Check the marketplace.'}
+            </p>
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="mt-3"
+            >
+              <Link href={isShipper ? '/shipments/new' : '/marketplace'}>
+                {isShipper ? 'Create Shipment' : 'Open Marketplace'}
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {recentShipments.map((s) => (
+              <ShipmentCard key={s.id} shipment={s} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
