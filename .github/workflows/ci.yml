@@ -29,8 +29,11 @@ jobs:
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
 
+      - name: Sync lock file
+        run: npm install --package-lock-only --ignore-scripts
+
       - name: Install dependencies
-        run: npm ci --omit=optional
+        run: npm ci
 
       - name: Lint
         run: npm run lint
