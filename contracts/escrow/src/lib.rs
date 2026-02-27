@@ -385,7 +385,21 @@ mod tests {
     const AMOUNT: i128 = 500_000_000; // 50 XLM in stroops (7 decimals)
     const SHIPMENT_ID: u64 = 42;
 
-    fn fund(client: &EscrowContractClient, shipper: &Address, carrier: &Address) {
+    fn fund(
+        env: &Env,
+        token_addr: &Address,
+        client: &EscrowContractClient,
+        shipper: &Address,
+        carrier: &Address,
+    ) {
+        // Approve the escrow contract to pull AMOUNT from the shipper before funding.
+        let token = TokenClient::new(env, token_addr);
+        token.approve(
+            shipper,
+            &client.address,
+            &AMOUNT,
+            &(env.ledger().sequence() + 1000),
+        );
         client.fund_escrow(shipper, carrier, &SHIPMENT_ID, &AMOUNT);
     }
 
@@ -393,7 +407,7 @@ mod tests {
     fn test_fund_and_release() {
         let (env, _admin, shipper, carrier, token_addr, client) = setup(AMOUNT);
 
-        fund(&client, &shipper, &carrier);
+        fund(&env, &token_addr, &client, &shipper, &carrier);
 
         let record = client.get_escrow(&SHIPMENT_ID);
         assert_eq!(record.status, EscrowStatus::Funded);
@@ -416,7 +430,7 @@ mod tests {
     fn test_fund_and_refund() {
         let (env, _admin, shipper, carrier, token_addr, client) = setup(AMOUNT);
 
-        fund(&client, &shipper, &carrier);
+        fund(&env, &token_addr, &client, &shipper, &carrier);
 
         client.refund_payment(&SHIPMENT_ID);
 
@@ -431,7 +445,7 @@ mod tests {
     fn test_dispute_resolved_to_carrier() {
         let (env, _admin, shipper, carrier, token_addr, client) = setup(AMOUNT);
 
-        fund(&client, &shipper, &carrier);
+        fund(&env, &token_addr, &client, &shipper, &carrier);
         client.raise_dispute(&shipper, &SHIPMENT_ID);
 
         let record = client.get_escrow(&SHIPMENT_ID);
@@ -446,7 +460,7 @@ mod tests {
     fn test_dispute_resolved_to_shipper() {
         let (env, _admin, shipper, carrier, token_addr, client) = setup(AMOUNT);
 
-        fund(&client, &shipper, &carrier);
+        fund(&env, &token_addr, &client, &shipper, &carrier);
         client.raise_dispute(&carrier, &SHIPMENT_ID);
         client.resolve_dispute(&SHIPMENT_ID, &false);
 
@@ -456,9 +470,9 @@ mod tests {
 
     #[test]
     fn test_double_fund_fails() {
-        let (_, _, shipper, carrier, _, client) = setup(AMOUNT * 2);
+        let (env, _, shipper, carrier, token_addr, client) = setup(AMOUNT * 2);
 
-        fund(&client, &shipper, &carrier);
+        fund(&env, &token_addr, &client, &shipper, &carrier);
         let result = client.try_fund_escrow(&shipper, &carrier, &SHIPMENT_ID, &AMOUNT);
         assert_eq!(result, Err(Ok(EscrowError::AlreadyFunded)));
     }
@@ -481,9 +495,9 @@ mod tests {
 
     #[test]
     fn test_unauthorized_dispute_fails() {
-        let (env, _, shipper, carrier, _, client) = setup(AMOUNT);
+        let (env, _, shipper, carrier, token_addr, client) = setup(AMOUNT);
 
-        fund(&client, &shipper, &carrier);
+        fund(&env, &token_addr, &client, &shipper, &carrier);
         let random = Address::generate(&env);
         let result = client.try_raise_dispute(&random, &SHIPMENT_ID);
         assert_eq!(result, Err(Ok(EscrowError::Unauthorized)));
