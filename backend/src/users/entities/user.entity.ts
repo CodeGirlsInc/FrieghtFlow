@@ -42,13 +42,22 @@ export class User {
   @Column({ name: 'wallet_address', nullable: true, type: 'varchar' })
   walletAddress: string | null;
 
-  @Column({ name: 'refresh_token', nullable: true, type: 'varchar', select: false })
+  @Column({
+    name: 'refresh_token',
+    nullable: true,
+    type: 'varchar',
+    select: false,
+  })
   refreshToken: string | null;
 
   @Column({ name: 'verification_token', nullable: true, type: 'varchar' })
   verificationToken: string | null;
 
-  @Column({ name: 'verification_token_expiry', nullable: true, type: 'timestamptz' })
+  @Column({
+    name: 'verification_token_expiry',
+    nullable: true,
+    type: 'timestamptz',
+  })
   verificationTokenExpiry: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })

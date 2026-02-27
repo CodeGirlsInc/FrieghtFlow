@@ -10,7 +10,13 @@ import {
   HttpStatus,
   Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiCookieAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiCookieAuth,
+} from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -66,7 +72,10 @@ export class AuthController {
     @Body() body: { userId: string; refreshToken: string },
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.authService.refresh(body.userId, body.refreshToken);
+    const result = await this.authService.refresh(
+      body.userId,
+      body.refreshToken,
+    );
     this.setAuthCookie(res, result.accessToken);
     return result;
   }

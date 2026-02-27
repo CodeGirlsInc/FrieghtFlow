@@ -35,9 +35,7 @@ describe('CarrierController (e2e)', () => {
   });
 
   it('/carriers (GET) - should return all carriers', async () => {
-    return request(app.getHttpServer())
-      .get('/carriers')
-      .expect(200);
+    return request(app.getHttpServer()).get('/carriers').expect(200);
   });
 
   it('/carriers/:id (GET) - should return a carrier by id', async () => {

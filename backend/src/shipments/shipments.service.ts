@@ -52,7 +52,9 @@ export class ShipmentsService {
     to: ShipmentStatus,
     actorRole: UserRole,
   ): void {
-    const allowed: Partial<Record<ShipmentStatus, { next: ShipmentStatus[]; roles: UserRole[] }>> = {
+    const allowed: Partial<
+      Record<ShipmentStatus, { next: ShipmentStatus[]; roles: UserRole[] }>
+    > = {
       [ShipmentStatus.PENDING]: {
         next: [ShipmentStatus.ACCEPTED, ShipmentStatus.CANCELLED],
         roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
@@ -130,11 +132,20 @@ export class ShipmentsService {
     });
 
     const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(saved.id, null, ShipmentStatus.PENDING, shipperId, 'Shipment created');
+    await this.recordHistory(
+      saved.id,
+      null,
+      ShipmentStatus.PENDING,
+      shipperId,
+      'Shipment created',
+    );
     return saved;
   }
 
-  async findAll(user: User, query: QueryShipmentDto): Promise<PaginatedShipments> {
+  async findAll(
+    user: User,
+    query: QueryShipmentDto,
+  ): Promise<PaginatedShipments> {
     const { page = 1, limit = 20, status, origin, destination } = query;
     const skip = (page - 1) * limit;
 
@@ -167,7 +178,9 @@ export class ShipmentsService {
     const { page = 1, limit = 20, origin, destination } = query;
     const skip = (page - 1) * limit;
 
-    const where: FindOptionsWhere<Shipment> = { status: ShipmentStatus.PENDING };
+    const where: FindOptionsWhere<Shipment> = {
+      status: ShipmentStatus.PENDING,
+    };
     if (origin) where.origin = ILike(`%${origin}%`);
     if (destination) where.destination = ILike(`%${destination}%`);
 
@@ -196,22 +209,30 @@ export class ShipmentsService {
       where: { trackingNumber },
       relations: ['shipper', 'carrier'],
     });
-    if (!shipment) throw new NotFoundException(`Shipment ${trackingNumber} not found`);
+    if (!shipment)
+      throw new NotFoundException(`Shipment ${trackingNumber} not found`);
     return shipment;
   }
 
-  async update(id: string, shipperId: string, dto: UpdateShipmentDto): Promise<Shipment> {
+  async update(
+    id: string,
+    shipperId: string,
+    dto: UpdateShipmentDto,
+  ): Promise<Shipment> {
     const shipment = await this.findOne(id);
 
     if (shipment.shipperId !== shipperId) {
       throw new ForbiddenException('Only the shipper can update this shipment');
     }
     if (shipment.status !== ShipmentStatus.PENDING) {
-      throw new BadRequestException('Can only update shipments in PENDING status');
+      throw new BadRequestException(
+        'Can only update shipments in PENDING status',
+      );
     }
 
     if (dto.notes !== undefined) shipment.notes = dto.notes;
-    if (dto.pickupDate !== undefined) shipment.pickupDate = new Date(dto.pickupDate);
+    if (dto.pickupDate !== undefined)
+      shipment.pickupDate = new Date(dto.pickupDate);
     if (dto.estimatedDeliveryDate !== undefined) {
       shipment.estimatedDeliveryDate = new Date(dto.estimatedDeliveryDate);
     }
@@ -223,12 +244,21 @@ export class ShipmentsService {
 
   async accept(shipmentId: string, carrier: User): Promise<Shipment> {
     const shipment = await this.findOne(shipmentId);
-    this.assertTransitionAllowed(shipment.status, ShipmentStatus.ACCEPTED, carrier.role);
+    this.assertTransitionAllowed(
+      shipment.status,
+      ShipmentStatus.ACCEPTED,
+      carrier.role,
+    );
 
     shipment.carrierId = carrier.id;
     shipment.status = ShipmentStatus.ACCEPTED;
     const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(shipmentId, ShipmentStatus.PENDING, ShipmentStatus.ACCEPTED, carrier.id);
+    await this.recordHistory(
+      shipmentId,
+      ShipmentStatus.PENDING,
+      ShipmentStatus.ACCEPTED,
+      carrier.id,
+    );
     return saved;
   }
 
@@ -236,13 +266,24 @@ export class ShipmentsService {
     const shipment = await this.findOne(shipmentId);
 
     if (shipment.carrierId !== carrier.id && carrier.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Only the assigned carrier can mark this shipment in transit');
+      throw new ForbiddenException(
+        'Only the assigned carrier can mark this shipment in transit',
+      );
     }
-    this.assertTransitionAllowed(shipment.status, ShipmentStatus.IN_TRANSIT, carrier.role);
+    this.assertTransitionAllowed(
+      shipment.status,
+      ShipmentStatus.IN_TRANSIT,
+      carrier.role,
+    );
 
     shipment.status = ShipmentStatus.IN_TRANSIT;
     const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(shipmentId, ShipmentStatus.ACCEPTED, ShipmentStatus.IN_TRANSIT, carrier.id);
+    await this.recordHistory(
+      shipmentId,
+      ShipmentStatus.ACCEPTED,
+      ShipmentStatus.IN_TRANSIT,
+      carrier.id,
+    );
     return saved;
   }
 
@@ -250,14 +291,25 @@ export class ShipmentsService {
     const shipment = await this.findOne(shipmentId);
 
     if (shipment.carrierId !== carrier.id && carrier.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Only the assigned carrier can mark this shipment delivered');
+      throw new ForbiddenException(
+        'Only the assigned carrier can mark this shipment delivered',
+      );
     }
-    this.assertTransitionAllowed(shipment.status, ShipmentStatus.DELIVERED, carrier.role);
+    this.assertTransitionAllowed(
+      shipment.status,
+      ShipmentStatus.DELIVERED,
+      carrier.role,
+    );
 
     shipment.status = ShipmentStatus.DELIVERED;
     shipment.actualDeliveryDate = new Date();
     const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(shipmentId, ShipmentStatus.IN_TRANSIT, ShipmentStatus.DELIVERED, carrier.id);
+    await this.recordHistory(
+      shipmentId,
+      ShipmentStatus.IN_TRANSIT,
+      ShipmentStatus.DELIVERED,
+      carrier.id,
+    );
     return saved;
   }
 
@@ -267,15 +319,28 @@ export class ShipmentsService {
     if (shipment.shipperId !== shipper.id && shipper.role !== UserRole.ADMIN) {
       throw new ForbiddenException('Only the shipper can confirm delivery');
     }
-    this.assertTransitionAllowed(shipment.status, ShipmentStatus.COMPLETED, shipper.role);
+    this.assertTransitionAllowed(
+      shipment.status,
+      ShipmentStatus.COMPLETED,
+      shipper.role,
+    );
 
     shipment.status = ShipmentStatus.COMPLETED;
     const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(shipmentId, ShipmentStatus.DELIVERED, ShipmentStatus.COMPLETED, shipper.id);
+    await this.recordHistory(
+      shipmentId,
+      ShipmentStatus.DELIVERED,
+      ShipmentStatus.COMPLETED,
+      shipper.id,
+    );
     return saved;
   }
 
-  async cancel(shipmentId: string, user: User, reason?: string): Promise<Shipment> {
+  async cancel(
+    shipmentId: string,
+    user: User,
+    reason?: string,
+  ): Promise<Shipment> {
     const shipment = await this.findOne(shipmentId);
 
     const isShipper = shipment.shipperId === user.id;
@@ -285,26 +350,53 @@ export class ShipmentsService {
     if (!isShipper && !isCarrier && !isAdmin) {
       throw new ForbiddenException('Not authorised to cancel this shipment');
     }
-    this.assertTransitionAllowed(shipment.status, ShipmentStatus.CANCELLED, user.role);
+    this.assertTransitionAllowed(
+      shipment.status,
+      ShipmentStatus.CANCELLED,
+      user.role,
+    );
 
     shipment.status = ShipmentStatus.CANCELLED;
     const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(shipmentId, shipment.status, ShipmentStatus.CANCELLED, user.id, reason);
+    await this.recordHistory(
+      shipmentId,
+      shipment.status,
+      ShipmentStatus.CANCELLED,
+      user.id,
+      reason,
+    );
     return saved;
   }
 
-  async raiseDispute(shipmentId: string, user: User, reason: string): Promise<Shipment> {
+  async raiseDispute(
+    shipmentId: string,
+    user: User,
+    reason: string,
+  ): Promise<Shipment> {
     const shipment = await this.findOne(shipmentId);
 
     const isParty =
-      shipment.shipperId === user.id || shipment.carrierId === user.id || user.role === UserRole.ADMIN;
-    if (!isParty) throw new ForbiddenException('Not authorised to raise a dispute');
+      shipment.shipperId === user.id ||
+      shipment.carrierId === user.id ||
+      user.role === UserRole.ADMIN;
+    if (!isParty)
+      throw new ForbiddenException('Not authorised to raise a dispute');
 
-    this.assertTransitionAllowed(shipment.status, ShipmentStatus.DISPUTED, user.role);
+    this.assertTransitionAllowed(
+      shipment.status,
+      ShipmentStatus.DISPUTED,
+      user.role,
+    );
 
     shipment.status = ShipmentStatus.DISPUTED;
     const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(shipmentId, shipment.status, ShipmentStatus.DISPUTED, user.id, reason);
+    await this.recordHistory(
+      shipmentId,
+      shipment.status,
+      ShipmentStatus.DISPUTED,
+      user.id,
+      reason,
+    );
     return saved;
   }
 
@@ -319,7 +411,13 @@ export class ShipmentsService {
 
     shipment.status = resolution;
     const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(shipmentId, ShipmentStatus.DISPUTED, resolution, admin.id, reason);
+    await this.recordHistory(
+      shipmentId,
+      ShipmentStatus.DISPUTED,
+      resolution,
+      admin.id,
+      reason,
+    );
     return saved;
   }
 

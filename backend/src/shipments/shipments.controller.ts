@@ -7,8 +7,6 @@ import {
   Body,
   Query,
   ParseUUIDPipe,
-  HttpCode,
-  HttpStatus,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -94,10 +92,7 @@ export class ShipmentsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Carrier accepts a shipment' })
-  accept(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() carrier: User,
-  ) {
+  accept(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() carrier: User) {
     return this.shipmentsService.accept(id, carrier);
   }
 
@@ -185,7 +180,12 @@ export class ShipmentsController {
     @CurrentUser() admin: User,
     @Body() body: ResolveDisputeBody,
   ) {
-    return this.shipmentsService.resolveDispute(id, admin, body.resolution, body.reason);
+    return this.shipmentsService.resolveDispute(
+      id,
+      admin,
+      body.resolution,
+      body.reason,
+    );
   }
 
   @Get(':id/history')

@@ -52,7 +52,13 @@ export class Shipment {
   @Column({ name: 'weight_kg', type: 'decimal', precision: 10, scale: 2 })
   weightKg: number;
 
-  @Column({ name: 'volume_cbm', type: 'decimal', precision: 10, scale: 3, nullable: true })
+  @Column({
+    name: 'volume_cbm',
+    type: 'decimal',
+    precision: 10,
+    scale: 3,
+    nullable: true,
+  })
   volumeCbm: number | null;
 
   // ── Pricing ──────────────────────────────────────────────────────────────────
@@ -80,7 +86,11 @@ export class Shipment {
   @Column({ name: 'pickup_date', type: 'timestamptz', nullable: true })
   pickupDate: Date | null;
 
-  @Column({ name: 'estimated_delivery_date', type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'estimated_delivery_date',
+    type: 'timestamptz',
+    nullable: true,
+  })
   estimatedDeliveryDate: Date | null;
 
   @Column({ name: 'actual_delivery_date', type: 'timestamptz', nullable: true })

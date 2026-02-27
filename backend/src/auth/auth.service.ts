@@ -39,7 +39,10 @@ export class AuthService {
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersService.findByEmail(email);
     if (!user) return null;
-    const isMatch = await this.usersService.verifyPassword(password, user.passwordHash);
+    const isMatch = await this.usersService.verifyPassword(
+      password,
+      user.passwordHash,
+    );
     if (!isMatch) return null;
     return user;
   }
@@ -55,12 +58,19 @@ export class AuthService {
 
     const verificationToken = uuidv4();
     const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    await this.usersService.updateVerificationToken(user.id, verificationToken, expiry);
+    await this.usersService.updateVerificationToken(
+      user.id,
+      verificationToken,
+      expiry,
+    );
 
     try {
       await this.sendVerificationEmail(user, verificationToken);
-    } catch (err) {
-      this.logger.warn(`Failed to send verification email to ${user.email}: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to send verification email to ${user.email}: ${message}`,
+      );
     }
 
     const tokens = await this.generateTokens(user);
@@ -78,7 +88,10 @@ export class AuthService {
     return this.buildAuthResponse(user, tokens);
   }
 
-  async refresh(userId: string, rawRefreshToken: string): Promise<AuthResponse> {
+  async refresh(
+    userId: string,
+    rawRefreshToken: string,
+  ): Promise<AuthResponse> {
     const baseUser = await this.usersService.findOne(userId);
     if (!baseUser) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -108,7 +121,10 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException('Invalid or expired verification token');
     }
-    if (!user.verificationTokenExpiry || user.verificationTokenExpiry < new Date()) {
+    if (
+      !user.verificationTokenExpiry ||
+      user.verificationTokenExpiry < new Date()
+    ) {
       throw new BadRequestException('Verification token has expired');
     }
     await this.usersService.markEmailVerified(user.id);
@@ -116,7 +132,10 @@ export class AuthService {
   }
 
   async sendVerificationEmail(user: User, token: string): Promise<void> {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const frontendUrl = this.configService.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3000',
+    );
     const verifyUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
 
     await this.mailerService.sendMail({
@@ -144,11 +163,14 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '15m') as any,
+        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '15m'),
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d') as any,
+        expiresIn: this.configService.get<string>(
+          'JWT_REFRESH_EXPIRES_IN',
+          '7d',
+        ),
       }),
     ]);
 
@@ -156,7 +178,7 @@ export class AuthService {
   }
 
   private buildAuthResponse(user: User, tokens: AuthTokens): AuthResponse {
-    const { passwordHash: _ph, refreshToken: _rt, ...safeUser } = user as any;
+    const { passwordHash: _ph, refreshToken: _rt, ...safeUser } = user;
     return {
       user: safeUser,
       accessToken: tokens.accessToken,

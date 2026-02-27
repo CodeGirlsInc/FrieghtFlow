@@ -46,7 +46,10 @@ export class CreateShipmentDto {
   @IsPositive()
   volumeCbm?: number;
 
-  @ApiProperty({ example: 1500.0, description: 'Quoted price for the shipment' })
+  @ApiProperty({
+    example: 1500.0,
+    description: 'Quoted price for the shipment',
+  })
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)

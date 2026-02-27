@@ -21,7 +21,7 @@ import { UsersModule } from '../users/users.module';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '15m') as any,
+          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '15m'),
         },
       }),
     }),
@@ -30,7 +30,10 @@ import { UsersModule } from '../users/users.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         transport: {
-          host: configService.get<string>('MAIL_HOST', 'sandbox.smtp.mailtrap.io'),
+          host: configService.get<string>(
+            'MAIL_HOST',
+            'sandbox.smtp.mailtrap.io',
+          ),
           port: configService.get<number>('MAIL_PORT', 2525),
           auth: {
             user: configService.get<string>('MAIL_USER'),
@@ -38,7 +41,10 @@ import { UsersModule } from '../users/users.module';
           },
         },
         defaults: {
-          from: configService.get<string>('MAIL_FROM', 'noreply@freightflow.io'),
+          from: configService.get<string>(
+            'MAIL_FROM',
+            'noreply@freightflow.io',
+          ),
         },
       }),
     }),

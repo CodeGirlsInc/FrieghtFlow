@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 import { UserRole } from '../../common/enums/role.enum';
 
 export class RegisterDto {
@@ -22,7 +29,10 @@ export class RegisterDto {
   @IsNotEmpty()
   lastName: string;
 
-  @ApiPropertyOptional({ enum: [UserRole.SHIPPER, UserRole.CARRIER], default: UserRole.SHIPPER })
+  @ApiPropertyOptional({
+    enum: [UserRole.SHIPPER, UserRole.CARRIER],
+    default: UserRole.SHIPPER,
+  })
   @IsEnum([UserRole.SHIPPER, UserRole.CARRIER], {
     message: 'role must be either shipper or carrier',
   })

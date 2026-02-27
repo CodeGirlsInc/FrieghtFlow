@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -53,7 +57,9 @@ export class UsersService {
   }
 
   async findByVerificationToken(token: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { verificationToken: token } });
+    return this.usersRepository.findOne({
+      where: { verificationToken: token },
+    });
   }
 
   async verifyPassword(plainPassword: string, hash: string): Promise<boolean> {
@@ -63,7 +69,7 @@ export class UsersService {
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
     if (updateUserDto.password) {
-      (user as any).passwordHash = await bcrypt.hash(updateUserDto.password, 12);
+      user.passwordHash = await bcrypt.hash(updateUserDto.password, 12);
     }
     Object.assign(user, {
       ...(updateUserDto.firstName && { firstName: updateUserDto.firstName }),
@@ -74,7 +80,10 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async updateRefreshToken(id: string, refreshToken: string | null): Promise<void> {
+  async updateRefreshToken(
+    id: string,
+    refreshToken: string | null,
+  ): Promise<void> {
     let hashedToken: string | null = null;
     if (refreshToken) {
       hashedToken = await bcrypt.hash(refreshToken, 10);

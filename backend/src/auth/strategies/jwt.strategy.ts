@@ -13,8 +13,9 @@ export interface JwtPayload {
 
 function extractCookie(request: Request, name: string): string | null {
   // If cookie-parser is present, use parsed cookies
-  if (request?.cookies?.[name]) {
-    return request.cookies[name];
+  const cookies = request?.cookies as Record<string, string> | undefined;
+  if (cookies?.[name]) {
+    return cookies[name];
   }
   // Fallback: parse raw Cookie header
   const cookieHeader = request?.headers?.['cookie'];
