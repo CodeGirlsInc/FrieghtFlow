@@ -118,9 +118,7 @@ impl DocumentContract {
             verified_at: 0,
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Document(id), &doc);
+        env.storage().persistent().set(&DataKey::Document(id), &doc);
         env.storage()
             .persistent()
             .extend_ttl(&DataKey::Document(id), TTL_LEDGERS, TTL_LEDGERS);
@@ -143,11 +141,7 @@ impl DocumentContract {
 
     /// Admin verifies that a document is authentic.
     /// Once verified the record is immutable.
-    pub fn verify_document(
-        env: Env,
-        verifier: Address,
-        doc_id: u64,
-    ) -> Result<(), DocumentError> {
+    pub fn verify_document(env: Env, verifier: Address, doc_id: u64) -> Result<(), DocumentError> {
         let admin: Address = env
             .storage()
             .instance()

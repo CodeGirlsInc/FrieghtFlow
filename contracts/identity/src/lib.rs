@@ -1,8 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env,
-};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, BytesN, Env};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -68,16 +66,11 @@ impl IdentityContract {
 
     /// Returns true if `wallet` has a registered identity.
     pub fn verify_identity(env: Env, wallet: Address) -> bool {
-        env.storage()
-            .persistent()
-            .has(&DataKey::Identity(wallet))
+        env.storage().persistent().has(&DataKey::Identity(wallet))
     }
 
     /// Returns the user_id_hash for `wallet`.
-    pub fn get_user_identity(
-        env: Env,
-        wallet: Address,
-    ) -> Result<BytesN<32>, IdentityError> {
+    pub fn get_user_identity(env: Env, wallet: Address) -> Result<BytesN<32>, IdentityError> {
         env.storage()
             .persistent()
             .get(&DataKey::Identity(wallet))

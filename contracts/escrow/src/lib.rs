@@ -1,9 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype,
-    token, Address, Env,
-};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, token, Address, Env};
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -154,9 +151,11 @@ impl EscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Escrow(shipment_id), &record);
-        env.storage()
-            .persistent()
-            .extend_ttl(&DataKey::Escrow(shipment_id), TTL_LEDGERS, TTL_LEDGERS);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Escrow(shipment_id),
+            TTL_LEDGERS,
+            TTL_LEDGERS,
+        );
 
         Ok(())
     }
@@ -187,7 +186,11 @@ impl EscrowContract {
             .get(&DataKey::TokenContract)
             .unwrap();
         let token = token::Client::new(&env, &token_addr);
-        token.transfer(&env.current_contract_address(), &record.carrier, &record.amount);
+        token.transfer(
+            &env.current_contract_address(),
+            &record.carrier,
+            &record.amount,
+        );
 
         record.status = EscrowStatus::Released;
         record.settled_at = env.ledger().timestamp();
@@ -217,7 +220,11 @@ impl EscrowContract {
             .get(&DataKey::TokenContract)
             .unwrap();
         let token = token::Client::new(&env, &token_addr);
-        token.transfer(&env.current_contract_address(), &record.shipper, &record.amount);
+        token.transfer(
+            &env.current_contract_address(),
+            &record.shipper,
+            &record.amount,
+        );
 
         record.status = EscrowStatus::Refunded;
         record.settled_at = env.ledger().timestamp();
@@ -227,11 +234,7 @@ impl EscrowContract {
 
     /// Raise a dispute for the escrow (mirrors the shipment dispute).
     /// Either party can call this; admin then resolves via release or refund.
-    pub fn raise_dispute(
-        env: Env,
-        caller: Address,
-        shipment_id: u64,
-    ) -> Result<(), EscrowError> {
+    pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), EscrowError> {
         caller.require_auth();
 
         let mut record = Self::load(&env, shipment_id)?;
@@ -324,9 +327,11 @@ impl EscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Escrow(record.shipment_id), record);
-        env.storage()
-            .persistent()
-            .extend_ttl(&DataKey::Escrow(record.shipment_id), TTL_LEDGERS, TTL_LEDGERS);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Escrow(record.shipment_id),
+            TTL_LEDGERS,
+            TTL_LEDGERS,
+        );
     }
 }
 
@@ -355,10 +360,10 @@ mod tests {
         shipper_balance: i128,
     ) -> (
         Env,
-        Address,          // admin
-        Address,          // shipper
-        Address,          // carrier
-        Address,          // token
+        Address, // admin
+        Address, // shipper
+        Address, // carrier
+        Address, // token
         EscrowContractClient<'static>,
     ) {
         let env = Env::default();
@@ -380,11 +385,7 @@ mod tests {
     const AMOUNT: i128 = 500_000_000; // 50 XLM in stroops (7 decimals)
     const SHIPMENT_ID: u64 = 42;
 
-    fn fund(
-        client: &EscrowContractClient,
-        shipper: &Address,
-        carrier: &Address,
-    ) {
+    fn fund(client: &EscrowContractClient, shipper: &Address, carrier: &Address) {
         client.fund_escrow(shipper, carrier, &SHIPMENT_ID, &AMOUNT);
     }
 

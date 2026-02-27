@@ -1,8 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Vec};
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -25,13 +23,13 @@ pub enum ShipmentError {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ShipmentStatus {
-    Created,    // Shipper posted, awaiting carrier
-    Accepted,   // Carrier accepted, awaiting pickup
-    InTransit,  // Carrier has picked up cargo
-    Delivered,  // Carrier marked as delivered, awaiting shipper confirm
-    Completed,  // Shipper confirmed delivery — triggers payment release
-    Disputed,   // Either party raised a dispute
-    Cancelled,  // Cancelled by shipper (only from Created or Accepted)
+    Created,   // Shipper posted, awaiting carrier
+    Accepted,  // Carrier accepted, awaiting pickup
+    InTransit, // Carrier has picked up cargo
+    Delivered, // Carrier marked as delivered, awaiting shipper confirm
+    Completed, // Shipper confirmed delivery — triggers payment release
+    Disputed,  // Either party raised a dispute
+    Cancelled, // Cancelled by shipper (only from Created or Accepted)
 }
 
 #[contracttype]
@@ -252,17 +250,12 @@ impl ShipmentContract {
     // ── Dispute ───────────────────────────────────────────────────────────
 
     /// Either party can raise a dispute when the shipment is InTransit or Delivered.
-    pub fn raise_dispute(
-        env: Env,
-        caller: Address,
-        shipment_id: u64,
-    ) -> Result<(), ShipmentError> {
+    pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), ShipmentError> {
         caller.require_auth();
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
-        let is_party = shipment.shipper == caller
-            || shipment.carrier.as_ref() == Some(&caller);
+        let is_party = shipment.shipper == caller || shipment.carrier.as_ref() == Some(&caller);
 
         if !is_party {
             return Err(ShipmentError::Unauthorized);
@@ -349,9 +342,11 @@ impl ShipmentContract {
         env.storage()
             .persistent()
             .set(&DataKey::Shipment(shipment.id), shipment);
-        env.storage()
-            .persistent()
-            .extend_ttl(&DataKey::Shipment(shipment.id), TTL_LEDGERS, TTL_LEDGERS);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Shipment(shipment.id),
+            TTL_LEDGERS,
+            TTL_LEDGERS,
+        );
     }
 
     fn next_id(env: &Env) -> u64 {
@@ -361,9 +356,7 @@ impl ShipmentContract {
             .get(&DataKey::Counter)
             .unwrap_or(0);
         let next = current + 1;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Counter, &next);
+        env.storage().persistent().set(&DataKey::Counter, &next);
         env.storage()
             .persistent()
             .extend_ttl(&DataKey::Counter, TTL_LEDGERS, TTL_LEDGERS);
@@ -404,11 +397,7 @@ mod tests {
         String::from_str(env, s)
     }
 
-    fn make_shipment(
-        env: &Env,
-        client: &ShipmentContractClient,
-        shipper: &Address,
-    ) -> u64 {
+    fn make_shipment(env: &Env, client: &ShipmentContractClient, shipper: &Address) -> u64 {
         client.create_shipment(
             shipper,
             &str(env, "Lagos, Nigeria"),

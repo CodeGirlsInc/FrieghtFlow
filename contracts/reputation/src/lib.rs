@@ -13,9 +13,7 @@
 //! Fixed-point arithmetic: `average_rating` is stored as `score * 100`
 //! (i.e. 500 = 5.00 stars, 350 = 3.50 stars).
 
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, Env, Vec,
-};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Vec};
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -83,11 +81,11 @@ pub struct RatingRecord {
 #[contracttype]
 pub enum DataKey {
     Admin,
-    AuthorizedContract,         // Shipment contract allowed to call update_stats
+    AuthorizedContract, // Shipment contract allowed to call update_stats
     RatingCounter,
     Reputation(Address),
     Rating(u64),
-    ShipmentRaters(u64),        // Vec<Address> — who has already rated this shipment
+    ShipmentRaters(u64), // Vec<Address> — who has already rated this shipment
 }
 
 const TTL_LEDGERS: u32 = 6_307_200; // ~1 year
@@ -225,9 +223,11 @@ impl ReputationContract {
         env.storage()
             .persistent()
             .set(&DataKey::Rating(rating_id), &record);
-        env.storage()
-            .persistent()
-            .extend_ttl(&DataKey::Rating(rating_id), TTL_LEDGERS, TTL_LEDGERS);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Rating(rating_id),
+            TTL_LEDGERS,
+            TTL_LEDGERS,
+        );
 
         // Mark rater for this shipment.
         raters.push_back(rater);
@@ -250,9 +250,11 @@ impl ReputationContract {
         env.storage()
             .persistent()
             .set(&DataKey::Reputation(rated.clone()), &rep);
-        env.storage()
-            .persistent()
-            .extend_ttl(&DataKey::Reputation(rated), TTL_LEDGERS, TTL_LEDGERS);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Reputation(rated),
+            TTL_LEDGERS,
+            TTL_LEDGERS,
+        );
 
         Ok(rating_id)
     }
@@ -353,14 +355,12 @@ impl ReputationContract {
             match rep.user_type {
                 UserType::Carrier => {
                     // On-time percentage × 3 → 0-300
-                    let pct = (rep.on_time_count as u64 * 100)
-                        / rep.total_completed as u64;
+                    let pct = (rep.on_time_count as u64 * 100) / rep.total_completed as u64;
                     (pct * 3) as u32
                 }
                 UserType::Shipper => {
                     // Success percentage × 3 → 0-300
-                    let pct = (rep.success_count as u64 * 100)
-                        / rep.total_completed as u64;
+                    let pct = (rep.success_count as u64 * 100) / rep.total_completed as u64;
                     (pct * 3) as u32
                 }
             }
