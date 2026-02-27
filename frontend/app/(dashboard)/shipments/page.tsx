@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '../../../stores/auth.store';
 import { shipmentApi } from '../../../lib/api/shipment.api';
-import { Shipment, ShipmentStatus, PaginatedShipments } from '../../../types/shipment.types';
+import { ShipmentStatus, PaginatedShipments } from '../../../types/shipment.types';
 import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { Button } from '../../../components/ui/button';
 import { toast } from 'sonner';

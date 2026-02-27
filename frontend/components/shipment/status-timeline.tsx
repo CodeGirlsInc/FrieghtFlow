@@ -41,7 +41,7 @@ export function StatusTimeline({ history }: StatusTimelineProps) {
 
   return (
     <ol className="relative border-l border-border ml-3">
-      {history.map((entry, index) => (
+      {history.map((entry) => (
         <li key={entry.id} className="mb-6 ml-6">
           {/* Dot */}
           <span
