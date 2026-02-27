@@ -375,7 +375,7 @@ mod tests {
 
         let token_addr = create_token(&env, &admin, &shipper, shipper_balance);
 
-        let contract_id = env.register_contract(None, EscrowContract);
+        let contract_id = env.register(EscrowContract {}, ());
         let client = EscrowContractClient::new(&env, &contract_id);
         client.initialize(&admin, &token_addr);
 

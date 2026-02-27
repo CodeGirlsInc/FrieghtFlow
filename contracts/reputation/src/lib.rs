@@ -180,7 +180,7 @@ impl ReputationContract {
     ) -> Result<u64, ReputationError> {
         rater.require_auth();
 
-        if score < 1 || score > 5 {
+        if !(1..=5).contains(&score) {
             return Err(ReputationError::InvalidScore);
         }
         if rater == rated {
@@ -440,7 +440,7 @@ mod tests {
 
         let admin = Address::generate(&env);
         let auth_contract = Address::generate(&env); // simulates shipment contract
-        let contract_id = env.register_contract(None, ReputationContract);
+        let contract_id = env.register(ReputationContract {}, ());
         let client = ReputationContractClient::new(&env, &contract_id);
         client.initialize(&admin, &auth_contract);
 

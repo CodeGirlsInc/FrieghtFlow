@@ -116,7 +116,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, IdentityContract);
+        let contract_id = env.register(IdentityContract {}, ());
         let client = IdentityContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -135,7 +135,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, IdentityContract);
+        let contract_id = env.register(IdentityContract {}, ());
         let client = IdentityContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -154,7 +154,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, IdentityContract);
+        let contract_id = env.register(IdentityContract {}, ());
         let client = IdentityContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -174,7 +174,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, IdentityContract);
+        let contract_id = env.register(IdentityContract {}, ());
         let client = IdentityContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);

@@ -42,7 +42,7 @@ pub enum DocumentType {
 
 /// A registered document record.
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DocumentRecord {
     pub id: u64,
     pub shipment_id: u64,
@@ -249,7 +249,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let admin = Address::generate(&env);
-        let id = env.register_contract(None, DocumentContract);
+        let id = env.register(DocumentContract {}, ());
         let client = DocumentContractClient::new(&env, &id);
         client.initialize(&admin);
         (env, admin, client)

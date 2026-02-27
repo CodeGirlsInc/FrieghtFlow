@@ -33,7 +33,7 @@ pub enum ShipmentStatus {
 }
 
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Shipment {
     pub id: u64,
     pub shipper: Address,
@@ -387,7 +387,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let admin = Address::generate(&env);
-        let contract_id = env.register_contract(None, ShipmentContract);
+        let contract_id = env.register(ShipmentContract {}, ());
         let client = ShipmentContractClient::new(&env, &contract_id);
         client.initialize(&admin);
         (env, admin, client)
@@ -507,7 +507,7 @@ mod tests {
 
     #[test]
     fn test_dispute_and_admin_resolve() {
-        let (env, admin, client) = setup();
+        let (env, _admin, client) = setup();
         let shipper = Address::generate(&env);
         let carrier = Address::generate(&env);
 

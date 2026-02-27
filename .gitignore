@@ -1,0 +1,15 @@
+# Rust build artifacts
+contracts/target/
+
+# Claude Code working memory (local only)
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
