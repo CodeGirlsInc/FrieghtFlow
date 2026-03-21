@@ -50,6 +50,21 @@ export class User {
   })
   refreshToken: string | null;
 
+  @Column({
+    name: 'reset_password_token',
+    nullable: true,
+    type: 'varchar',
+    select: false,
+  })
+  resetPasswordToken: string | null;
+
+  @Column({
+    name: 'reset_password_expiry',
+    nullable: true,
+    type: 'timestamptz',
+  })
+  resetPasswordExpiry: Date | null;
+
   @Column({ name: 'verification_token', nullable: true, type: 'varchar' })
   verificationToken: string | null;
 
