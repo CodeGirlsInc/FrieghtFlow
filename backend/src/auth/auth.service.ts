@@ -132,6 +132,114 @@ export class AuthService {
     return { message: 'Email verified successfully' };
   }
 
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const user = await this.usersService.findByEmail(email);
+    // Always return the same message to avoid email enumeration
+    if (!user) {
+      return {
+        message: 'If that email is registered, a reset link has been sent.',
+      };
+    }
+
+    const resetToken = uuidv4();
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await this.usersService.setResetToken(user.id, resetToken, expiry);
+
+    try {
+      await this.sendPasswordResetEmail(user, resetToken);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to send password reset email to ${user.email}: ${message}`,
+      );
+    }
+
+    return {
+      message: 'If that email is registered, a reset link has been sent.',
+    };
+  }
+
+  async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const user = await this.usersService.findByResetToken(token);
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+    if (!user.resetPasswordExpiry || user.resetPasswordExpiry < new Date()) {
+      throw new BadRequestException('Reset token has expired');
+    }
+
+    await this.usersService.update(user.id, { password: newPassword });
+    await this.usersService.clearResetToken(user.id);
+    // Invalidate any existing sessions
+    await this.usersService.updateRefreshToken(user.id, null);
+
+    return {
+      message:
+        'Password reset successfully. Please log in with your new password.',
+    };
+  }
+
+  async updateProfile(
+    userId: string,
+    dto: { firstName?: string; lastName?: string; walletAddress?: string },
+  ): Promise<Omit<User, 'passwordHash' | 'refreshToken'>> {
+    await this.usersService.update(userId, dto);
+    const updated = await this.usersService.findOne(userId);
+    const { passwordHash: _ph, refreshToken: _rt, ...safeUser } = updated;
+    return safeUser;
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const user = await this.usersService.findByEmail(
+      (await this.usersService.findOne(userId)).email,
+    );
+    if (!user) throw new UnauthorizedException('User not found');
+
+    const isValid = await this.usersService.verifyPassword(
+      currentPassword,
+      user.passwordHash,
+    );
+    if (!isValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    await this.usersService.update(userId, { password: newPassword });
+    // Invalidate all existing sessions so other devices are logged out
+    await this.usersService.updateRefreshToken(userId, null);
+
+    return { message: 'Password changed successfully. Please log in again.' };
+  }
+
+  async sendPasswordResetEmail(user: User, token: string): Promise<void> {
+    const frontendUrl = this.configService.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3000',
+    );
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+
+    await this.mailerService.sendMail({
+      to: user.email,
+      subject: 'Reset your FreightFlow password',
+      html: `
+        <h1>Password Reset Request</h1>
+        <p>Hi ${user.firstName},</p>
+        <p>We received a request to reset your FreightFlow password. Click the button below to set a new password:</p>
+        <a href="${resetUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">
+          Reset Password
+        </a>
+        <p>This link expires in <strong>1 hour</strong>.</p>
+        <p>If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.</p>
+      `,
+    });
+  }
+
   async sendVerificationEmail(user: User, token: string): Promise<void> {
     const frontendUrl = this.configService.get<string>(
       'FRONTEND_URL',
@@ -164,7 +272,10 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '15m') as StringValue,
+        expiresIn: this.configService.get<string>(
+          'JWT_EXPIRES_IN',
+          '15m',
+        ) as StringValue,
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
