@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, ILike } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { v4 as uuidv4 } from 'uuid';
 import { Shipment } from './entities/shipment.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
@@ -16,6 +17,17 @@ import { QueryShipmentDto } from './dto/query-shipment.dto';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
+import {
+  SHIPMENT_CREATED,
+  SHIPMENT_ACCEPTED,
+  SHIPMENT_IN_TRANSIT,
+  SHIPMENT_DELIVERED,
+  SHIPMENT_COMPLETED,
+  SHIPMENT_CANCELLED,
+  SHIPMENT_DISPUTED,
+  SHIPMENT_DISPUTE_RESOLVED,
+  ShipmentEvent,
+} from './events/shipment.events';
 
 export interface PaginatedShipments {
   data: Shipment[];
@@ -34,6 +46,7 @@ export class ShipmentsService {
     private readonly shipmentRepo: Repository<Shipment>,
     @InjectRepository(ShipmentStatusHistory)
     private readonly historyRepo: Repository<ShipmentStatusHistory>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // ── Tracking number ──────────────────────────────────────────────────────────
@@ -138,6 +151,12 @@ export class ShipmentsService {
       ShipmentStatus.PENDING,
       shipperId,
       'Shipment created',
+    );
+    // Reload with relations for notification payload
+    const full = await this.findOne(saved.id);
+    this.eventEmitter.emit(
+      SHIPMENT_CREATED,
+      new ShipmentEvent(full, shipperId),
     );
     return saved;
   }
@@ -259,6 +278,11 @@ export class ShipmentsService {
       ShipmentStatus.ACCEPTED,
       carrier.id,
     );
+    const full = await this.findOne(shipmentId);
+    this.eventEmitter.emit(
+      SHIPMENT_ACCEPTED,
+      new ShipmentEvent(full, carrier.id),
+    );
     return saved;
   }
 
@@ -283,6 +307,11 @@ export class ShipmentsService {
       ShipmentStatus.ACCEPTED,
       ShipmentStatus.IN_TRANSIT,
       carrier.id,
+    );
+    const full = await this.findOne(shipmentId);
+    this.eventEmitter.emit(
+      SHIPMENT_IN_TRANSIT,
+      new ShipmentEvent(full, carrier.id),
     );
     return saved;
   }
@@ -310,6 +339,11 @@ export class ShipmentsService {
       ShipmentStatus.DELIVERED,
       carrier.id,
     );
+    const full = await this.findOne(shipmentId);
+    this.eventEmitter.emit(
+      SHIPMENT_DELIVERED,
+      new ShipmentEvent(full, carrier.id),
+    );
     return saved;
   }
 
@@ -332,6 +366,11 @@ export class ShipmentsService {
       ShipmentStatus.DELIVERED,
       ShipmentStatus.COMPLETED,
       shipper.id,
+    );
+    const full = await this.findOne(shipmentId);
+    this.eventEmitter.emit(
+      SHIPMENT_COMPLETED,
+      new ShipmentEvent(full, shipper.id),
     );
     return saved;
   }
@@ -356,14 +395,20 @@ export class ShipmentsService {
       user.role,
     );
 
+    const previousStatus = shipment.status;
     shipment.status = ShipmentStatus.CANCELLED;
     const saved = await this.shipmentRepo.save(shipment);
     await this.recordHistory(
       shipmentId,
-      shipment.status,
+      previousStatus,
       ShipmentStatus.CANCELLED,
       user.id,
       reason,
+    );
+    const full = await this.findOne(shipmentId);
+    this.eventEmitter.emit(
+      SHIPMENT_CANCELLED,
+      new ShipmentEvent(full, user.id, reason),
     );
     return saved;
   }
@@ -388,14 +433,20 @@ export class ShipmentsService {
       user.role,
     );
 
+    const previousStatus = shipment.status;
     shipment.status = ShipmentStatus.DISPUTED;
     const saved = await this.shipmentRepo.save(shipment);
     await this.recordHistory(
       shipmentId,
-      shipment.status,
+      previousStatus,
       ShipmentStatus.DISPUTED,
       user.id,
       reason,
+    );
+    const full = await this.findOne(shipmentId);
+    this.eventEmitter.emit(
+      SHIPMENT_DISPUTED,
+      new ShipmentEvent(full, user.id, reason),
     );
     return saved;
   }
@@ -417,6 +468,11 @@ export class ShipmentsService {
       resolution,
       admin.id,
       reason,
+    );
+    const full = await this.findOne(shipmentId);
+    this.eventEmitter.emit(
+      SHIPMENT_DISPUTE_RESOLVED,
+      new ShipmentEvent(full, admin.id, reason),
     );
     return saved;
   }
