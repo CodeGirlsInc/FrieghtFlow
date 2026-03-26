@@ -110,6 +110,28 @@ export class UsersService {
     });
   }
 
+  async findByResetToken(token: string): Promise<User | null> {
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.resetPasswordToken')
+      .where('user.resetPasswordToken = :token', { token })
+      .getOne();
+  }
+
+  async setResetToken(id: string, token: string, expiry: Date): Promise<void> {
+    await this.usersRepository.update(id, {
+      resetPasswordToken: token,
+      resetPasswordExpiry: expiry,
+    });
+  }
+
+  async clearResetToken(id: string): Promise<void> {
+    await this.usersRepository.update(id, {
+      resetPasswordToken: null,
+      resetPasswordExpiry: null,
+    });
+  }
+
   async remove(id: string): Promise<void> {
     const user = await this.findOne(id);
     await this.usersRepository.remove(user);
