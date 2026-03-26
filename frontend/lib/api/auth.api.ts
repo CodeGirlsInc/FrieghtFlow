@@ -61,3 +61,43 @@ export async function refreshToken(): Promise<AuthResponse> {
 export async function getCurrentUser(): Promise<User> {
   return apiClient<User>('/auth/me');
 }
+
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  return apiClient<{ message: string }>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+    skipAuth: true,
+  });
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  return apiClient<{ message: string }>('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword }),
+    skipAuth: true,
+  });
+}
+
+export async function updateProfile(dto: {
+  firstName?: string;
+  lastName?: string;
+  walletAddress?: string;
+}): Promise<User> {
+  return apiClient<User>('/auth/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
+  });
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  return apiClient<{ message: string }>('/auth/change-password', {
+    method: 'PATCH',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
