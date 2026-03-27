@@ -1,100 +1,66 @@
-import { apiClient } from "./client";
-import { User, UserRole } from "@/types/auth.types";
-import { Shipment, ShipmentStatus } from "@/types/shipment.types";
+import { apiClient } from './client';
+import { User } from '../../types/auth.types';
+import { PaginatedShipments, ShipmentStatus } from '../../types/shipment.types';
 
-// Stats overview interface
-export interface PlatformStats {
-  users: {
-    total: number;
-    active: number;
-    inactive: number;
-    shippers: number;
-    carriers: number;
-    admins: number;
-  };
-  shipments: {
-    total: number;
-    pending: number;
-    inTransit: number;
-    completed: number;
-    disputed: number;
-    cancelled: number;
-  };
-  revenue: {
-    completed: number;
-  };
-}
-
-// Paginated users
-export interface PaginatedUsers {
-  data: User[];
+export interface ListUsersResponse {
+  users: User[];
   total: number;
   page: number;
-  pageSize: number;
+  limit: number;
+  totalPages: number;
 }
 
-// Paginated shipments
-export interface PaginatedAdminShipments {
-  data: Shipment[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-// Query params for users
-export interface QueryUsersParams {
-  page?: number;
-  pageSize?: number;
-  role?: UserRole;
-  status?: "active" | "inactive";
-}
-
-// Query params for shipments
-export interface QueryAdminShipmentsParams {
-  page?: number;
-  pageSize?: number;
-  status?: ShipmentStatus;
-  disputed?: boolean;
-}
-
-// Helper to serialize query params
-function toQueryString(params: Record<string, any> = {}): string {
-  const query = Object.entries(params)
-    .filter(([_, v]) => v !== undefined && v !== null)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join("&");
-  return query ? `?${query}` : "";
-}
-
-// Admin API client
 export const adminApi = {
-  async getStats(): Promise<PlatformStats> {
-    return apiClient.get("/admin/stats");
+  listUsers: async (page = 1, role?: string, status?: string): Promise<ListUsersResponse> => {
+    const query = new URLSearchParams();
+    query.append('page', page.toString());
+    query.append('limit', '10');
+    if (role && role !== 'All Roles') {
+      // Map 'Shippers' -> 'shipper', etc
+      let roleVal = role.toLowerCase();
+      if (roleVal.endsWith('s')) roleVal = roleVal.slice(0, -1);
+      query.append('role', roleVal);
+    }
+    if (status && status !== 'All') {
+      query.append('isActive', status === 'Active' ? 'true' : 'false');
+    }
+    return apiClient<ListUsersResponse>(`/admin/users?${query.toString()}`);
   },
 
-  async listUsers(params?: QueryUsersParams): Promise<PaginatedUsers> {
-    const qs = toQueryString(params || {});
-    return apiClient.get(`/admin/users${qs}`);
+  listShipments: async (page = 1, status?: string): Promise<PaginatedShipments> => {
+    const query = new URLSearchParams();
+    query.append('page', page.toString());
+    query.append('limit', '10');
+    if (status && status !== 'All') {
+      // Map visual tabs to ShipmentStatus enum
+      const statusMap: Record<string, ShipmentStatus> = {
+        'Pending': ShipmentStatus.PENDING,
+        'Accepted': ShipmentStatus.ACCEPTED,
+        'In Transit': ShipmentStatus.IN_TRANSIT,
+        'Delivered': ShipmentStatus.DELIVERED,
+        'Completed': ShipmentStatus.COMPLETED,
+        'Cancelled': ShipmentStatus.CANCELLED,
+        'Disputed': ShipmentStatus.DISPUTED,
+      };
+      if (statusMap[status]) {
+        query.append('status', statusMap[status]);
+      }
+    }
+    return apiClient<PaginatedShipments>(`/admin/shipments?${query.toString()}`);
   },
 
-  async getUser(id: string): Promise<User> {
-    return apiClient.get(`/admin/users/${id}`);
+  activateUser: async (id: string): Promise<User> => {
+    return apiClient<User>(`/admin/users/${id}/activate`, { method: 'POST' });
   },
 
-  async deactivateUser(id: string): Promise<void> {
-    return apiClient.post(`/admin/users/${id}/deactivate`);
+  deactivateUser: async (id: string): Promise<User> => {
+    return apiClient<User>(`/admin/users/${id}/deactivate`, { method: 'POST' });
   },
 
-  async activateUser(id: string): Promise<void> {
-    return apiClient.post(`/admin/users/${id}/activate`);
-  },
-
-  async changeUserRole(id: string, role: UserRole): Promise<void> {
-    return apiClient.post(`/admin/users/${id}/role`, { role });
-  },
-
-  async listShipments(params?: QueryAdminShipmentsParams): Promise<PaginatedAdminShipments> {
-    const qs = toQueryString(params || {});
-    return apiClient.get(`/admin/shipments${qs}`);
+  changeUserRole: async (id: string, role: string): Promise<User> => {
+    return apiClient<User>(`/admin/users/${id}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    });
   },
 };
