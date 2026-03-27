@@ -1,4 +1,4 @@
-FrieghtFlow is a decentralized logistics and freight management platform built to streamline freight and cargo operations for **small businesses**, **large enterprises**, and **independent shippers** using Web3 technologies. It integrates with blockchain infrastructure to enhance transparency, traceability, and efficiency in shipment tracking and freight workflows.
+FrieghtFlow is a decentralized stellar logistics and freight management platform built to streamline freight and cargo operations for **small businesses**, **large enterprises**, and **independent shippers** using Web3 technologies. It integrates with blockchain infrastructure to enhance transparency, traceability, and efficiency in shipment tracking and freight workflows.
 
 ---
 
@@ -34,13 +34,13 @@ This repository contains both frontend and backend components — each designed 
 
 ## Tech Stack
 
-| Layer      | Technology                            |     |
-| ---------- | ------------------------------------- | --- |
-| Frontend   | **Next.js**, React, TypeScript        |     |
-| Backend    | **NestJS**, Node.js                   |     |
-| Blockchain | **Starknet**, Soroban/Smart Contracts |     |
-| Languages  | TypeScript, JavaScript, Stellar       |     |
-| Deployment | Modern CI/CD (GitHub Actions)         |     |
+| Layer      | Technology                                                                                         |     |
+| ---------- | -------------------------------------------------------------------------------------------------- | --- |
+| Frontend   | **Next.js**, React, TypeScript, zustand, react query, react hook form, axios, api client, zod, etc |
+| Backend    | **NestJS**, Typeorm, postgresql, etc                                                               |     |
+| Blockchain | **Stellar (Rust)**,                                                                                |     |
+| Languages  | TypeScript, JavaScript, Stellar                                                                    |     |
+| Deployment | Modern CI/CD (GitHub Actions)                                                                      |     |
 
 ---
 
@@ -123,7 +123,7 @@ Visit `http://localhost:3000` to view the app. Adjust ports and proxies if neces
 FrieghtFlow/
 ├── backend/        # NestJS backend
 ├── frontend/       # Next.js UI & client
-├── contracts/      # Starknet/Soroban smart contracts
+├── contracts/      # Stellar smart contracts
 ├── .github/        # CI/CD workflows and templates
 ├── README.md       # Project documentation
 ```

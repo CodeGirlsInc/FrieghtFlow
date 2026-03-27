@@ -1,141 +1,138 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { shipmentApi } from '@/services/shipmentApi';
-import ShipmentCard from '@/components/ShipmentCard';
-import { toast } from 'react-hot-toast';
-
-interface Shipment {
-  id: string;
-  origin: string;
-  destination: string;
-  // other fields...
-}
+import { useEffect, useState } from 'react';
+import { shipmentApi } from '../../../lib/api/shipment.api';
+import { PaginatedShipments } from '../../../types/shipment.types';
+import { ShipmentCard } from '../../../components/shipment/shipment-card';
+import { Input } from '../../../components/ui/input';
+import { Button } from '../../../components/ui/button';
+import { toast } from 'sonner';
 
 export default function MarketplacePage() {
-  const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<PaginatedShipments | null>(null);
+  const [loading, setLoading] = useState(true);
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
 
-  const fetchShipments = async (params?: { origin?: string; destination?: string; page?: number }) => {
+  const fetchMarketplace = async (pg = 1) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      const response = await shipmentApi.marketplace(params || { page });
-      setShipments(response.data);
-      setTotalPages(response.totalPages);
-      setTotalCount(response.totalCount);
-    } catch (err) {
-      setError('Failed to fetch shipments');
-      toast.error('Failed to fetch shipments');
+      const data = await shipmentApi.marketplace({
+        origin: origin || undefined,
+        destination: destination || undefined,
+        page: pg,
+        limit: 12,
+      });
+      setResult(data);
+      setPage(pg);
+    } catch {
+      toast.error('Failed to load marketplace');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchShipments({ page });
-  }, [page]);
+    fetchMarketplace(1);
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
-    fetchShipments({ origin, destination, page: 1 });
-  };
-
-  const handleClear = () => {
-    setOrigin('');
-    setDestination('');
-    setPage(1);
-    fetchShipments({ page: 1 });
+    fetchMarketplace(1);
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Carrier Marketplace</h1>
+    <div className="p-6 max-w-5xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-foreground">Marketplace</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Browse available shipments open for carriers to accept.
+        </p>
+      </div>
 
-      {/* Search Form */}
-      <form onSubmit={handleSearch} className="flex gap-2 mb-6">
-        <input
-          type="text"
+      {/* Search */}
+      <form onSubmit={handleSearch} className="flex gap-2 mb-6 flex-wrap">
+        <Input
           placeholder="Origin"
           value={origin}
           onChange={(e) => setOrigin(e.target.value)}
-          className="border px-2 py-1 rounded"
+          className="w-40"
         />
-        <input
-          type="text"
+        <Input
           placeholder="Destination"
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
-          className="border px-2 py-1 rounded"
+          className="w-40"
         />
-        <button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
+        <Button type="submit" variant="outline" size="sm">
           Search
-        </button>
+        </Button>
         {(origin || destination) && (
-          <button type="button" onClick={handleClear} className="bg-gray-400 text-white px-4 py-1 rounded">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setOrigin('');
+              setDestination('');
+              fetchMarketplace(1);
+            }}
+          >
             Clear
-          </button>
+          </Button>
         )}
       </form>
 
-      {/* Loading Skeleton */}
-      {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Results */}
+      {loading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="animate-pulse bg-gray-200 h-40 rounded" />
+            <div key={i} className="h-36 rounded-lg bg-muted animate-pulse" />
           ))}
         </div>
-      )}
-
-      {/* Error State */}
-      {error && <p className="text-red-600">{error}</p>}
-
-      {/* Empty State */}
-      {!loading && !error && shipments.length === 0 && (
-        <p className="text-gray-600">No available shipments right now. Check back soon!</p>
-      )}
-
-      {/* Results Grid */}
-      {!loading && shipments.length > 0 && (
+      ) : !result || result.data.length === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-muted-foreground text-sm">
+            No available shipments right now. Check back soon!
+          </p>
+        </div>
+      ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {shipments.map((shipment) => (
-              <ShipmentCard key={shipment.id} shipment={shipment} />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {result.data.map((s) => (
+              <ShipmentCard key={s.id} shipment={s} />
             ))}
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 mt-6">
-              <button
+          {result.totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={page === 1}
-                onClick={() => setPage((p) => Math.max(p - 1, 1))}
-                className="px-3 py-1 border rounded disabled:opacity-50"
+                onClick={() => fetchMarketplace(page - 1)}
               >
                 Previous
-              </button>
-              <span>
-                Page {page} of {totalPages}
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {page} of {result.totalPages}
               </span>
-              <button
-                disabled={page === totalPages}
-                onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-                className="px-3 py-1 border rounded disabled:opacity-50"
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === result.totalPages}
+                onClick={() => fetchMarketplace(page + 1)}
               >
                 Next
-              </button>
+              </Button>
             </div>
           )}
 
-          {/* Total Count */}
-          <p className="text-sm text-gray-500 mt-2">{totalCount} shipment(s) available</p>
+          <p className="text-xs text-muted-foreground text-center mt-3">
+            {result.total} shipment{result.total !== 1 ? 's' : ''} available
+          </p>
         </>
       )}
     </div>

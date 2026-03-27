@@ -1,25 +1,23 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { NotificationController } from './controllers/notification.controller';
-import { NotificationService } from './services/notification.service';
-import { Notification, NotificationPreference } from './entities';
-import {
-  EmailProvider,
-  SmsProvider,
-  InAppProvider,
-} from './providers';
-import { NotificationTemplateService } from './templates/notification-template.service';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import type { StringValue } from 'ms';
+import { NotificationsService } from './notifications.service';
+import { NotificationsGateway } from './notifications.gateway';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Notification, NotificationPreference])],
-  controllers: [NotificationController],
-  providers: [
-    NotificationService,
-    EmailProvider,
-    SmsProvider,
-    InAppProvider,
-    NotificationTemplateService,
+  imports: [
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET'),
+        signOptions: {
+          expiresIn: config.get<string>('JWT_EXPIRES_IN', '15m') as StringValue,
+        },
+      }),
+    }),
   ],
-  exports: [NotificationService, NotificationTemplateService],
+  providers: [NotificationsService, NotificationsGateway],
 })
-export class NotificationModule {}
+export class NotificationsModule {}
