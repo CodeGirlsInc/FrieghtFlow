@@ -4,6 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ReactNode } from "react";
+import { useAuthStore } from "../../stores/auth.store";
+import { useShipmentSocket } from "../../hooks/useShipmentSocket";
+import { NotificationBell } from "../../components/notifications/notification-bell";
+
+interface DashboardLayoutProps {
+  children: ReactNode;
+}
 
 const SHIPPER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -26,18 +33,37 @@ const ADMIN_NAV = [
   { href: '/admin/shipments', label: 'Shipment Oversight' },
 ];
 
+interface DashboardLayoutProps {
+  children: ReactNode;
+}
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
+  const user = useAuthStore((state) => state.user);
+
+  // Initialize the WebSocket connection for real-time shipment updates
+  useShipmentSocket();
+
+  // Determine nav items based on user role
+  const getNavItems = () => {
+    if (!user) return SHIPPER_NAV;
+    if (user.role === 'admin') return ADMIN_NAV;
+    if (user.role === 'carrier') return CARRIER_NAV;
+    return SHIPPER_NAV;
+  };
+
+  const navItems = getNavItems();
 
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
       <aside className="w-64 border-r bg-card flex flex-col">
-        <div className="h-16 flex items-center gap-2 px-6 border-b">
-          <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center">
+        <div className="h-16 flex items-center gap-2 px-4 border-b">
+          <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
             <span className="text-primary-foreground font-bold text-xs">FF</span>
           </div>
-          <span className="font-bold text-foreground">FreightFlow</span>
+          <span className="font-bold text-foreground flex-1">FreightFlow</span>
+          <NotificationBell />
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
