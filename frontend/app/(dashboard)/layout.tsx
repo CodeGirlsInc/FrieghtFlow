@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '../../lib/utils';
-import { useAuthStore } from '../../stores/auth.store';
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { ReactNode } from "react";
 
 const SHIPPER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -26,19 +26,11 @@ const ADMIN_NAV = [
   { href: '/admin/shipments', label: 'Shipment Oversight' },
 ];
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
-  const { user, logout } = useAuthStore();
-
-  const navItems =
-    user?.role === 'carrier'
-      ? CARRIER_NAV
-      : user?.role === 'admin'
-        ? ADMIN_NAV
-        : SHIPPER_NAV;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen">
       {/* Sidebar */}
       <aside className="w-64 border-r bg-card flex flex-col">
         <div className="h-16 flex items-center gap-2 px-6 border-b">
@@ -72,33 +64,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* User footer */}
-        <div className="border-t p-4">
-          {user && (
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                {user.firstName[0]}
-                {user.lastName[0]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {user.firstName} {user.lastName}
-                </p>
-                <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
-              </div>
-            </div>
-          )}
-          <button
-            onClick={logout}
-            className="mt-3 w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors px-1"
+        {/* User footer section */}
+        <div className="p-4 border-t">
+          <Link
+            href="/profile"
+            className={cn(
+              "block px-3 py-2 rounded-md text-sm font-medium",
+              pathname === "/profile" && "bg-gray-200 text-gray-900"
+            )}
           >
-            Sign out
-          </button>
+            Profile
+          </Link>
+          <Link
+            href="/settings"
+            className={cn(
+              "block px-3 py-2 rounded-md text-sm font-medium",
+              pathname === "/settings" && "bg-gray-200 text-gray-900"
+            )}
+          >
+            Settings
+          </Link>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   );
 }
