@@ -21,6 +21,9 @@ const ADMIN_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'All Shipments' },
   { href: '/marketplace', label: 'Marketplace' },
+  { href: '/admin', label: 'Admin Panel' },
+  { href: '/admin/users', label: 'Manage Users' },
+  { href: '/admin/shipments', label: 'Shipment Oversight' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -48,8 +51,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="flex-1 p-4 space-y-1">
           {navItems.map((item) => {
             const active =
-              item.href === '/dashboard'
-                ? pathname === '/dashboard'
+              ['/dashboard', '/admin'].includes(item.href)
+                ? pathname === item.href
                 : pathname.startsWith(item.href);
 
             return (
