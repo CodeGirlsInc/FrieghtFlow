@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import { User } from '../../types/auth.types';
+import { PaginatedShipments, ShipmentStatus } from '../../types/shipment.types';
 
 export interface ListUsersResponse {
   users: User[];
@@ -24,6 +25,28 @@ export const adminApi = {
       query.append('isActive', status === 'Active' ? 'true' : 'false');
     }
     return apiClient<ListUsersResponse>(`/admin/users?${query.toString()}`);
+  },
+
+  listShipments: async (page = 1, status?: string): Promise<PaginatedShipments> => {
+    const query = new URLSearchParams();
+    query.append('page', page.toString());
+    query.append('limit', '10');
+    if (status && status !== 'All') {
+      // Map visual tabs to ShipmentStatus enum
+      const statusMap: Record<string, ShipmentStatus> = {
+        'Pending': ShipmentStatus.PENDING,
+        'Accepted': ShipmentStatus.ACCEPTED,
+        'In Transit': ShipmentStatus.IN_TRANSIT,
+        'Delivered': ShipmentStatus.DELIVERED,
+        'Completed': ShipmentStatus.COMPLETED,
+        'Cancelled': ShipmentStatus.CANCELLED,
+        'Disputed': ShipmentStatus.DISPUTED,
+      };
+      if (statusMap[status]) {
+        query.append('status', statusMap[status]);
+      }
+    }
+    return apiClient<PaginatedShipments>(`/admin/shipments?${query.toString()}`);
   },
 
   activateUser: async (id: string): Promise<User> => {
