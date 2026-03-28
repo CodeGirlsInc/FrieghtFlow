@@ -1,164 +1,199 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { updateProfile, changePassword } from "@/lib/api/auth.api";
-import { useAuthStore } from "@/stores/auth.store";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'sonner';
+
+import { updateProfile } from '@/lib/api/auth.api';
+import { useAuthStore } from '@/stores/auth.store';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+const stellarWalletRegex = /^G[A-Z2-7]{55}$/;
 
 const profileSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  walletAddress: z.string().optional(),
+  firstName: z.string().trim().min(1, 'First name is required'),
+  lastName: z.string().trim().min(1, 'Last name is required'),
+  walletAddress: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || stellarWalletRegex.test(value), {
+      message: 'Enter a valid Stellar wallet address',
+    }),
 });
 
-const passwordSchema = z
-  .object({
-    currentPassword: z.string().min(1, "Current password is required"),
-    newPassword: z.string().min(8, "New password must be at least 8 characters"),
-    confirmPassword: z.string().min(1, "Please confirm your new password"),
-  })
-  .refine((d) => d.newPassword === d.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
+type ProfileFormValues = z.infer<typeof profileSchema>;
 
-type ProfileValues = z.infer<typeof profileSchema>;
-type PasswordValues = z.infer<typeof passwordSchema>;
+function getErrorMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: string | string[] }).message;
+    if (Array.isArray(message)) {
+      return message[0] ?? 'Failed to update profile';
+    }
+    if (typeof message === 'string' && message.length > 0) {
+      return message;
+    }
+  }
+
+  return 'Failed to update profile';
+}
+
+function formatRole(role: string): string {
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function formatMemberSince(isoDate: string): string {
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'N/A';
+  }
+  return parsed.toLocaleDateString();
+}
 
 export default function ProfilePage() {
-  const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
+  const { user, isLoading, fetchCurrentUser, setUser } = useAuthStore();
 
   const {
-    register: regProfile,
-    handleSubmit: handleProfile,
-    reset: resetProfile,
-    formState: { errors: profileErrors, isSubmitting: profileSubmitting },
-  } = useForm<ProfileValues>({ resolver: zodResolver(profileSchema) });
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      firstName: '',
+      lastName: '',
+      walletAddress: '',
+    },
+  });
 
-  const {
-    register: regPassword,
-    handleSubmit: handlePassword,
-    reset: resetPassword,
-    formState: { errors: passwordErrors, isSubmitting: passwordSubmitting },
-  } = useForm<PasswordValues>({ resolver: zodResolver(passwordSchema) });
+  useEffect(() => {
+    if (!user) {
+      void fetchCurrentUser();
+    }
+  }, [user, fetchCurrentUser]);
 
   useEffect(() => {
     if (user) {
-      resetProfile({
+      reset({
         firstName: user.firstName,
         lastName: user.lastName,
-        walletAddress: user.walletAddress ?? "",
+        walletAddress: user.walletAddress ?? '',
       });
     }
-  }, [user, resetProfile]);
+  }, [user, reset]);
 
-  const onProfileSubmit = async (values: ProfileValues) => {
+  const onSubmit = async (values: ProfileFormValues) => {
     try {
-      const updated = await updateProfile({
+      const updatedUser = await updateProfile({
         firstName: values.firstName,
         lastName: values.lastName,
         walletAddress: values.walletAddress || undefined,
       });
-      setUser(updated);
-      toast.success("Profile updated successfully");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to update profile");
+
+      setUser(updatedUser);
+      toast.success('Profile updated successfully');
+      reset({
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        walletAddress: updatedUser.walletAddress ?? '',
+      });
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
     }
   };
 
-  const onPasswordSubmit = async (values: PasswordValues) => {
-    try {
-      const { message } = await changePassword(values.currentPassword, values.newPassword);
-      toast.success(message);
-      resetPassword();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to change password");
-    }
-  };
+  if (isLoading && !user) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">Loading profile...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">Unable to load profile.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
+    <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">Profile</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle>Personal Information</CardTitle>
+          <CardTitle>Account Details</CardTitle>
+          <CardDescription>These fields are managed by your account and cannot be edited here.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleProfile(onProfileSubmit)} className="space-y-4">
-            <div>
-              <Label htmlFor="firstName">First Name</Label>
-              <Input id="firstName" {...regProfile("firstName")} />
-              {profileErrors.firstName && (
-                <p className="text-red-600 text-sm">{profileErrors.firstName.message}</p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="lastName">Last Name</Label>
-              <Input id="lastName" {...regProfile("lastName")} />
-              {profileErrors.lastName && (
-                <p className="text-red-600 text-sm">{profileErrors.lastName.message}</p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="walletAddress">Wallet Address</Label>
-              <Input id="walletAddress" {...regProfile("walletAddress")} placeholder="0x..." />
-            </div>
-
-            <div>
-              <Label>Email</Label>
-              <Input value={user?.email ?? ""} disabled className="bg-muted" />
-            </div>
-
-            <Button type="submit" disabled={profileSubmitting}>
-              {profileSubmitting ? "Saving..." : "Save Changes"}
-            </Button>
-          </form>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-sm text-muted-foreground">Email</p>
+            <p className="font-medium">{user.email}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Role</p>
+            <p className="font-medium">{formatRole(user.role)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Email verification</p>
+            <p className="font-medium">{user.isEmailVerified ? 'Verified' : 'Not verified'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Member since</p>
+            <p className="font-medium">{formatMemberSince(user.createdAt)}</p>
+          </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Change Password</CardTitle>
+          <CardTitle>Edit Profile</CardTitle>
+          <CardDescription>Update your display details and optional Stellar wallet address.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handlePassword(onPasswordSubmit)} className="space-y-4">
-            <div>
-              <Label htmlFor="currentPassword">Current Password</Label>
-              <Input id="currentPassword" type="password" {...regPassword("currentPassword")} />
-              {passwordErrors.currentPassword && (
-                <p className="text-red-600 text-sm">{passwordErrors.currentPassword.message}</p>
-              )}
+          <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First name</Label>
+                <Input id="firstName" {...register('firstName')} />
+                {errors.firstName ? (
+                  <p className="text-sm text-red-600">{errors.firstName.message}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last name</Label>
+                <Input id="lastName" {...register('lastName')} />
+                {errors.lastName ? (
+                  <p className="text-sm text-red-600">{errors.lastName.message}</p>
+                ) : null}
+              </div>
             </div>
 
-            <div>
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input id="newPassword" type="password" {...regPassword("newPassword")} />
-              {passwordErrors.newPassword && (
-                <p className="text-red-600 text-sm">{passwordErrors.newPassword.message}</p>
-              )}
+            <div className="space-y-2">
+              <Label htmlFor="walletAddress">Stellar wallet address</Label>
+              <Input id="walletAddress" placeholder="G..." {...register('walletAddress')} />
+              {errors.walletAddress ? (
+                <p className="text-sm text-red-600">{errors.walletAddress.message}</p>
+              ) : null}
             </div>
 
-            <div>
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
-              <Input id="confirmPassword" type="password" {...regPassword("confirmPassword")} />
-              {passwordErrors.confirmPassword && (
-                <p className="text-red-600 text-sm">{passwordErrors.confirmPassword.message}</p>
-              )}
-            </div>
-
-            <Button type="submit" disabled={passwordSubmitting}>
-              {passwordSubmitting ? "Updating..." : "Update Password"}
+            <Button type="submit" disabled={!isDirty || isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save changes'}
             </Button>
           </form>
         </CardContent>
