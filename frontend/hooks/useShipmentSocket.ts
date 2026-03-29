@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuthStore } from '../stores/auth.store';
 import { useNotificationStore, type ShipmentNotification } from '../stores/notification.store';
+import { getAccessToken } from '../lib/api/client';
 import { connectSocket, disconnectSocket } from '../lib/socket';
 import { toast } from 'sonner';
 import { ShipmentStatus } from '../types/shipment.types';
@@ -46,10 +47,12 @@ export function useShipmentSocket() {
   const isConnectedRef = useRef(false);
 
   useEffect(() => {
+    const accessToken = getAccessToken();
+
     // When user is set, connect the socket
-    if (user && user.accessToken) {
+    if (user && accessToken) {
       if (!isConnectedRef.current) {
-        const socket = connectSocket(user.accessToken);
+        const socket = connectSocket(accessToken);
         socketRef.current = socket;
         isConnectedRef.current = true;
 

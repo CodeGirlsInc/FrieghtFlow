@@ -4,8 +4,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { authApi } from "@/lib/api/auth.api";
-import { logout } from "@/stores/auth.store";
+import { changePassword } from "@/lib/api/auth.api";
+import { useAuthStore } from "@/stores/auth.store";
 import {
   Card,
   CardHeader,
@@ -29,7 +29,17 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Failed to change password";
+}
+
 export default function SettingsPage() {
+  const logout = useAuthStore((state) => state.logout);
+
   const {
     register,
     handleSubmit,
@@ -41,19 +51,16 @@ export default function SettingsPage() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      await authApi.changePassword({
-        currentPassword: values.currentPassword,
-        newPassword: values.newPassword,
-      });
+      await changePassword(values.currentPassword, values.newPassword);
 
       toast.success("Password changed successfully. You will be signed out.");
       reset();
 
       setTimeout(() => {
-        logout();
+        void logout();
       }, 1500);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to change password");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
     }
   };
 

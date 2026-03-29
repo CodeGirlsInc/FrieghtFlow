@@ -10,7 +10,33 @@ export interface ListUsersResponse {
   totalPages: number;
 }
 
+export interface AdminStatsResponse {
+  users: {
+    total: number;
+    byRole: {
+      admin: number;
+      shipper: number;
+      carrier: number;
+    };
+    active: number;
+    inactive: number;
+  };
+  shipments: {
+    total: number;
+    byStatus: Record<ShipmentStatus, number>;
+    disputesPending: number;
+  };
+  revenue: {
+    totalCompleted: number;
+    currency: string;
+  };
+}
+
 export const adminApi = {
+  getStats: async (): Promise<AdminStatsResponse> => {
+    return apiClient<AdminStatsResponse>('/admin/stats');
+  },
+
   listUsers: async (page = 1, role?: string, status?: string): Promise<ListUsersResponse> => {
     const query = new URLSearchParams();
     query.append('page', page.toString());
