@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { shipmentApi } from '../../../lib/api/shipment.api';
 import { PaginatedShipments } from '../../../types/shipment.types';
 import { ShipmentCard } from '../../../components/shipment/shipment-card';
@@ -15,7 +15,7 @@ export default function MarketplacePage() {
   const [destination, setDestination] = useState('');
   const [page, setPage] = useState(1);
 
-  const fetchMarketplace = async (pg = 1) => {
+  const fetchMarketplace = useCallback(async (pg = 1) => {
     setLoading(true);
     try {
       const data = await shipmentApi.marketplace({
@@ -31,11 +31,11 @@ export default function MarketplacePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [destination, origin]);
 
   useEffect(() => {
     fetchMarketplace(1);
-  }, []);
+  }, [fetchMarketplace]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
