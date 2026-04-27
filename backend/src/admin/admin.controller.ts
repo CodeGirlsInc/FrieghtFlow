@@ -17,8 +17,10 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { CarrierCertificationsService } from '../carriers/carrier-certifications.service';
 import { QueryUsersDto } from './dto/query-users.dto';
 import { QueryAdminShipmentsDto } from './dto/query-admin-shipments.dto';
+import { UpdateCertificationVerificationDto } from '../carriers/dto/carrier-certification.dto';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -39,7 +41,10 @@ class ChangeRoleDto {
 @UseGuards(RolesGuard)
 @Roles(UserRole.ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly certificationsService: CarrierCertificationsService,
+  ) {}
 
   // ── Stats ────────────────────────────────────────────────────────────────────
 
@@ -107,5 +112,19 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Paginated shipment list' })
   listShipments(@Query() query: QueryAdminShipmentsDto) {
     return this.adminService.listShipments(query);
+  }
+
+  // ── Certifications ───────────────────────────────────────────────────────────
+
+  @Patch('certifications/:id/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify or unverify a carrier certification' })
+  @ApiResponse({ status: 200, description: 'Certification verification updated' })
+  @ApiResponse({ status: 404, description: 'Certification not found' })
+  verifyCertification(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCertificationVerificationDto,
+  ) {
+    return this.certificationsService.updateVerification(id, dto);
   }
 }

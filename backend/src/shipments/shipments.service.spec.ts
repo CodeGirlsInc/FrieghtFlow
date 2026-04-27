@@ -13,6 +13,7 @@ import { Shipment } from './entities/shipment.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
+import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { User } from '../users/entities/user.entity';
 
 function makeUser(overrides: Partial<User> = {}): User {
@@ -48,10 +49,13 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     origin: 'Lagos',
     destination: 'Abuja',
     cargoDescription: 'Electronics',
+    cargoCategory: null,
     weightKg: 100,
     volumeCbm: null,
     price: 5000,
     currency: 'USD',
+    isInsured: false,
+    insurancePremium: null,
     status: ShipmentStatus.PENDING,
     notes: null,
     pickupDate: null,
@@ -70,12 +74,22 @@ function mockRepo() {
     create: jest.fn(),
     save: jest.fn(),
     createQueryBuilder: jest.fn(),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn(),
+      },
+      save: jest.fn(),
+    },
   } as unknown as jest.Mocked<{
     findOne: jest.Mock;
     findAndCount: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
     createQueryBuilder: jest.Mock;
+    manager: {
+      connection: { createQueryRunner: jest.Mock };
+      save: jest.Mock;
+    };
   }>;
 }
 
@@ -467,6 +481,195 @@ describe('ShipmentsService', () => {
         'shipment.cancelled',
         expect.anything(),
       );
+    });
+  });
+
+  describe('cargoCategory filtering', () => {
+    it('applies cargoCategory filter in findAll', async () => {
+      shipmentRepo.findAndCount.mockResolvedValue([[], 0]);
+      const shipper = makeUser({ id: 'shipper-1', role: UserRole.SHIPPER });
+
+      await service.findAll(shipper, {
+        cargoCategory: CargoCategory.ELECTRONICS,
+        page: 1,
+        limit: 20,
+      });
+
+      expect(shipmentRepo.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            shipperId: 'shipper-1',
+            cargoCategory: CargoCategory.ELECTRONICS,
+          }),
+        }),
+      );
+    });
+
+    it('applies cargoCategory filter in findMarketplace', async () => {
+      shipmentRepo.findAndCount.mockResolvedValue([[], 0]);
+
+      await service.findMarketplace({
+        cargoCategory: CargoCategory.HAZARDOUS,
+        page: 1,
+        limit: 20,
+      });
+
+      expect(shipmentRepo.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: ShipmentStatus.PENDING,
+            cargoCategory: CargoCategory.HAZARDOUS,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('insurance premium calculation', () => {
+    it('calculates insurance premium as 1.5% of price when isInsured is true', async () => {
+      const shipment = makeShipment();
+      shipmentRepo.create.mockReturnValue(shipment);
+      shipmentRepo.save.mockResolvedValue(shipment);
+      shipmentRepo.findOne.mockResolvedValue(shipment);
+      historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
+      historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+
+      await service.create('user-uuid-1', {
+        origin: 'Lagos',
+        destination: 'Abuja',
+        cargoDescription: 'Electronics',
+        weightKg: 100,
+        price: 10000,
+        isInsured: true,
+      });
+
+      expect(shipmentRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isInsured: true,
+          insurancePremium: 150, // 1.5% of 10000
+        }),
+      );
+    });
+
+    it('sets insurancePremium to null when isInsured is false', async () => {
+      const shipment = makeShipment();
+      shipmentRepo.create.mockReturnValue(shipment);
+      shipmentRepo.save.mockResolvedValue(shipment);
+      shipmentRepo.findOne.mockResolvedValue(shipment);
+      historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
+      historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+
+      await service.create('user-uuid-1', {
+        origin: 'Lagos',
+        destination: 'Abuja',
+        cargoDescription: 'Electronics',
+        weightKg: 100,
+        price: 5000,
+        isInsured: false,
+      });
+
+      expect(shipmentRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isInsured: false,
+          insurancePremium: null,
+        }),
+      );
+    });
+  });
+
+  describe('batchCreate()', () => {
+    it('creates multiple shipments transactionally and returns their IDs', async () => {
+      const mockQueryRunner = {
+        connect: jest.fn(),
+        startTransaction: jest.fn(),
+        commitTransaction: jest.fn(),
+        rollbackTransaction: jest.fn(),
+        release: jest.fn(),
+        manager: {
+          save: jest
+            .fn()
+            .mockResolvedValueOnce({ id: 'batch-1' })
+            .mockResolvedValueOnce({ id: 'batch-2' }),
+        },
+      };
+      shipmentRepo.manager.connection.createQueryRunner.mockReturnValue(
+        mockQueryRunner,
+      );
+      shipmentRepo.create.mockImplementation((dto) => dto as Shipment);
+      shipmentRepo.findOne.mockResolvedValue(makeShipment());
+      historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
+      historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+
+      const result = await service.batchCreate('shipper-1', {
+        shipments: [
+          {
+            origin: 'Lagos',
+            destination: 'Abuja',
+            cargoDescription: 'Electronics batch 1',
+            weightKg: 100,
+            price: 5000,
+          },
+          {
+            origin: 'Lagos',
+            destination: 'Kano',
+            cargoDescription: 'Electronics batch 2',
+            weightKg: 200,
+            price: 8000,
+          },
+        ],
+      });
+
+      expect(result).toEqual(['batch-1', 'batch-2']);
+      expect(mockQueryRunner.startTransaction).toHaveBeenCalled();
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
+      expect(mockQueryRunner.rollbackTransaction).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(2);
+    });
+
+    it('rolls back the entire batch if any shipment fails', async () => {
+      const mockQueryRunner = {
+        connect: jest.fn(),
+        startTransaction: jest.fn(),
+        commitTransaction: jest.fn(),
+        rollbackTransaction: jest.fn(),
+        release: jest.fn(),
+        manager: {
+          save: jest
+            .fn()
+            .mockResolvedValueOnce({ id: 'batch-1' })
+            .mockRejectedValueOnce(new Error('Validation error')),
+        },
+      };
+      shipmentRepo.manager.connection.createQueryRunner.mockReturnValue(
+        mockQueryRunner,
+      );
+      shipmentRepo.create.mockImplementation((dto) => dto as Shipment);
+      historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
+      historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+
+      await expect(
+        service.batchCreate('shipper-1', {
+          shipments: [
+            {
+              origin: 'Lagos',
+              destination: 'Abuja',
+              cargoDescription: 'Valid shipment',
+              weightKg: 100,
+              price: 5000,
+            },
+            {
+              origin: 'Lagos',
+              destination: 'Kano',
+              cargoDescription: 'Invalid shipment',
+              weightKg: 200,
+              price: 8000,
+            },
+          ],
+        }),
+      ).rejects.toThrow('Validation error');
+
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(mockQueryRunner.commitTransaction).not.toHaveBeenCalled();
     });
   });
 });
