@@ -21,6 +21,7 @@ import { ShipmentStatusHistory } from './entities/shipment-status-history.entity
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
 import { QueryShipmentDto } from './dto/query-shipment.dto';
+import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
 import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
@@ -182,6 +183,10 @@ export class ShipmentsService {
   // ── CRUD ─────────────────────────────────────────────────────────────────────
 
   async create(shipperId: string, dto: CreateShipmentDto): Promise<Shipment> {
+    const insurancePremium = dto.isInsured
+      ? Math.round(dto.price * 0.015 * 100) / 100
+      : null;
+
     const shipment = this.shipmentRepo.create({
       trackingNumber: this.generateTrackingNumber(),
       shipperId,
@@ -189,12 +194,15 @@ export class ShipmentsService {
       origin: dto.origin,
       destination: dto.destination,
       cargoDescription: dto.cargoDescription,
+      cargoCategory: dto.cargoCategory ?? null,
       weightKg: dto.weightKg,
       volumeCbm: dto.volumeCbm ?? null,
       price: dto.price,
       currency: dto.currency ?? 'USD',
       notes: dto.notes ?? null,
       status: ShipmentStatus.PENDING,
+      isInsured: dto.isInsured ?? false,
+      insurancePremium,
       pickupDate: dto.pickupDate ? new Date(dto.pickupDate) : null,
       estimatedDeliveryDate: dto.estimatedDeliveryDate
         ? new Date(dto.estimatedDeliveryDate)
@@ -218,11 +226,84 @@ export class ShipmentsService {
     return saved;
   }
 
+  async batchCreate(
+    shipperId: string,
+    dto: BatchCreateShipmentsDto,
+  ): Promise<string[]> {
+    const createdIds: string[] = [];
+
+    // Use TypeORM transaction
+    const queryRunner = this.shipmentRepo.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      for (const shipmentDto of dto.shipments) {
+        const insurancePremium = shipmentDto.isInsured
+          ? Math.round(shipmentDto.price * 0.015 * 100) / 100
+          : null;
+
+        const shipment = this.shipmentRepo.create({
+          trackingNumber: this.generateTrackingNumber(),
+          shipperId,
+          carrierId: null,
+          origin: shipmentDto.origin,
+          destination: shipmentDto.destination,
+          cargoDescription: shipmentDto.cargoDescription,
+          cargoCategory: shipmentDto.cargoCategory ?? null,
+          weightKg: shipmentDto.weightKg,
+          volumeCbm: shipmentDto.volumeCbm ?? null,
+          price: shipmentDto.price,
+          currency: shipmentDto.currency ?? 'USD',
+          notes: shipmentDto.notes ?? null,
+          status: ShipmentStatus.PENDING,
+          isInsured: shipmentDto.isInsured ?? false,
+          insurancePremium,
+          pickupDate: shipmentDto.pickupDate
+            ? new Date(shipmentDto.pickupDate)
+            : null,
+          estimatedDeliveryDate: shipmentDto.estimatedDeliveryDate
+            ? new Date(shipmentDto.estimatedDeliveryDate)
+            : null,
+        });
+
+        const saved = await queryRunner.manager.save(shipment);
+        createdIds.push(saved.id);
+
+        await this.recordHistory(
+          saved.id,
+          null,
+          ShipmentStatus.PENDING,
+          shipperId,
+          'Shipment created via batch',
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      // Emit events for all created shipments
+      for (const id of createdIds) {
+        const full = await this.findOne(id);
+        this.eventEmitter.emit(
+          SHIPMENT_CREATED,
+          new ShipmentEvent(full, shipperId),
+        );
+      }
+
+      return createdIds;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async findAll(
     user: User,
     query: QueryShipmentDto,
   ): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, status, origin, destination } = query;
+    const { page = 1, limit = 20, status, origin, destination, cargoCategory } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {};
@@ -238,6 +319,7 @@ export class ShipmentsService {
     if (status) where.status = status;
     if (origin) where.origin = ILike(`%${origin}%`);
     if (destination) where.destination = ILike(`%${destination}%`);
+    if (cargoCategory) where.cargoCategory = cargoCategory;
 
     const [data, total] = await this.shipmentRepo.findAndCount({
       where,
@@ -251,7 +333,7 @@ export class ShipmentsService {
   }
 
   async findMarketplace(query: QueryShipmentDto): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, origin, destination } = query;
+    const { page = 1, limit = 20, origin, destination, cargoCategory } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {
@@ -259,6 +341,7 @@ export class ShipmentsService {
     };
     if (origin) where.origin = ILike(`%${origin}%`);
     if (destination) where.destination = ILike(`%${destination}%`);
+    if (cargoCategory) where.cargoCategory = cargoCategory;
 
     const [data, total] = await this.shipmentRepo.findAndCount({
       where,

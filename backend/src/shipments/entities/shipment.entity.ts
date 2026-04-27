@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { ShipmentStatus } from '../../common/enums/shipment-status.enum';
+import { CargoCategory } from '../../common/enums/cargo-category.enum';
 
 @Entity('shipments')
 export class Shipment {
@@ -49,6 +50,14 @@ export class Shipment {
   @Column({ name: 'cargo_description', type: 'text' })
   cargoDescription: string;
 
+  @Column({
+    name: 'cargo_category',
+    type: 'enum',
+    enum: CargoCategory,
+    nullable: true,
+  })
+  cargoCategory: CargoCategory | null;
+
   @Column({ name: 'weight_kg', type: 'decimal', precision: 10, scale: 2 })
   weightKg: number;
 
@@ -68,6 +77,18 @@ export class Shipment {
 
   @Column({ default: 'USD', length: 3 })
   currency: string;
+
+  @Column({ name: 'is_insured', default: false })
+  isInsured: boolean;
+
+  @Column({
+    name: 'insurance_premium',
+    type: 'decimal',
+    precision: 14,
+    scale: 2,
+    nullable: true,
+  })
+  insurancePremium: number | null;
 
   // ── Status ───────────────────────────────────────────────────────────────────
 

@@ -9,9 +9,12 @@ import {
   MaxLength,
   Min,
   IsISO4217CurrencyCode,
+  IsEnum,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { CargoCategory } from '../../common/enums/cargo-category.enum';
 
 export class CreateShipmentDto {
   @ApiProperty({ example: 'Lagos, Nigeria' })
@@ -32,6 +35,11 @@ export class CreateShipmentDto {
   @MinLength(10)
   @MaxLength(2000)
   cargoDescription: string;
+
+  @ApiPropertyOptional({ enum: CargoCategory, example: CargoCategory.ELECTRONICS })
+  @IsOptional()
+  @IsEnum(CargoCategory)
+  cargoCategory?: CargoCategory;
 
   @ApiProperty({ example: 500.5, description: 'Weight in kilograms' })
   @Type(() => Number)
@@ -76,4 +84,13 @@ export class CreateShipmentDto {
   @IsOptional()
   @IsDateString()
   estimatedDeliveryDate?: string;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Opt into insurance coverage for this shipment',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isInsured?: boolean;
 }
