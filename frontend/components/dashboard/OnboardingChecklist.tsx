@@ -38,9 +38,9 @@ export default function OnboardingChecklist() {
     setDismissed(localStorage.getItem(DISMISS_KEY) === 'true');
   }, []);
 
-  const { data: profile } = useQuery<UserProfile>({
+  const { data: profile } = useQuery({
     queryKey: ['onboarding-profile'],
-    queryFn: () => apiClient.get('/users/me/onboarding').then((r) => r.data),
+    queryFn: () => apiClient<UserProfile>('/users/me/onboarding'),
   });
 
   if (dismissed || !profile) return null;
