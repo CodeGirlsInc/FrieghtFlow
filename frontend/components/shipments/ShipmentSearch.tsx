@@ -61,10 +61,11 @@ export default function ShipmentSearch() {
         aria-label="Search shipments"
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-controls="shipment-search-listbox"
         className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
       {open && (
-        <ul role="listbox" className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+        <ul id="shipment-search-listbox" role="listbox" className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
           {results.length === 0
             ? <li className="px-4 py-3 text-sm text-gray-500">No results</li>
             : results.map(r => (

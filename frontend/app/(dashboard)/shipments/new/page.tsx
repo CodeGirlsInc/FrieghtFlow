@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
@@ -55,7 +55,7 @@ export default function NewShipmentPage() {
   const [step, setStep] = useState(0);
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(fullSchema),
+    resolver: zodResolver(fullSchema) as Resolver<FormValues>,
     defaultValues: { currency: 'USD' },
     mode: 'onTouched',
   });
