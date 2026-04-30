@@ -65,7 +65,7 @@ export default function MarketplacePage() {
       minPrice: minPrice ? Number(minPrice) : undefined,
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
     });
-  }, [origin, destination, cargoCategory, minPrice, maxPrice, sort]);
+  }, [origin, destination, cargoCategory, minPrice, maxPrice]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Patch,
   Delete,
   Param,
   Body,
@@ -17,10 +16,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
-import {
-  CreateCarrierCertificationDto,
-  UpdateCertificationVerificationDto,
-} from './dto/carrier-certification.dto';
+import { CreateCarrierCertificationDto } from './dto/carrier-certification.dto';
 
 @ApiTags('carriers')
 @ApiBearerAuth()

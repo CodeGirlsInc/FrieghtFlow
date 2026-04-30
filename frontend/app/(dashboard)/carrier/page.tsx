@@ -118,7 +118,7 @@ export default function CarrierDashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Carrier Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Welcome back, {user.firstName}. Here's your overview.
+            Welcome back, {user.firstName}. Here&apos;s your overview.
           </p>
         </div>
         <Button asChild variant="outline">

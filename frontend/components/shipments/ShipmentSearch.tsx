@@ -57,6 +57,7 @@ export default function ShipmentSearch() {
         onChange={e => setQuery(e.target.value)}
         onKeyDown={e => results.length && e.key === "Enter" && navigate(results[0].id)}
         placeholder="Search by tracking number, origin or destination…"
+        role="combobox"
         aria-label="Search shipments"
         aria-expanded={open}
         aria-haspopup="listbox"

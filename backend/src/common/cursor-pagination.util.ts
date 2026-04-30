@@ -1,4 +1,4 @@
-import { Repository, FindOptionsWhere, MoreThan, LessThan } from 'typeorm';
+import { Repository, FindOptionsWhere, LessThan } from 'typeorm';
 
 export interface CursorPageOptions {
   cursor?: string;   // opaque base64 cursor from previous response
