@@ -6,6 +6,10 @@ members = [
     "escrow",
     "document",
     "reputation",
+    "package/escrow-multisig",
+    "package/escrow-partial",
+    "package/shipment-milestones",
+    "package/reputation-batch",
 ]
 
 [profile.release]
