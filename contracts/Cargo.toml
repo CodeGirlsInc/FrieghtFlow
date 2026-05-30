@@ -10,6 +10,7 @@ members = [
     "package/escrow-partial",
     "package/shipment-milestones",
     "package/reputation-batch",
+    "package/upgradeable",
 ]
 
 [profile.release]
