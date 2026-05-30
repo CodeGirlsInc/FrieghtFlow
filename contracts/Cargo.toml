@@ -6,6 +6,10 @@ members = [
     "escrow",
     "document",
     "reputation",
+    "reputation-decay",
+    "escrow-pausable",
+    "cross-contract-validator",
+    "shipment-events",
 ]
 
 [profile.release]
