@@ -6,6 +6,7 @@ members = [
     "escrow",
     "document",
     "reputation",
+    "package/upgradeable",
 ]
 
 [profile.release]
