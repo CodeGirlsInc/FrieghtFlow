@@ -1,0 +1,13 @@
+[package]
+name    = "integration-tests"
+version = "0.1.0"
+edition = "2021"
+
+[[test]]
+name = "lifecycle"
+path = "lifecycle.rs"
+
+[dev-dependencies]
+soroban-sdk     = { version = "21.0.0", features = ["testutils"] }
+shipment        = { path = "../../shipment",  features = ["testutils"] }
+escrow          = { path = "../../escrow",    features = ["testutils"] }

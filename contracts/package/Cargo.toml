@@ -1,0 +1,6 @@
+members = [
+    # ... existing members ...
+    "document-verification",
+    "certification-registry",
+    "tests/integration",
+]
