@@ -9,7 +9,7 @@ import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
 import { Button } from '../../../components/ui/button';
 import { toast } from 'sonner';
-import { apiClient } from '../../../lib/api/client';
+import { ExportButton, type ExportFilters } from '../../../package/components/ExportButton';
 
 const STATUS_TABS: { label: string; value: ShipmentStatus | 'all' }[] = [
   { label: 'All', value: 'all' },
@@ -25,25 +25,13 @@ export default function ShipmentsPage() {
   const [result, setResult] = useState<PaginatedShipments | null>(null);
   const [activeTab, setActiveTab] = useState<ShipmentStatus | 'all'>('all');
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
 
-  const exportCsv = async () => {
-    setExporting(true);
-    try {
-      const blob = await apiClient<Blob>('/shipments/export?format=csv', {
-        headers: { Accept: 'text/csv' },
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'shipments.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Failed to export CSV. Please try again.');
-    } finally {
-      setExporting(false);
+  const getActiveFilters = (): ExportFilters => {
+    const filters: ExportFilters = {};
+    if (activeTab !== 'all') {
+      filters.status = activeTab;
     }
+    return filters;
   };
 
   useEffect(() => {
@@ -64,25 +52,11 @@ export default function ShipmentsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-foreground">{pageTitle}</h1>
         <div className="flex items-center gap-2">
-          <Button
+          <ExportButton
+            filters={getActiveFilters()}
             variant="outline"
             size="sm"
-            onClick={exportCsv}
-            disabled={exporting}
-            aria-label="Export shipments as CSV"
-          >
-            {exporting ? (
-              <>
-                <svg className="animate-spin h-3.5 w-3.5 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                Exporting…
-              </>
-            ) : (
-              'Export CSV'
-            )}
-          </Button>
+          />
           {isShipper && (
             <Button asChild>
               <Link href="/shipments/new">+ New Shipment</Link>
