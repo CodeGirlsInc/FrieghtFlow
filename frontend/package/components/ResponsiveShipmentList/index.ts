@@ -1,0 +1,1 @@
+export { ResponsiveShipmentList } from './ResponsiveShipmentList';
