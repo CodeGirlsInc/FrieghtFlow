@@ -1,0 +1,16 @@
+[package]
+name = "identity-blocklist"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { version = "22.0.0", features = ["alloc"] }
+
+[dev-dependencies]
+soroban-sdk = { version = "22.0.0", features = ["testutils", "alloc"] }
+
+[features]
+testutils = ["soroban-sdk/testutils"]
