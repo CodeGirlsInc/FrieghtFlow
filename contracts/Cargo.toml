@@ -6,15 +6,6 @@ members = [
     "escrow",
     "document",
     "reputation",
-    "package/escrow-multisig",
-    "package/escrow-partial",
-    "package/escrow-timeout",
-    "package/escrow-with-fees",
-    "package/identity-blocklist",
-    "package/shipment-milestones",
-    "package/reputation-batch",
-    "package/upgradeable",
-    "package/tests/escrow",
 ]
 
 [profile.release]

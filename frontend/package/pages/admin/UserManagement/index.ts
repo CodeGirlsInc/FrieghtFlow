@@ -1,1 +1,0 @@
-export { UserManagementTable } from './UserManagementTable';
