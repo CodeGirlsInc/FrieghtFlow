@@ -25,6 +25,9 @@ function makeUser(): User {
     verificationTokenExpiry: null,
     resetPasswordToken: null,
     resetPasswordExpiry: null,
+    isTwoFactorEnabled: false,
+    twoFactorSecret: null,
+    recoveryCodes: [],
     createdAt: new Date(),
     updatedAt: new Date(),
   };

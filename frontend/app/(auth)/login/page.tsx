@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-import { authApi } from '@/frontend/lib/api/auth.api'
+import { authApi } from '@/lib/api/auth.api'
 import { ShieldCheck, ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

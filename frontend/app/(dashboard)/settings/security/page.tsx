@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { authApi, Setup2FAResponse } from '@/frontend/lib/api/auth.api'
+import { authApi, Setup2FAResponse } from '@/lib/api/auth.api'
 import { 
   ShieldAlert, ShieldCheck, Copy, Check, 
   Download, Loader2, KeyRound, Smartphone, AlertTriangle 
