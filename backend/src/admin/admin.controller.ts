@@ -28,6 +28,8 @@ import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bullmq';
 
 class ChangeRoleDto {
   @ApiProperty({ enum: UserRole })
@@ -44,6 +46,9 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly certificationsService: CarrierCertificationsService,
+    @InjectQueue('stellar-anchor') private stellarQueue: Queue,
+    @InjectQueue('email-send') private emailQueue: Queue,
+    @InjectQueue('pdf-generate') private pdfQueue: Queue,
   ) {}
 
   // ── Stats ────────────────────────────────────────────────────────────────────
@@ -53,6 +58,22 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Platform stats' })
   getStats() {
     return this.adminService.getStats();
+  }
+
+  @Get('queue/stats')
+  @ApiOperation({ summary: 'Get queue job counts' })
+  async getQueueStats() {
+    const queues = [
+      { name: 'stellar-anchor', q: this.stellarQueue },
+      { name: 'email-send', q: this.emailQueue },
+      { name: 'pdf-generate', q: this.pdfQueue },
+    ];
+    const stats = [];
+    for (const { name, q } of queues) {
+      const counts = await q.getJobCounts();
+      stats.push({ queueName: name, ...counts });
+    }
+    return stats;
   }
 
   // ── Users ────────────────────────────────────────────────────────────────────

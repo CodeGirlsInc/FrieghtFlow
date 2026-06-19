@@ -14,6 +14,7 @@ export enum BidStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',
+  EXPIRED = 'EXPIRED',
 }
 
 @Entity('bids')
@@ -47,4 +48,7 @@ export class Bid {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @Column({ name: 'expires_at', type: 'timestamptz', nullable: true })
+  expiresAt: Date | null;
 }

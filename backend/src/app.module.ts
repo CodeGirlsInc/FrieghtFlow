@@ -22,7 +22,9 @@ import { NotificationPreferencesModule } from './notification-preferences/notifi
 import { AdminAuditInterceptor } from './audit-log/admin-audit.interceptor';
 import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
-
+import { ScheduleModule } from '@nestjs/schedule';
+import { QueueModule } from './queue/queue.module';
+import { TasksModule } from './tasks/tasks.module';
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
     ip?: string;
@@ -73,6 +75,8 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         MAIL_PASS: Joi.string().required(),
         MAIL_FROM: Joi.string().default('noreply@freightflow.io'),
         UPLOAD_DIR: Joi.string().default('./uploads'),
+        REDIS_HOST: Joi.string().default('localhost'),
+        REDIS_PORT: Joi.number().default(6379),
       }),
       validationOptions: {
         allowUnknown: true,
@@ -128,6 +132,9 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     NotificationPreferencesModule,
     CarriersModule,
     ReviewsModule,
+    ScheduleModule.forRoot(),
+    QueueModule,
+    TasksModule,
   ],
   controllers: [AppController],
   providers: [

@@ -6,4 +6,5 @@ export enum ShipmentStatus {
   COMPLETED = 'completed', // Shipper confirmed delivery
   CANCELLED = 'cancelled', // Cancelled by shipper or carrier
   DISPUTED = 'disputed', // Under dispute resolution
+  FAILED = 'failed', // Failed processing
 }
