@@ -99,10 +99,7 @@ export class ShipmentsController {
     description: 'Batch shipments created successfully',
   })
   @ApiResponse({ status: 400, description: 'Validation error in batch data' })
-  batchCreate(
-    @CurrentUser() user: User,
-    @Body() dto: BatchCreateShipmentsDto,
-  ) {
+  batchCreate(@CurrentUser() user: User, @Body() dto: BatchCreateShipmentsDto) {
     return this.shipmentsService.batchCreate(user.id, dto);
   }
 
@@ -160,7 +157,9 @@ export class ShipmentsController {
   @Get('analytics')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SHIPPER)
-  @ApiOperation({ summary: 'Shipment analytics — admin sees all, shipper sees own' })
+  @ApiOperation({
+    summary: 'Shipment analytics — admin sees all, shipper sees own',
+  })
   getAnalytics(@CurrentUser() user: User, @Query() query: AnalyticsQueryDto) {
     return this.shipmentsService.getAnalytics(user, query);
   }

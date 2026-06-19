@@ -20,18 +20,18 @@ export class StellarAnchorProcessor {
   })
   async handleStellarTransaction(job: Job) {
     this.logger.log(`Processing stellar-anchor job ${job.id}`);
-    
+
     try {
       await job.updateProgress(25);
       // Simulate work
       await new Promise((resolve) => setTimeout(resolve, 500));
       await job.updateProgress(50);
-      
+
       // Attempt some stellar logic...
-      
+
       await job.updateProgress(75);
       await new Promise((resolve) => setTimeout(resolve, 500));
-      
+
       await job.updateProgress(100);
       this.logger.log(`Job ${job.id} completed`);
     } catch (error) {
@@ -43,8 +43,11 @@ export class StellarAnchorProcessor {
       // Handle permanent failure logic using job.attemptsMade
       const maxRetries = job.opts.attempts || 3;
       if (job.attemptsMade >= maxRetries) {
-        this.logger.error(`Job ${job.id} permanently failed. Updating shipment status.`);
-        const shipmentId = job.data?.shipmentId;
+        this.logger.error(
+          `Job ${job.id} permanently failed. Updating shipment status.`,
+        );
+        const data = job.data as { shipmentId?: string };
+        const shipmentId = data?.shipmentId;
         if (shipmentId) {
           await this.shipmentRepository.update(shipmentId, {
             status: ShipmentStatus.FAILED,

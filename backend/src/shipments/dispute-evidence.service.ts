@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 export interface DisputeEvidence {
   id: string;
@@ -38,7 +42,11 @@ export class DisputeEvidenceService {
     }
   }
 
-  submit(shipmentId: string, userId: string, dto: SubmitEvidenceDto): DisputeEvidence {
+  submit(
+    shipmentId: string,
+    userId: string,
+    dto: SubmitEvidenceDto,
+  ): DisputeEvidence {
     const shipment = this.getShipment(shipmentId);
     this.assertAccess(shipment, userId);
 
@@ -56,7 +64,11 @@ export class DisputeEvidenceService {
     return record;
   }
 
-  findAll(shipmentId: string, userId: string, isAdmin: boolean): DisputeEvidence[] {
+  findAll(
+    shipmentId: string,
+    userId: string,
+    isAdmin: boolean,
+  ): DisputeEvidence[] {
     const shipment = this.getShipment(shipmentId);
     if (!isAdmin) this.assertAccess(shipment, userId);
     return this.evidence.get(shipmentId) ?? [];

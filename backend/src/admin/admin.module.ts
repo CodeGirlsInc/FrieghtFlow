@@ -8,7 +8,11 @@ import { Shipment } from '../shipments/entities/shipment.entity';
 import { QueueModule } from '../queue/queue.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Shipment]), CarriersModule, QueueModule],
+  imports: [
+    TypeOrmModule.forFeature([User, Shipment]),
+    CarriersModule,
+    QueueModule,
+  ],
   controllers: [AdminController],
   providers: [AdminService],
 })

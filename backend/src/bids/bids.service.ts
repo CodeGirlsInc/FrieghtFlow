@@ -24,7 +24,8 @@ export class BidsService {
     const shipment = await this.shipmentRepo.findOne({
       where: { id: shipmentId },
     });
-    if (!shipment) throw new NotFoundException(`Shipment ${shipmentId} not found`);
+    if (!shipment)
+      throw new NotFoundException(`Shipment ${shipmentId} not found`);
     return shipment;
   }
 
@@ -35,14 +36,18 @@ export class BidsService {
   ): Promise<Bid> {
     const shipment = await this.getShipment(shipmentId);
     if (shipment.status !== ShipmentStatus.PENDING) {
-      throw new BadRequestException('Bids can only be placed on PENDING shipments');
+      throw new BadRequestException(
+        'Bids can only be placed on PENDING shipments',
+      );
     }
 
     const existing = await this.bidRepo.findOne({
       where: { shipmentId, carrierId, status: BidStatus.PENDING },
     });
     if (existing) {
-      throw new BadRequestException('You already have a pending bid on this shipment');
+      throw new BadRequestException(
+        'You already have a pending bid on this shipment',
+      );
     }
 
     const bid = this.bidRepo.create({
@@ -79,7 +84,9 @@ export class BidsService {
       throw new BadRequestException('Shipment is no longer accepting bids');
     }
 
-    const bid = await this.bidRepo.findOne({ where: { id: bidId, shipmentId } });
+    const bid = await this.bidRepo.findOne({
+      where: { id: bidId, shipmentId },
+    });
     if (!bid) throw new NotFoundException(`Bid ${bidId} not found`);
     if (bid.status !== BidStatus.PENDING) {
       throw new BadRequestException('Bid is no longer pending');

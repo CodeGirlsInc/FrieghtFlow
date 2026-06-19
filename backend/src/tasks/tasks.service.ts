@@ -55,7 +55,9 @@ export class TasksService {
 
     if (stuckShipments.length > 0) {
       const ids = stuckShipments.map((s) => s.id).join(', ');
-      this.logger.warn(`Found ${stuckShipments.length} stuck shipments: ${ids}`);
+      this.logger.warn(
+        `Found ${stuckShipments.length} stuck shipments: ${ids}`,
+      );
       // Create admin notification - since no DB entity for notifications, we log it prominently
       this.logger.warn('ADMIN NOTIFICATION: Please review stuck shipments.');
     }

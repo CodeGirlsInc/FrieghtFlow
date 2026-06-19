@@ -12,7 +12,7 @@ import { ShipmentsModule } from '../shipments/shipments.module';
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => ({
+      useFactory: (configService: ConfigService) => ({
         redis: {
           host: configService.get<string>('REDIS_HOST', 'localhost'),
           port: configService.get<number>('REDIS_PORT', 6379),
@@ -31,11 +31,7 @@ import { ShipmentsModule } from '../shipments/shipments.module';
       },
     ),
   ],
-  providers: [
-    StellarAnchorProcessor,
-    EmailSendProcessor,
-    PdfGenerateProcessor,
-  ],
+  providers: [StellarAnchorProcessor, EmailSendProcessor, PdfGenerateProcessor],
   exports: [BullModule],
 })
 export class QueueModule {}
