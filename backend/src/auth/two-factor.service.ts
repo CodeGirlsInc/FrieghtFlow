@@ -1,51 +1,115 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
-
-interface OtpRecord {
-  code: string;
-  expiresAt: number;
-  used: boolean;
-}
+import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { authenticator } from 'otplib';
+import * as qrcode from 'qrcode';
+import * as bcrypt from 'bcrypt';
+import { Redis } from 'ioredis'; // Assuming BE-02 Redis instance wrapper setup
+import { User } from '../users/entities/user.entity';
+import { TwoFactorRecovery } from '../users/entities/two-factor-recovery.entity';
 
 @Injectable()
 export class TwoFactorService {
-  // In production, store in Redis or DB
-  private readonly store = new Map<string, OtpRecord>();
-  private readonly enabled2FA = new Set<string>();
+  private readonly redisClient: Redis;
 
-  isEnabled(userId: string): boolean {
-    return this.enabled2FA.has(userId);
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(TwoFactorRecovery)
+    private readonly recoveryRepository: Repository<TwoFactorRecovery>,
+  ) {
+    // Standard workspace constructor assignment for Redis connection
+    this.redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
   }
 
-  enable(userId: string): void {
-    this.enabled2FA.add(userId);
+  async initiateSetup(userId: number, email: string) {
+    const secret = authenticator.generateSecret();
+    const appName = 'YieldLadder platform';
+    const otpauthUrl = authenticator.keyuri(email, appName, secret);
+    const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
+
+    // Cache the temporary secret safely inside Redis with a strict 10 minute TTL
+    const redisKey = `2fa:setup:${userId}`;
+    await this.redisClient.setex(redisKey, 600, secret);
+
+    return { otpauthUrl, qrCodeDataUrl, secret };
   }
 
-  disable(userId: string): void {
-    this.enabled2FA.delete(userId);
-    this.store.delete(userId);
-  }
+  async confirmEnable(userId: number, otp: string) {
+    const redisKey = `2fa:setup:${userId}`;
+    const secret = await this.redisClient.get(redisKey);
 
-  generateOtp(userId: string): string {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    this.store.set(userId, {
-      code,
-      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-      used: false,
-    });
-    return code;
-  }
-
-  verifyOtp(userId: string, code: string): void {
-    const record = this.store.get(userId);
-
-    if (!record) throw new UnauthorizedException('No OTP issued');
-    if (record.used) throw new UnauthorizedException('OTP already used');
-    if (Date.now() > record.expiresAt) {
-      this.store.delete(userId);
-      throw new UnauthorizedException('OTP expired');
+    if (!secret) {
+      throw new BadRequestException('2FA setup session expired. Please regenerate the QR configuration.');
     }
-    if (record.code !== code) throw new BadRequestException('Invalid OTP');
 
-    record.used = true;
+    const isValid = authenticator.verify({ token: otp, secret });
+    if (!isValid) {
+      throw new BadRequestException('Invalid confirmation code. Verification rejected.');
+    }
+
+    // Persist configuration settings to user entity
+    await this.userRepository.update(userId, {
+      twoFactorSecret: secret,
+      isTwoFactorEnabled: true,
+    });
+
+    // Clear temporary setup parameters out of cache memory immediately
+    await this.redisClient.del(redisKey);
+
+    // Generate 8 individual secure backup validation tokens
+    const plainRecoveryCodes: string[] = [];
+    const entityPool: Partial<TwoFactorRecovery>[] = [];
+
+    for (let i = 0; i < 8; i++) {
+      // Create readable 8-character structural split code chunks
+      const plainCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      plainRecoveryCodes.push(plainCode);
+
+      const codeHash = await bcrypt.hash(plainCode, 10);
+      entityPool.push({ userId, codeHash, usedAt: null });
+    }
+
+    await this.recoveryRepository.save(entityPool);
+
+    return { recoveryCodes: plainRecoveryCodes };
+  }
+
+  async verifyTokenOrRecovery(userId: number, inputToken: string): Promise<boolean> {
+    const user = await this.userRepository.createQueryBuilder('user')
+      .addSelect('user.twoFactorSecret')
+      .where('user.id = :userId', { userId })
+      .getOne();
+
+    if (!user || !user.twoFactorSecret) {
+      throw new UnauthorizedException('Multi-factor authorization is not configured for this account.');
+    }
+
+    // Path A: Validate via standard time-based dynamic OTP first
+    const isTotpValid = authenticator.verify({ token: inputToken, secret: user.twoFactorSecret });
+    if (isTotpValid) return true;
+
+    // Path B: Fall back to un-used emergency recovery tokens
+    const records = await this.recoveryRepository.find({ where: { userId, usedAt: null } });
+    
+    for (const record of records) {
+      const match = await bcrypt.compare(inputToken, record.codeHash);
+      if (match) {
+        // Invalidate single-use tracking item upon execution match matching Acceptance Criteria
+        await this.recoveryRepository.update(record.id, { usedAt: new Date() });
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async deactivate(userId: number) {
+    await this.userRepository.update(userId, {
+      twoFactorSecret: null,
+      isTwoFactorEnabled: false,
+    });
+    // Wipe matching system recovery database objects safely
+    await this.recoveryRepository.delete({ userId });
   }
 }
