@@ -3,9 +3,10 @@
 import * as React from 'react'
 import { authApi, Setup2FAResponse } from '@/frontend/lib/api/auth.api'
 import { 
-  Shield, ShieldAlert, ShieldCheck, Copy, Check, 
+  ShieldAlert, ShieldCheck, Copy, Check, 
   Download, Loader2, KeyRound, Smartphone, AlertTriangle 
 } from 'lucide-react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -42,8 +43,8 @@ export default function SecuritySettingsPage() {
       setSetupData(data)
       setStep(1)
       setSetupModalOpen(true)
-    } catch (err: any) {
-      alert(err.message || 'Could not initialize 2FA configuration.')
+    } catch (err: unknown) {
+      alert((err as Error).message || 'Could not initialize 2FA configuration.')
     } finally {
       setLoading(false)
     }
@@ -59,8 +60,8 @@ export default function SecuritySettingsPage() {
       setRecoveryCodes(data.recoveryCodes)
       setIs2FAEnabled(true)
       setStep(3)
-    } catch (err: any) {
-      setInlineError(err.message)
+    } catch (err: unknown) {
+      setInlineError((err as Error).message)
     } finally {
       setLoading(false)
     }
@@ -75,8 +76,8 @@ export default function SecuritySettingsPage() {
       setIs2FAEnabled(false)
       setDisableModalOpen(false)
       setConfirmPassword('')
-    } catch (err: any) {
-      setInlineError(err.message)
+    } catch (err: unknown) {
+      setInlineError((err as Error).message)
     } finally {
       setLoading(false)
     }
@@ -165,7 +166,7 @@ export default function SecuritySettingsPage() {
             <div className="space-y-4">
               <div className="text-xs text-slate-600 font-semibold">Step 1: Scan this QR matrix using your mobile authenticator app (Google Authenticator, Duo, or 1Password).</div>
               <div className="flex justify-center p-3 bg-white border rounded-xl w-fit mx-auto shadow-inner">
-                <img src={setupData.qrCodeDataUrl} alt="2FA Setup QR Matrix" className="w-44 h-44" />
+                <Image src={setupData.qrCodeDataUrl} alt="2FA Setup QR Matrix" width={176} height={176} className="w-44 h-44" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Manual Account Key Configuration</label>
