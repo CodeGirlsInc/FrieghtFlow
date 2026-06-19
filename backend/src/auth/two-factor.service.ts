@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { authenticator } from 'otplib';
 import * as qrcode from 'qrcode';
 import * as bcrypt from 'bcrypt';
@@ -114,7 +114,7 @@ export class TwoFactorService {
 
     // Path B: Fall back to un-used emergency recovery tokens
     const records = await this.recoveryRepository.find({
-      where: { userId, usedAt: null },
+      where: { userId, usedAt: IsNull() },
     });
 
     for (const record of records) {

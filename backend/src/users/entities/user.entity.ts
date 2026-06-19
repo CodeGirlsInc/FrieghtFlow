@@ -87,7 +87,7 @@ export class User {
   isTwoFactorEnabled: boolean;
 
   @Column({ nullable: true, select: false })
-  twoFactorSecret: string;
+  twoFactorSecret: string | null;
 
   @OneToMany(() => TwoFactorRecovery, (recovery) => recovery.user)
   recoveryCodes: TwoFactorRecovery[];
