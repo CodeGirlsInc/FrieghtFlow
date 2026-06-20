@@ -22,6 +22,7 @@ import { NotificationPreferencesModule } from './notification-preferences/notifi
 import { AdminAuditInterceptor } from './audit-log/admin-audit.interceptor';
 import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -73,6 +74,9 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         MAIL_PASS: Joi.string().required(),
         MAIL_FROM: Joi.string().default('noreply@freightflow.io'),
         UPLOAD_DIR: Joi.string().default('./uploads'),
+        CLOUDINARY_CLOUD_NAME: Joi.string().required(),
+        CLOUDINARY_API_KEY: Joi.string().required(),
+        CLOUDINARY_API_SECRET: Joi.string().required(),
       }),
       validationOptions: {
         allowUnknown: true,
@@ -128,6 +132,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     NotificationPreferencesModule,
     CarriersModule,
     ReviewsModule,
+    CloudinaryModule,
   ],
   controllers: [AppController],
   providers: [
