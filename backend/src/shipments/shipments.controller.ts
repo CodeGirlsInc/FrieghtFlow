@@ -13,6 +13,7 @@ import {
 import {
   ApiTags,
   ApiBearerAuth,
+  ApiProduces,
   ApiOperation,
   ApiResponse,
   ApiParam,
@@ -99,10 +100,7 @@ export class ShipmentsController {
     description: 'Batch shipments created successfully',
   })
   @ApiResponse({ status: 400, description: 'Validation error in batch data' })
-  batchCreate(
-    @CurrentUser() user: User,
-    @Body() dto: BatchCreateShipmentsDto,
-  ) {
+  batchCreate(@CurrentUser() user: User, @Body() dto: BatchCreateShipmentsDto) {
     return this.shipmentsService.batchCreate(user.id, dto);
   }
 
@@ -160,7 +158,9 @@ export class ShipmentsController {
   @Get('analytics')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SHIPPER)
-  @ApiOperation({ summary: 'Shipment analytics — admin sees all, shipper sees own' })
+  @ApiOperation({
+    summary: 'Shipment analytics — admin sees all, shipper sees own',
+  })
   getAnalytics(@CurrentUser() user: User, @Query() query: AnalyticsQueryDto) {
     return this.shipmentsService.getAnalytics(user, query);
   }
@@ -212,6 +212,58 @@ export class ShipmentsController {
   @ApiParam({ name: 'trackingNumber', example: 'FF-ABC123-DEF456' })
   findByTracking(@Param('trackingNumber') trackingNumber: string) {
     return this.shipmentsService.findByTracking(trackingNumber);
+  }
+
+  @Get(':id/bol')
+  @ApiOperation({ summary: 'Download Bill of Lading PDF for a shipment' })
+  @ApiProduces('application/pdf')
+  @ApiResponse({ status: 200, description: 'Bill of Lading PDF file' })
+  @ApiResponse({
+    status: 400,
+    description: 'Shipment not in accepted status or beyond',
+  })
+  @ApiResponse({ status: 403, description: 'Not a party to this shipment' })
+  async downloadBol(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, trackingNumber } = await this.shipmentsService.generateBol(
+      id,
+      user,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="BOL-${trackingNumber}.pdf"`,
+    );
+    res.end(buffer);
+  }
+
+  @Get(':id/invoice')
+  @ApiOperation({
+    summary: 'Download freight invoice PDF for a completed shipment',
+  })
+  @ApiProduces('application/pdf')
+  @ApiResponse({ status: 200, description: 'Invoice PDF file' })
+  @ApiResponse({ status: 400, description: 'Shipment not yet completed' })
+  @ApiResponse({
+    status: 403,
+    description: 'Only the shipper or admin can access the invoice',
+  })
+  async downloadInvoice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, trackingNumber } =
+      await this.shipmentsService.generateInvoice(id, user);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="INV-${trackingNumber}.pdf"`,
+    );
+    res.end(buffer);
   }
 
   @Get(':id')

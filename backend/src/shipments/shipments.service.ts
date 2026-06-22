@@ -7,6 +7,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Readable, Transform } from 'node:stream';
+import PDFDocument from 'pdfkit';
+import QRCode from 'qrcode';
+import * as ExcelJS from 'exceljs';
 import {
   Repository,
   FindOptionsWhere,
@@ -233,7 +236,8 @@ export class ShipmentsService {
     const createdIds: string[] = [];
 
     // Use TypeORM transaction
-    const queryRunner = this.shipmentRepo.manager.connection.createQueryRunner();
+    const queryRunner =
+      this.shipmentRepo.manager.connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -303,7 +307,14 @@ export class ShipmentsService {
     user: User,
     query: QueryShipmentDto,
   ): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, status, origin, destination, cargoCategory } = query;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      origin,
+      destination,
+      cargoCategory,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {};
@@ -383,9 +394,27 @@ export class ShipmentsService {
       );
     }
 
+    const timeLabel = new Date().toISOString().replace(/[.:]/g, '-');
+    const fileLabel = user.role === UserRole.ADMIN ? 'all' : user.id;
+
+    if (format === 'xlsx') {
+      const buffer = await this.createXlsxBuffer(user);
+      const stream = new Readable({
+        read() {
+          this.push(buffer);
+          this.push(null);
+        },
+      });
+      return {
+        stream,
+        contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        fileName: `shipments-${fileLabel}-${timeLabel}.xlsx`,
+      };
+    }
+
     const queryBuilder = this.buildExportQuery(user);
     const rowStream = (await queryBuilder.stream()) as Readable;
-    const timeLabel = new Date().toISOString().replace(/[.:]/g, '-');
 
     return {
       stream:
@@ -396,8 +425,246 @@ export class ShipmentsService {
         format === 'csv'
           ? 'text/csv; charset=utf-8'
           : 'application/json; charset=utf-8',
-      fileName: `shipments-${user.role === UserRole.ADMIN ? 'all' : user.id}-${timeLabel}.${format}`,
+      fileName: `shipments-${fileLabel}-${timeLabel}.${format}`,
     };
+  }
+
+  async generateBol(
+    shipmentId: string,
+    user: User,
+  ): Promise<{ buffer: Buffer; trackingNumber: string }> {
+    const shipment = await this.findOne(shipmentId);
+
+    const isShipper = shipment.shipperId === user.id;
+    const isCarrier = shipment.carrierId === user.id;
+    const isAdmin = user.role === UserRole.ADMIN;
+    if (!isShipper && !isCarrier && !isAdmin) {
+      throw new ForbiddenException(
+        'Only parties to this shipment or an admin can download the Bill of Lading',
+      );
+    }
+
+    const unavailableStatuses = [ShipmentStatus.PENDING];
+    if (unavailableStatuses.includes(shipment.status)) {
+      throw new BadRequestException(
+        'Bill of Lading is not available for shipments in pending status',
+      );
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://freightflow.app';
+    const trackingUrl = `${frontendUrl}/track/${shipment.trackingNumber}`;
+    const qrBuffer = await QRCode.toBuffer(trackingUrl, {
+      type: 'png',
+      width: 120,
+    });
+
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk as Buffer));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const shipperName = shipment.shipper
+        ? `${shipment.shipper.firstName} ${shipment.shipper.lastName}`
+        : 'Unknown';
+      const carrierName = shipment.carrier
+        ? `${shipment.carrier.firstName} ${shipment.carrier.lastName}`
+        : 'Unassigned';
+
+      doc
+        .fontSize(22)
+        .font('Helvetica-Bold')
+        .text('BILL OF LADING', { align: 'center' });
+      doc.moveDown(0.4);
+      doc
+        .fontSize(11)
+        .font('Helvetica')
+        .text(`BoL Number: ${shipment.trackingNumber}`, { align: 'center' });
+      doc.text(`Issue Date: ${new Date().toLocaleDateString('en-US')}`, {
+        align: 'center',
+      });
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Parties');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(
+        `Shipper: ${shipperName}${shipment.shipper?.email ? ` | ${shipment.shipper.email}` : ''}`,
+      );
+      doc.text(
+        `Carrier: ${carrierName}${shipment.carrier?.email ? ` | ${shipment.carrier.email}` : ''}`,
+      );
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Route');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(
+        `Origin → Destination: ${shipment.origin} → ${shipment.destination}`,
+      );
+      if (shipment.pickupDate) {
+        doc.text(
+          `Pickup Date: ${new Date(shipment.pickupDate).toLocaleDateString('en-US')}`,
+        );
+      }
+      if (shipment.estimatedDeliveryDate) {
+        doc.text(
+          `Estimated Delivery: ${new Date(shipment.estimatedDeliveryDate).toLocaleDateString('en-US')}`,
+        );
+      }
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Cargo');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(`Description: ${shipment.cargoDescription}`);
+      if (shipment.cargoCategory) {
+        doc.text(`Category: ${shipment.cargoCategory}`);
+      }
+      doc.text(`Weight: ${String(shipment.weightKg)} kg`);
+      if (shipment.volumeCbm != null) {
+        doc.text(`Volume: ${String(shipment.volumeCbm)} cbm`);
+      }
+      doc.text(
+        shipment.isInsured
+          ? `Insurance: Yes — Premium: ${String(shipment.insurancePremium ?? 0)} ${shipment.currency}`
+          : 'Insurance: No',
+      );
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Financial');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(`Agreed Price: ${String(shipment.price)} ${shipment.currency}`);
+      doc.moveDown(1);
+
+      doc.image(qrBuffer, { width: 120 });
+      doc.moveDown(0.4);
+      doc.fontSize(9).text(`Scan to track: ${trackingUrl}`);
+      doc.moveDown(2);
+
+      doc.fontSize(10).font('Helvetica');
+      doc.text(
+        '_________________________________          _________________________________',
+      );
+      doc.text(
+        'Shipper Signature & Date                    Carrier Signature & Date',
+      );
+      doc.moveDown(2);
+
+      doc
+        .fontSize(9)
+        .fillColor('#666666')
+        .text(
+          'Generated by FreightFlow | Blockchain Tx: Pending verification',
+          { align: 'center' },
+        );
+
+      doc.end();
+    });
+
+    return { buffer, trackingNumber: shipment.trackingNumber };
+  }
+
+  async generateInvoice(
+    shipmentId: string,
+    user: User,
+  ): Promise<{ buffer: Buffer; trackingNumber: string }> {
+    const shipment = await this.findOne(shipmentId);
+
+    const isShipper = shipment.shipperId === user.id;
+    const isAdmin = user.role === UserRole.ADMIN;
+    if (!isShipper && !isAdmin) {
+      throw new ForbiddenException(
+        'Only the shipper or an admin can download the invoice',
+      );
+    }
+
+    if (shipment.status !== ShipmentStatus.COMPLETED) {
+      throw new BadRequestException(
+        'Invoice is only available for completed shipments',
+      );
+    }
+
+    const platformFeePercent = parseFloat(
+      process.env.PLATFORM_FEE_PERCENT ?? '2.5',
+    );
+    const freightCharge = Number(shipment.price);
+    const insurancePremium =
+      shipment.isInsured && shipment.insurancePremium != null
+        ? Number(shipment.insurancePremium)
+        : 0;
+    const platformFee = Math.round(freightCharge * platformFeePercent) / 100;
+    const total = freightCharge + insurancePremium + platformFee;
+
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk as Buffer));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const shipperName = shipment.shipper
+        ? `${shipment.shipper.firstName} ${shipment.shipper.lastName}`
+        : 'Unknown';
+
+      doc
+        .fontSize(22)
+        .font('Helvetica-Bold')
+        .text('FREIGHT INVOICE', { align: 'center' });
+      doc.moveDown(0.4);
+      doc
+        .fontSize(11)
+        .font('Helvetica')
+        .text(`Invoice No.: INV-${shipment.trackingNumber}`, {
+          align: 'center',
+        });
+      doc.text(`Issue Date: ${new Date().toLocaleDateString('en-US')}`, {
+        align: 'center',
+      });
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Bill To');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(shipperName);
+      if (shipment.shipper?.email) {
+        doc.text(shipment.shipper.email);
+      }
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Line Items');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(
+        `Freight Charge: ${freightCharge.toFixed(2)} ${shipment.currency}`,
+      );
+      if (insurancePremium > 0) {
+        doc.text(
+          `Insurance Premium: ${insurancePremium.toFixed(2)} ${shipment.currency}`,
+        );
+      }
+      doc.text(
+        `Platform Fee (${platformFeePercent.toFixed(1)}%): ${platformFee.toFixed(2)} ${shipment.currency}`,
+      );
+      doc.moveDown(0.5);
+      doc
+        .font('Helvetica-Bold')
+        .text(`Total: ${total.toFixed(2)} ${shipment.currency}`);
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Payment');
+      doc.fontSize(10).font('Helvetica');
+      doc.font('Helvetica-Bold').fillColor('#1a7a1a').text('Status: Paid');
+      doc.fillColor('black');
+      doc.moveDown(2);
+
+      doc
+        .fontSize(9)
+        .fillColor('#666666')
+        .text(`Generated ${new Date().toISOString()} | FreightFlow`, {
+          align: 'center',
+        });
+
+      doc.end();
+    });
+
+    return { buffer, trackingNumber: shipment.trackingNumber };
   }
 
   async update(
@@ -717,6 +984,63 @@ export class ShipmentsService {
       relations: ['changedBy'],
       order: { changedAt: 'ASC' },
     });
+  }
+
+  private async createXlsxBuffer(user: User): Promise<Buffer> {
+    const where: FindOptionsWhere<Shipment> = {};
+    if (user.role === UserRole.SHIPPER) {
+      where.shipperId = user.id;
+    }
+
+    const shipments = await this.shipmentRepo.find({
+      where,
+      relations: ['shipper', 'carrier'],
+      order: { createdAt: 'DESC' },
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Shipments');
+
+    sheet.columns = [
+      { header: 'Tracking Number', key: 'trackingNumber', width: 25 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Origin', key: 'origin', width: 20 },
+      { header: 'Destination', key: 'destination', width: 20 },
+      { header: 'Cargo Category', key: 'cargoCategory', width: 18 },
+      { header: 'Weight (kg)', key: 'weightKg', width: 12 },
+      { header: 'Price', key: 'price', width: 12 },
+      { header: 'Currency', key: 'currency', width: 10 },
+      { header: 'Shipper Name', key: 'shipperName', width: 20 },
+      { header: 'Carrier Name', key: 'carrierName', width: 20 },
+      { header: 'Created At', key: 'createdAt', width: 22 },
+      { header: 'Completed At', key: 'completedAt', width: 22 },
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+
+    for (const s of shipments) {
+      sheet.addRow({
+        trackingNumber: s.trackingNumber,
+        status: s.status,
+        origin: s.origin,
+        destination: s.destination,
+        cargoCategory: s.cargoCategory ?? '',
+        weightKg: s.weightKg,
+        price: s.price,
+        currency: s.currency,
+        shipperName: s.shipper
+          ? `${s.shipper.firstName} ${s.shipper.lastName}`
+          : '',
+        carrierName: s.carrier
+          ? `${s.carrier.firstName} ${s.carrier.lastName}`
+          : '',
+        createdAt: s.createdAt?.toISOString() ?? '',
+        completedAt: s.actualDeliveryDate?.toISOString() ?? '',
+      });
+    }
+
+    const arrayBuffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(arrayBuffer);
   }
 
   private buildExportQuery(user: User): SelectQueryBuilder<Shipment> {
