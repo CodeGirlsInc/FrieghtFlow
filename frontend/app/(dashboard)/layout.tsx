@@ -9,18 +9,21 @@ const SHIPPER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'My Shipments' },
   { href: '/shipments/new', label: 'Create Shipment' },
+  { href: '/documents', label: 'Documents' },
 ];
 
 const CARRIER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'My Jobs' },
   { href: '/marketplace', label: 'Marketplace' },
+  { href: '/documents', label: 'Documents' },
 ];
 
 const ADMIN_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'All Shipments' },
   { href: '/marketplace', label: 'Marketplace' },
+  { href: '/documents', label: 'Documents' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
