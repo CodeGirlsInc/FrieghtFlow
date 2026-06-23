@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  OneToMany,
 } from 'typeorm';
 import { UserRole } from '../../common/enums/role.enum';
 import { TwoFactorRecovery } from './two-factor-recovery.entity';
