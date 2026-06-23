@@ -21,6 +21,10 @@ import {
   SHIPMENT_CREATED,
   ShipmentEvent,
 } from '../shipments/events/shipment.events';
+import {
+  MESSAGE_NEW,
+  MessageNewEvent,
+} from '../messaging/messaging.service';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 
 /** Room prefix for per-user rooms */
@@ -193,5 +197,18 @@ export class NotificationsGateway
     if (evt.shipment.carrierId) {
       this.emitToUser(evt.shipment.carrierId, 'shipment:updated', payload);
     }
+  }
+
+  // ── Messaging events ─────────────────────────────────────────────────────────
+
+  @OnEvent(MESSAGE_NEW)
+  onMessageNew(evt: MessageNewEvent) {
+    this.emitToUser(evt.recipientId, 'message:new', {
+      conversationId: evt.conversationId,
+      messageId: evt.messageId,
+      senderName: evt.senderName,
+      preview: evt.preview,
+      createdAt: evt.createdAt,
+    });
   }
 }

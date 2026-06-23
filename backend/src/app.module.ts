@@ -13,6 +13,7 @@ import { ShipmentsModule } from './shipments/shipments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 import { DocumentsModule } from './documents/documents.module';
+import { MessagingModule } from './messaging/messaging.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { DocumentsModule } from './documents/documents.module';
     NotificationsModule,
     AdminModule,
     DocumentsModule,
+    MessagingModule,
   ],
   controllers: [AppController],
   providers: [
