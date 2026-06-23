@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-import { authApi } from '@/frontend/lib/api/auth.api'
+import { authApi } from '@/lib/api/auth.api'
 import { ShieldCheck, ArrowLeft, Loader2, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,8 +54,8 @@ export default function LoginPage() {
         // tokenStore.saveSessionTokens(response.accessToken, response.refreshToken)
         router.push('/dashboard')
       }
-    } catch (err: any) {
-      setGlobalError(err.message || 'Authentication sequence failure.')
+    } catch (err: unknown) {
+      setGlobalError((err as { message?: string }).message || 'Authentication sequence failure.')
     } finally {
       setLoading(false)
     }
@@ -76,9 +76,9 @@ export default function LoginPage() {
       // Successful verification path clears component states before routing
       setTempToken(null)
       router.push('/dashboard')
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Acceptance Criteria: Keep verification fields populated upon input rejections
-      setGlobalError(err.message || 'Invalid confirmation code. Please try again.')
+      setGlobalError((err as { message?: string }).message || 'Invalid confirmation code. Please try again.')
     } finally {
       setLoading(false)
     }

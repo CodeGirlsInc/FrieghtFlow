@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Shipment, ShipmentStatus, ShipmentStatusHistory } from '../../../../types/shipment.types';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
+import { messagingApi } from '../../../../lib/api/messaging.api';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { StatusBadge } from '../../../../components/shipment/status-badge';
 import { StatusTimeline } from '../../../../components/shipment/status-timeline';
@@ -20,6 +21,7 @@ export default function ShipmentDetailPage() {
   const [history, setHistory] = useState<ShipmentStatusHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [msgLoading, setMsgLoading] = useState(false);
 
   const reload = useCallback(async () => {
     const [s, h] = await Promise.all([
@@ -73,6 +75,19 @@ export default function ShipmentDetailPage() {
   const isShipper = user?.id === shipment.shipperId;
   const isCarrier = user?.id === shipment.carrierId;
   const isAdmin = user?.role === 'admin';
+
+  const handleMessage = async () => {
+    if (!shipment.carrierId) return;
+    setMsgLoading(true);
+    try {
+      const conv = await messagingApi.getOrCreateConversation(shipment.id);
+      router.push(`/messages?conversationId=${conv.id}`);
+    } catch {
+      toast.error('Could not open conversation');
+    } finally {
+      setMsgLoading(false);
+    }
+  };
 
   const formattedPrice = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -283,6 +298,18 @@ export default function ShipmentDetailPage() {
                 <p className="text-sm text-muted-foreground">
                   This shipment is {shipment.status} — no further actions available.
                 </p>
+              )}
+
+              {/* Message button — visible once a carrier is assigned */}
+              {shipment.carrierId && (isShipper || isCarrier) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={msgLoading}
+                  onClick={handleMessage}
+                >
+                  {msgLoading ? 'Opening…' : isShipper ? 'Message Carrier' : 'Message Shipper'}
+                </Button>
               )}
             </CardContent>
           </Card>
