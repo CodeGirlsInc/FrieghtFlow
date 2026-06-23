@@ -3,11 +3,12 @@ import { IsIn, IsOptional } from 'class-validator';
 
 export class ExportShipmentsDto {
   @ApiPropertyOptional({
-    enum: ['csv', 'json'],
+    enum: ['csv', 'json', 'xlsx'],
     default: 'json',
-    description: 'Export format. Responses are streamed for large datasets.',
+    description:
+      'Export format. CSV and JSON responses are streamed; XLSX is buffered.',
   })
   @IsOptional()
-  @IsIn(['csv', 'json'])
-  format: 'csv' | 'json' = 'json';
+  @IsIn(['csv', 'json', 'xlsx'])
+  format: 'csv' | 'json' | 'xlsx' = 'json';
 }
