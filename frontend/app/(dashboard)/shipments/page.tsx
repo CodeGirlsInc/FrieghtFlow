@@ -6,8 +6,10 @@ import { useAuthStore } from '../../../stores/auth.store';
 import { shipmentApi } from '../../../lib/api/shipment.api';
 import { ShipmentStatus, PaginatedShipments } from '../../../types/shipment.types';
 import { ShipmentCard } from '../../../components/shipment/shipment-card';
+import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
 import { Button } from '../../../components/ui/button';
 import { toast } from 'sonner';
+import { apiClient } from '../../../lib/api/client';
 
 const STATUS_TABS: { label: string; value: ShipmentStatus | 'all' }[] = [
   { label: 'All', value: 'all' },
@@ -23,6 +25,26 @@ export default function ShipmentsPage() {
   const [result, setResult] = useState<PaginatedShipments | null>(null);
   const [activeTab, setActiveTab] = useState<ShipmentStatus | 'all'>('all');
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const blob = await apiClient<Blob>('/shipments/export?format=csv', {
+        headers: { Accept: 'text/csv' },
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'shipments.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to export CSV. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -41,11 +63,32 @@ export default function ShipmentsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-foreground">{pageTitle}</h1>
-        {isShipper && (
-          <Button asChild>
-            <Link href="/shipments/new">+ New Shipment</Link>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={exporting}
+            aria-label="Export shipments as CSV"
+          >
+            {exporting ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Exporting…
+              </>
+            ) : (
+              'Export CSV'
+            )}
           </Button>
-        )}
+          {isShipper && (
+            <Button asChild>
+              <Link href="/shipments/new">+ New Shipment</Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -69,7 +112,7 @@ export default function ShipmentsPage() {
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-36 rounded-lg bg-muted animate-pulse" />
+            <ShipmentCardSkeleton key={i} />
           ))}
         </div>
       ) : !result || result.data.length === 0 ? (

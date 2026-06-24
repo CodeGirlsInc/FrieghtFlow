@@ -61,6 +61,9 @@ export interface QueryShipmentParams {
   status?: ShipmentStatus;
   origin?: string;
   destination?: string;
+  cargoCategory?: string;
+  minPrice?: number;
+  maxPrice?: number;
   page?: number;
   limit?: number;
 }

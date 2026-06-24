@@ -7,6 +7,7 @@ import { shipmentApi } from '../../../lib/api/shipment.api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { ShipmentCard } from '../../../components/shipment/shipment-card';
+import { ShipmentCardSkeleton, StatsCardSkeleton } from '../../../components/ui/skeleton';
 import { Shipment, ShipmentStatus } from '../../../types/shipment.types';
 
 interface Stats {
@@ -49,8 +50,19 @@ export default function DashboardPage() {
 
   if (isLoading || !user) {
     return (
-      <div className="flex items-center justify-center h-full p-8">
-        <p className="text-muted-foreground">Loading…</p>
+      <div className="p-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-7 w-48 bg-muted animate-pulse rounded-md" />
+            <div className="h-4 w-24 bg-muted animate-pulse rounded-md" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => <StatsCardSkeleton key={i} />)}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => <ShipmentCardSkeleton key={i} />)}
+        </div>
       </div>
     );
   }
@@ -151,7 +163,7 @@ export default function DashboardPage() {
         {dataLoading ? (
           <div className="grid gap-3 sm:grid-cols-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-32 bg-muted rounded-lg animate-pulse" />
+              <ShipmentCardSkeleton key={i} />
             ))}
           </div>
         ) : recentShipments.length === 0 ? (
