@@ -4,7 +4,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import type { StringValue } from 'ms';
 import { APP_GUARD } from '@nestjs/core';
-import { MailerModule } from '@nestjs-modules/mailer';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -26,29 +25,6 @@ import { UsersModule } from '../users/users.module';
             'JWT_EXPIRES_IN',
             '15m',
           ) as StringValue,
-        },
-      }),
-    }),
-    MailerModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        transport: {
-          host: configService.get<string>(
-            'MAIL_HOST',
-            'sandbox.smtp.mailtrap.io',
-          ),
-          port: configService.get<number>('MAIL_PORT', 2525),
-          auth: {
-            user: configService.get<string>('MAIL_USER'),
-            pass: configService.get<string>('MAIL_PASS'),
-          },
-        },
-        defaults: {
-          from: configService.get<string>(
-            'MAIL_FROM',
-            'noreply@freightflow.io',
-          ),
         },
       }),
     }),
