@@ -15,6 +15,7 @@ import {
   FindOptionsWhere,
   ILike,
   SelectQueryBuilder,
+  MoreThanOrEqual,
 } from 'typeorm';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -28,6 +29,7 @@ import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
 import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
+import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { User } from '../users/entities/user.entity';
 import {
   SHIPMENT_CREATED,
@@ -40,6 +42,9 @@ import {
   SHIPMENT_DISPUTE_RESOLVED,
   ShipmentEvent,
 } from './events/shipment.events';
+import { EtaService, resolveZone } from './eta.service';
+import { Redis } from 'ioredis';
+import { ZONE_BASE_RATES, RATE_PER_KG, CATEGORY_MULTIPLIERS, DEFAULT_ZONE_BASE_RATE } from './quotes.config';
 
 export interface PaginatedShipments {
   data: Shipment[];
@@ -82,6 +87,7 @@ type ShipmentExportValue = string | number | Date | null | undefined;
 @Injectable()
 export class ShipmentsService {
   private readonly logger = new Logger(ShipmentsService.name);
+  private redisClient: Redis | null = null;
   private readonly exportColumns: Array<keyof ShipmentExportRow> = [
     'id',
     'trackingNumber',
@@ -108,6 +114,7 @@ export class ShipmentsService {
     @InjectRepository(ShipmentStatusHistory)
     private readonly historyRepo: Repository<ShipmentStatusHistory>,
     private readonly eventEmitter: EventEmitter2,
+    private readonly etaService: EtaService,
   ) {}
 
   // ── Tracking number ──────────────────────────────────────────────────────────
@@ -183,11 +190,107 @@ export class ShipmentsService {
     await this.historyRepo.save(entry);
   }
 
+  private getRedisClient(): Redis | null {
+    if (!this.redisClient) {
+      try {
+        this.redisClient = new Redis(
+          process.env.REDIS_URL || 'redis://localhost:6379',
+          { lazyConnect: true },
+        );
+      } catch {
+        return null;
+      }
+    }
+
+    return this.redisClient;
+  }
+
+  private sanitizeKeyValue(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, '-');
+  }
+
+  private async getCachedMarketRate(key: string) {
+    const client = this.getRedisClient();
+    if (!client) return null;
+
+    try {
+      const cachedValue = await client.get(key);
+      return cachedValue ? JSON.parse(cachedValue) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async setCachedMarketRate(key: string, value: unknown): Promise<void> {
+    const client = this.getRedisClient();
+    if (!client) return;
+
+    try {
+      await client.setex(key, 3600, JSON.stringify(value));
+    } catch {
+      // Ignore Redis failures and fall back to in-memory response.
+    }
+  }
+
+  private matchesLane(
+    shipmentOrigin: string | undefined,
+    shipmentDestination: string | undefined,
+    origin: string,
+    destination: string,
+  ): boolean {
+    return (
+      shipmentOrigin?.toLowerCase().includes(origin.toLowerCase()) || false
+    ) && (
+      shipmentDestination?.toLowerCase().includes(destination.toLowerCase()) ||
+      false
+    );
+  }
+
+  private getCountry(value: string): string {
+    const parts = value
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    return (parts.at(-1) ?? value).toLowerCase();
+  }
+
+  private buildRateStats(prices: Array<number | null | undefined>, currency: string) {
+    const validPrices = prices.filter(
+      (price): price is number => typeof price === 'number' && Number.isFinite(price),
+    );
+
+    if (validPrices.length === 0) {
+      return {
+        insufficient_data: true,
+        message: 'Not enough completed shipments on this lane to estimate a rate',
+      };
+    }
+
+    const sorted = [...validPrices].sort((a, b) => a - b);
+    const min = sorted[0];
+    const max = sorted[sorted.length - 1];
+    const average = sorted.reduce((sum, value) => sum + value, 0) / sorted.length;
+    const median =
+      sorted.length % 2 === 0
+        ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+        : sorted[Math.floor(sorted.length / 2)];
+
+    return {
+      min,
+      max,
+      average,
+      median,
+      sampleSize: sorted.length,
+      currency: currency || 'USD',
+    };
+  }
+
   // ── CRUD ─────────────────────────────────────────────────────────────────────
 
   async create(shipperId: string, dto: CreateShipmentDto): Promise<Shipment> {
-    const insurancePremium = dto.isInsured
-      ? Math.round(dto.price * 0.015 * 100) / 100
+    const effectivePrice = dto.isRFQ && dto.price === undefined ? null : dto.price;
+    const insurancePremium = dto.isInsured && effectivePrice !== null && effectivePrice !== undefined
+      ? Math.round(effectivePrice * 0.015 * 100) / 100
       : null;
 
     const shipment = this.shipmentRepo.create({
@@ -200,7 +303,8 @@ export class ShipmentsService {
       cargoCategory: dto.cargoCategory ?? null,
       weightKg: dto.weightKg,
       volumeCbm: dto.volumeCbm ?? null,
-      price: dto.price,
+      price: effectivePrice,
+      isRFQ: dto.isRFQ ?? false,
       currency: dto.currency ?? 'USD',
       notes: dto.notes ?? null,
       status: ShipmentStatus.PENDING,
@@ -243,8 +347,9 @@ export class ShipmentsService {
 
     try {
       for (const shipmentDto of dto.shipments) {
-        const insurancePremium = shipmentDto.isInsured
-          ? Math.round(shipmentDto.price * 0.015 * 100) / 100
+        const effectivePrice = shipmentDto.isRFQ && shipmentDto.price === undefined ? null : shipmentDto.price;
+        const insurancePremium = shipmentDto.isInsured && effectivePrice !== null && effectivePrice !== undefined
+          ? Math.round(effectivePrice * 0.015 * 100) / 100
           : null;
 
         const shipment = this.shipmentRepo.create({
@@ -257,7 +362,8 @@ export class ShipmentsService {
           cargoCategory: shipmentDto.cargoCategory ?? null,
           weightKg: shipmentDto.weightKg,
           volumeCbm: shipmentDto.volumeCbm ?? null,
-          price: shipmentDto.price,
+          price: effectivePrice,
+          isRFQ: shipmentDto.isRFQ ?? false,
           currency: shipmentDto.currency ?? 'USD',
           notes: shipmentDto.notes ?? null,
           status: ShipmentStatus.PENDING,
@@ -341,6 +447,115 @@ export class ShipmentsService {
     });
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async getMarketRate(query: {
+    origin: string;
+    destination: string;
+    weightKg?: number;
+    cargoCategory?: CargoCategory;
+  }) {
+    const origin = query.origin?.trim();
+    const destination = query.destination?.trim();
+    const cargoCategory = query.cargoCategory;
+
+    if (!origin || !destination) {
+      throw new BadRequestException('origin and destination are required');
+    }
+
+    const cacheKey = `market-rate:${this.sanitizeKeyValue(origin)}:${this.sanitizeKeyValue(destination)}:${this.sanitizeKeyValue(cargoCategory ?? 'general')}`;
+    const cachedValue = await this.getCachedMarketRate(cacheKey);
+    if (cachedValue) {
+      return cachedValue;
+    }
+
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+    const shipments = await this.shipmentRepo.find({
+      where: {
+        status: ShipmentStatus.COMPLETED,
+        updatedAt: MoreThanOrEqual(ninetyDaysAgo),
+        cargoCategory: cargoCategory ?? undefined,
+      },
+      select: ['price', 'origin', 'destination', 'currency'],
+    });
+
+    const sameLane = shipments.filter((shipment) =>
+      this.matchesLane(shipment.origin, shipment.destination, origin, destination),
+    );
+
+    const laneToUse = sameLane.length >= 5 ? sameLane : shipments.filter((shipment) => {
+      return (
+        this.getCountry(shipment.origin) === this.getCountry(origin) &&
+        this.getCountry(shipment.destination) === this.getCountry(destination)
+      );
+    });
+
+    if (laneToUse.length < 5) {
+      return {
+        insufficient_data: true,
+        message: 'Not enough completed shipments on this lane to estimate a rate',
+      };
+    }
+
+    const stats = this.buildRateStats(
+      laneToUse.map((shipment) => shipment.price),
+      laneToUse[0]?.currency ?? 'USD',
+    );
+
+    if ('insufficient_data' in stats) {
+      return stats;
+    }
+
+    const response = {
+      ...stats,
+      ...(sameLane.length < 5 ? { broadened: true } : {}),
+    };
+
+    await this.setCachedMarketRate(cacheKey, response);
+    return response;
+  }
+
+  async estimatePrice(dto: {
+    origin: string;
+    destination: string;
+    weightKg: number;
+    volumeCbm?: number;
+    cargoCategory?: CargoCategory;
+  }) {
+    if (!dto.origin || !dto.destination || dto.weightKg <= 0) {
+      throw new BadRequestException('origin, destination, and weightKg are required');
+    }
+
+    const originZone = resolveZone(dto.origin);
+    const destinationZone = resolveZone(dto.destination);
+    const zoneKey = `${originZone}-${destinationZone}`;
+    const reverseKey = `${destinationZone}-${originZone}`;
+    const baseRate =
+      ZONE_BASE_RATES[zoneKey] ?? ZONE_BASE_RATES[reverseKey] ?? DEFAULT_ZONE_BASE_RATE;
+    const weightCharge = dto.weightKg * RATE_PER_KG;
+    const categoryMultiplier =
+      CATEGORY_MULTIPLIERS[dto.cargoCategory ?? CargoCategory.GENERAL_CARGO] ?? 1;
+    const estimatedMin = Number((baseRate * categoryMultiplier + weightCharge).toFixed(2));
+    const estimatedMax = Number((estimatedMin * 1.15).toFixed(2));
+    const eta = this.etaService.estimate({
+      origin: dto.origin,
+      destination: dto.destination,
+      weightKg: dto.weightKg,
+    });
+
+    return {
+      estimatedMin,
+      estimatedMax,
+      currency: 'USD',
+      estimatedDeliveryDays: eta.estimatedTransitDays,
+      breakdown: {
+        baseRate,
+        weightCharge,
+        categoryMultiplier,
+      },
+    };
   }
 
   async findMarketplace(query: QueryShipmentDto): Promise<PaginatedShipments> {

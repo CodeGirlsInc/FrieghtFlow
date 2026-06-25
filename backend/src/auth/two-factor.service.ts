@@ -1,7 +1,8 @@
 import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { authenticator } from 'otplib';
+import { Repository, IsNull } from 'typeorm';
+// import { authenticator } from 'otplib';
+import { authenticator } from '@otplib/preset-v11';
 import * as qrcode from 'qrcode';
 import * as bcrypt from 'bcrypt';
 import { Redis } from 'ioredis'; // Assuming BE-02 Redis instance wrapper setup
@@ -90,7 +91,8 @@ export class TwoFactorService {
     if (isTotpValid) return true;
 
     // Path B: Fall back to un-used emergency recovery tokens
-    const records = await this.recoveryRepository.find({ where: { userId, usedAt: null } });
+    // const records = await this.recoveryRepository.find({ where: { userId, usedAt: null } });
+    const records = await this.recoveryRepository.find({ where: { userId, usedAt: IsNull() } });
     
     for (const record of records) {
       const match = await bcrypt.compare(inputToken, record.codeHash);
