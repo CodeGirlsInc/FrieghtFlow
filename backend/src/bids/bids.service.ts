@@ -9,9 +9,11 @@ import { Not, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Bid, BidStatus } from './entities/bid.entity';
 import { Shipment } from '../shipments/entities/shipment.entity';
+import { User } from '../users/entities/user.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { CreateBidDto } from './dto/create-bid.dto';
 import { CounterBidDto } from './dto/counter-bid.dto';
+import { BidEmailEvent } from '../mailer/events/bid-email.events';
 
 const BID_EXPIRY_HOURS = 48;
 
@@ -29,12 +31,15 @@ export class BidsService {
     private readonly bidRepo: Repository<Bid>,
     @InjectRepository(Shipment)
     private readonly shipmentRepo: Repository<Shipment>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private async getShipment(shipmentId: string): Promise<Shipment> {
     const shipment = await this.shipmentRepo.findOne({
       where: { id: shipmentId },
+      relations: ['shipper'],
     });
     if (!shipment)
       throw new NotFoundException(`Shipment ${shipmentId} not found`);
@@ -88,6 +93,22 @@ export class BidsService {
       expiresAt,
     });
     const saved = await this.bidRepo.save(bid);
+
+    if (shipment.shipper) {
+      this.eventEmitter.emit(
+        'bid.received',
+        new BidEmailEvent(
+          shipment.id,
+          shipment.trackingNumber,
+          shipment.origin,
+          shipment.destination,
+          shipment.shipper.email,
+          `${shipment.shipper.firstName} ${shipment.shipper.lastName}`,
+          shipment.shipperId,
+        ),
+      );
+    }
+
     return this.addIsExpired(saved);
   }
 
@@ -138,6 +159,27 @@ export class BidsService {
       carrierId: bid.carrierId,
       status: ShipmentStatus.ACCEPTED,
     });
+
+    const carrier = await this.userRepo.findOne({
+      where: { id: bid.carrierId },
+    });
+    if (carrier) {
+      this.eventEmitter.emit(
+        'bid.accepted',
+        new BidEmailEvent(
+          shipment.id,
+          shipment.trackingNumber,
+          shipment.origin,
+          shipment.destination,
+          '',
+          '',
+          '',
+          carrier.email,
+          `${carrier.firstName} ${carrier.lastName}`,
+          carrier.id,
+        ),
+      );
+    }
 
     return bid;
   }

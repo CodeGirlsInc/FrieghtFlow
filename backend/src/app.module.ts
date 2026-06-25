@@ -14,7 +14,6 @@ import { ShipmentsModule } from './shipments/shipments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 import { DocumentsModule } from './documents/documents.module';
-import { MessagingModule } from './messaging/messaging.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { AddressesModule } from './addresses/addresses.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
@@ -24,6 +23,7 @@ import { AdminAuditInterceptor } from './audit-log/admin-audit.interceptor';
 import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { AppMailerModule } from './mailer/mailer.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -120,13 +120,13 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         synchronize: configService.get('NODE_ENV') !== 'production',
       }),
     }),
+    AppMailerModule,
     UsersModule,
     AuthModule,
     ShipmentsModule,
     NotificationsModule,
     AdminModule,
     DocumentsModule,
-    MessagingModule,
     WebhooksModule,
     AddressesModule,
     AuditLogModule,
