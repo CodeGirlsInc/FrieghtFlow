@@ -21,6 +21,7 @@ const CARRIER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'My Jobs' },
   { href: '/marketplace', label: 'Marketplace' },
+  { href: '/bids', label: 'My Bids' },
   { href: '/documents', label: 'Documents' },
 ];
 
