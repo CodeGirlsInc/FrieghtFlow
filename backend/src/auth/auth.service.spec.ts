@@ -226,7 +226,10 @@ describe('AuthService', () => {
 
       await service.logout('user-uuid-1');
 
-      expect(usersService.updateRefreshToken).toHaveBeenCalledWith('user-uuid-1', null);
+      expect(usersService.updateRefreshToken).toHaveBeenCalledWith(
+        'user-uuid-1',
+        null,
+      );
     });
   });
 
@@ -235,7 +238,10 @@ describe('AuthService', () => {
   describe('verifyEmail()', () => {
     it('marks email verified when token is valid', async () => {
       const expiry = new Date(Date.now() + 3600_000); // future
-      const user = makeUser({ verificationToken: 'valid-token', verificationTokenExpiry: expiry });
+      const user = makeUser({
+        verificationToken: 'valid-token',
+        verificationTokenExpiry: expiry,
+      });
       usersService.findByVerificationToken.mockResolvedValue(user);
       usersService.markEmailVerified.mockResolvedValue(undefined);
 
@@ -247,15 +253,22 @@ describe('AuthService', () => {
 
     it('throws BadRequestException when token not found', async () => {
       usersService.findByVerificationToken.mockResolvedValue(null);
-      await expect(service.verifyEmail('bad-token')).rejects.toThrow(BadRequestException);
+      await expect(service.verifyEmail('bad-token')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('throws BadRequestException when token has expired', async () => {
       const expiry = new Date(Date.now() - 1000); // past
-      const user = makeUser({ verificationToken: 'expired-token', verificationTokenExpiry: expiry });
+      const user = makeUser({
+        verificationToken: 'expired-token',
+        verificationTokenExpiry: expiry,
+      });
       usersService.findByVerificationToken.mockResolvedValue(user);
 
-      await expect(service.verifyEmail('expired-token')).rejects.toThrow(BadRequestException);
+      await expect(service.verifyEmail('expired-token')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -301,17 +314,28 @@ describe('AuthService', () => {
   describe('resetPassword()', () => {
     it('updates password, clears token, invalidates sessions', async () => {
       const expiry = new Date(Date.now() + 3600_000);
-      const user = makeUser({ resetPasswordToken: 'valid-token', resetPasswordExpiry: expiry });
+      const user = makeUser({
+        resetPasswordToken: 'valid-token',
+        resetPasswordExpiry: expiry,
+      });
       usersService.findByResetToken.mockResolvedValue(user);
       usersService.update.mockResolvedValue(user);
       usersService.clearResetToken.mockResolvedValue(undefined);
       usersService.updateRefreshToken.mockResolvedValue(undefined);
 
-      const result = await service.resetPassword('valid-token', 'NewPassword123!');
+      const result = await service.resetPassword(
+        'valid-token',
+        'NewPassword123!',
+      );
 
-      expect(usersService.update).toHaveBeenCalledWith(user.id, { password: 'NewPassword123!' });
+      expect(usersService.update).toHaveBeenCalledWith(user.id, {
+        password: 'NewPassword123!',
+      });
       expect(usersService.clearResetToken).toHaveBeenCalledWith(user.id);
-      expect(usersService.updateRefreshToken).toHaveBeenCalledWith(user.id, null);
+      expect(usersService.updateRefreshToken).toHaveBeenCalledWith(
+        user.id,
+        null,
+      );
       expect(result.message).toMatch(/reset/i);
     });
 
@@ -324,12 +348,15 @@ describe('AuthService', () => {
 
     it('throws BadRequestException when reset token has expired', async () => {
       const expiry = new Date(Date.now() - 1000); // past
-      const user = makeUser({ resetPasswordToken: 'expired-token', resetPasswordExpiry: expiry });
+      const user = makeUser({
+        resetPasswordToken: 'expired-token',
+        resetPasswordExpiry: expiry,
+      });
       usersService.findByResetToken.mockResolvedValue(user);
 
-      await expect(service.resetPassword('expired-token', 'pass')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.resetPassword('expired-token', 'pass'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -348,7 +375,10 @@ describe('AuthService', () => {
 
     it('returns null when user is not found', async () => {
       usersService.findByEmail.mockResolvedValue(null);
-      const result = await service.validateUser('nobody@example.com', 'password');
+      const result = await service.validateUser(
+        'nobody@example.com',
+        'password',
+      );
       expect(result).toBeNull();
     });
 
@@ -357,7 +387,10 @@ describe('AuthService', () => {
       usersService.findByEmail.mockResolvedValue(user);
       usersService.verifyPassword.mockResolvedValue(false);
 
-      const result = await service.validateUser('test@example.com', 'wrong-pass');
+      const result = await service.validateUser(
+        'test@example.com',
+        'wrong-pass',
+      );
       expect(result).toBeNull();
     });
   });

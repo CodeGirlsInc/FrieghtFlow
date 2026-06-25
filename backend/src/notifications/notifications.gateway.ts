@@ -32,7 +32,10 @@ const userRoom = (userId: string) => `user:${userId}`;
 
 @WebSocketGateway({
   cors: {
-    origin: (origin: string, cb: (err: Error | null, allow: boolean) => void) => {
+    origin: (
+      origin: string,
+      cb: (err: Error | null, allow: boolean) => void,
+    ) => {
       // Allow same-origin and configured frontend URL
       cb(null, true);
     },
@@ -62,7 +65,7 @@ export class NotificationsGateway
     try {
       const token =
         (client.handshake.auth?.token as string | undefined) ||
-        (client.handshake.headers?.authorization as string | undefined);
+        client.handshake.headers?.authorization;
 
       if (!token) {
         this.disconnect(client, 'No token provided');
@@ -85,7 +88,9 @@ export class NotificationsGateway
 
       // Join the user's personal room
       await client.join(userRoom(payload.sub));
-      this.logger.debug(`Client ${client.id} joined room ${userRoom(payload.sub)}`);
+      this.logger.debug(
+        `Client ${client.id} joined room ${userRoom(payload.sub)}`,
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.disconnect(client, msg);
@@ -94,7 +99,9 @@ export class NotificationsGateway
 
   handleDisconnect(client: Socket) {
     const userId = (client.data as { userId?: string }).userId;
-    this.logger.debug(`Client ${client.id} disconnected${userId ? ` (user: ${userId})` : ''}`);
+    this.logger.debug(
+      `Client ${client.id} disconnected${userId ? ` (user: ${userId})` : ''}`,
+    );
   }
 
   private disconnect(client: Socket, reason: string) {

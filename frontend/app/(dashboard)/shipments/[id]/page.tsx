@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Shipment, ShipmentStatus, ShipmentStatusHistory } from '../../../../types/shipment.types';
@@ -21,21 +21,21 @@ export default function ShipmentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     const [s, h] = await Promise.all([
       shipmentApi.getById(id),
       shipmentApi.getHistory(id),
     ]);
     setShipment(s);
     setHistory(h);
-  };
+  }, [id]);
 
   useEffect(() => {
     setLoading(true);
     reload()
       .catch(() => toast.error('Failed to load shipment'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [reload]);
 
   const act = async (fn: () => Promise<unknown>, successMsg: string) => {
     setActionLoading(true);

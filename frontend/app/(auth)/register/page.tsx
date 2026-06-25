@@ -20,6 +20,7 @@ import {
 } from '../../../components/ui/card';
 import { useAuthStore } from '../../../stores/auth.store';
 import { cn } from '../../../lib/utils';
+import PasswordStrengthBar from '../../../components/auth/PasswordStrengthBar';
 
 const registerSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -139,6 +140,7 @@ export default function RegisterPage() {
               autoComplete="new-password"
               {...register('password')}
             />
+            <PasswordStrengthBar password={watch('password') ?? ''} />
             {errors.password && (
               <p className="text-sm text-destructive">{errors.password.message}</p>
             )}
