@@ -21,10 +21,7 @@ import {
   SHIPMENT_CREATED,
   ShipmentEvent,
 } from '../shipments/events/shipment.events';
-import {
-  MESSAGE_NEW,
-  MessageNewEvent,
-} from '../messaging/messaging.service';
+import { MESSAGE_NEW, MessageNewEvent } from '../messaging/messaging.service';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 
 /** Room prefix for per-user rooms */

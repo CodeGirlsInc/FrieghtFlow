@@ -15,7 +15,9 @@ export class AuditLogController {
   constructor(private readonly auditLogService: AuditLogService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get paginated admin audit logs (filterable by action)' })
+  @ApiOperation({
+    summary: 'Get paginated admin audit logs (filterable by action)',
+  })
   findAll(@Query() query: QueryAuditLogDto) {
     return this.auditLogService.findAll(query);
   }

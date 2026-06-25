@@ -62,7 +62,9 @@ export class BidsController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER)
-  @ApiOperation({ summary: 'Shipper accepts a bid — assigns carrier, rejects others' })
+  @ApiOperation({
+    summary: 'Shipper accepts a bid — assigns carrier, rejects others',
+  })
   @ApiParam({ name: 'id', description: 'Shipment ID' })
   @ApiParam({ name: 'bidId', description: 'Bid ID' })
   acceptBid(

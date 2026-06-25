@@ -84,10 +84,7 @@ export class MessagingService {
     }[]
   > {
     const conversations = await this.conversationRepo.find({
-      where: [
-        { shipperId: currentUser.id },
-        { carrierId: currentUser.id },
-      ],
+      where: [{ shipperId: currentUser.id }, { carrierId: currentUser.id }],
       order: { lastMessageAt: 'DESC' },
     });
 
@@ -112,9 +109,7 @@ export class MessagingService {
         return {
           id: conv.id,
           shipmentId: conv.shipmentId,
-          lastMessage: lastMsg
-            ? lastMsg.body.substring(0, 80)
-            : null,
+          lastMessage: lastMsg ? lastMsg.body.substring(0, 80) : null,
           lastMessageAt: conv.lastMessageAt,
           unreadCount,
         };

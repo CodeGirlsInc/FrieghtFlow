@@ -41,12 +41,16 @@ export class BidsService {
       where: { id: shipmentId },
       relations: ['shipper'],
     });
-    if (!shipment) throw new NotFoundException(`Shipment ${shipmentId} not found`);
+    if (!shipment)
+      throw new NotFoundException(`Shipment ${shipmentId} not found`);
     return shipment;
   }
 
   private async getBidOrFail(bidId: string, shipmentId: string): Promise<Bid> {
-    const bid = await this.bidRepo.findOne({ where: { id: bidId, shipmentId }, relations: ['carrier'] });
+    const bid = await this.bidRepo.findOne({
+      where: { id: bidId, shipmentId },
+      relations: ['carrier'],
+    });
     if (!bid) throw new NotFoundException(`Bid ${bidId} not found`);
     return bid;
   }
@@ -67,14 +71,18 @@ export class BidsService {
   ): Promise<BidWithExpiry> {
     const shipment = await this.getShipment(shipmentId);
     if (shipment.status !== ShipmentStatus.PENDING) {
-      throw new BadRequestException('Bids can only be placed on PENDING shipments');
+      throw new BadRequestException(
+        'Bids can only be placed on PENDING shipments',
+      );
     }
 
     const existing = await this.bidRepo.findOne({
       where: { shipmentId, carrierId, status: BidStatus.PENDING },
     });
     if (existing) {
-      throw new BadRequestException('You already have a pending bid on this shipment');
+      throw new BadRequestException(
+        'You already have a pending bid on this shipment',
+      );
     }
 
     const expiresAt = new Date();
@@ -107,7 +115,10 @@ export class BidsService {
     return this.addIsExpired(saved);
   }
 
-  async getBids(shipmentId: string, requesterId: string): Promise<BidWithExpiry[]> {
+  async getBids(
+    shipmentId: string,
+    requesterId: string,
+  ): Promise<BidWithExpiry[]> {
     const shipment = await this.getShipment(shipmentId);
     if (shipment.shipperId !== requesterId) {
       throw new ForbiddenException('Only the shipment owner can view bids');
@@ -117,7 +128,7 @@ export class BidsService {
       relations: ['carrier'],
       order: { proposedPrice: 'ASC' },
     });
-    return bids.map(b => this.addIsExpired(b));
+    return bids.map((b) => this.addIsExpired(b));
   }
 
   async acceptBid(
@@ -138,7 +149,9 @@ export class BidsService {
       throw new BadRequestException('Bid is no longer pending');
     }
     if (this.isBidExpired(bid)) {
-      throw new BadRequestException('This bid has expired and cannot be accepted');
+      throw new BadRequestException(
+        'This bid has expired and cannot be accepted',
+      );
     }
 
     bid.status = BidStatus.ACCEPTED;
@@ -186,7 +199,9 @@ export class BidsService {
   ): Promise<BidWithExpiry> {
     const shipment = await this.getShipment(shipmentId);
     if (shipment.shipperId !== requesterId) {
-      throw new ForbiddenException('Only the shipment owner can make a counteroffer');
+      throw new ForbiddenException(
+        'Only the shipment owner can make a counteroffer',
+      );
     }
 
     const bid = await this.getBidOrFail(bidId, shipmentId);
@@ -194,7 +209,9 @@ export class BidsService {
       throw new BadRequestException('Can only counter a PENDING bid');
     }
     if (this.isBidExpired(bid)) {
-      throw new BadRequestException('This bid has expired and cannot be countered');
+      throw new BadRequestException(
+        'This bid has expired and cannot be countered',
+      );
     }
 
     bid.counterPrice = dto.counterPrice;
@@ -237,7 +254,10 @@ export class BidsService {
       status: ShipmentStatus.ACCEPTED,
     });
 
-    this.eventEmitter.emit('shipment.accepted', { shipment, actorId: requesterId });
+    this.eventEmitter.emit('shipment.accepted', {
+      shipment,
+      actorId: requesterId,
+    });
 
     return bid;
   }
@@ -251,7 +271,9 @@ export class BidsService {
     const shipment = await this.getShipment(shipmentId);
 
     if (bid.carrierId !== requesterId) {
-      throw new ForbiddenException('Only the bid owner can decline the counter');
+      throw new ForbiddenException(
+        'Only the bid owner can decline the counter',
+      );
     }
     if (bid.status !== BidStatus.COUNTER_OFFERED) {
       throw new BadRequestException('Bid is not in COUNTER_OFFERED status');

@@ -14,14 +14,27 @@ export class CarriersService {
   async getMyMetrics(carrierId: string) {
     const shipments = await this.shipmentRepo.find({
       where: { carrierId },
-      select: ['id', 'status', 'price', 'currency', 'estimatedDeliveryDate', 'actualDeliveryDate'],
+      select: [
+        'id',
+        'status',
+        'price',
+        'currency',
+        'estimatedDeliveryDate',
+        'actualDeliveryDate',
+      ],
     });
 
-    const completed = shipments.filter((s) => s.status === ShipmentStatus.COMPLETED);
-    const delivered = shipments.filter(
-      (s) => s.status === ShipmentStatus.DELIVERED || s.status === ShipmentStatus.COMPLETED,
+    const completed = shipments.filter(
+      (s) => s.status === ShipmentStatus.COMPLETED,
     );
-    const cancelled = shipments.filter((s) => s.status === ShipmentStatus.CANCELLED);
+    const delivered = shipments.filter(
+      (s) =>
+        s.status === ShipmentStatus.DELIVERED ||
+        s.status === ShipmentStatus.COMPLETED,
+    );
+    const cancelled = shipments.filter(
+      (s) => s.status === ShipmentStatus.CANCELLED,
+    );
 
     const totalAccepted = shipments.filter(
       (s) => s.status !== ShipmentStatus.PENDING,
@@ -34,11 +47,16 @@ export class CarriersService {
         new Date(s.actualDeliveryDate) <= new Date(s.estimatedDeliveryDate),
     ).length;
 
-    const onTimeRate = delivered.length > 0 ? onTimeDeliveries / delivered.length : 0;
+    const onTimeRate =
+      delivered.length > 0 ? onTimeDeliveries / delivered.length : 0;
 
-    const totalEarnings = completed.reduce((sum, s) => sum + Number(s.price), 0);
+    const totalEarnings = completed.reduce(
+      (sum, s) => sum + Number(s.price),
+      0,
+    );
 
-    const cancellationRate = totalAccepted > 0 ? cancelled.length / totalAccepted : 0;
+    const cancellationRate =
+      totalAccepted > 0 ? cancelled.length / totalAccepted : 0;
 
     return {
       totalAccepted,

@@ -27,6 +27,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     resetPasswordExpiry: null,
     createdAt: new Date(),
     updatedAt: new Date(),
+    isTwoFactorEnabled: false,
+    twoFactorSecret: 'secret-key',
+    recoveryCodes: [],
     ...overrides,
   };
 }
