@@ -1,5 +1,10 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ShipmentsService } from './shipments.service';
 import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';

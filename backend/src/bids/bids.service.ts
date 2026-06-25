@@ -83,7 +83,7 @@ export class BidsService {
     if (shipment.status !== ShipmentStatus.PENDING) {
       throw new BadRequestException('Shipment is no longer accepting bids');
     }
-
+    
     const bid = await this.bidRepo.findOne({
       where: { id: bidId, shipmentId },
     });
