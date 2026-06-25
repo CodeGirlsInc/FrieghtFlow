@@ -49,7 +49,7 @@
     "class-validator": "^0.14.3",
     "cloudinary": "^2.7.0",
     "dotenv": "^16.4.7",
-    "exceljs": "^4.4.0",
+    "handlebars": "^4.7.9",
     "joi": "^17.13.3",
     "nestjs-pino": "^4.4.0",
     "nodemailer": "^6.10.1",
