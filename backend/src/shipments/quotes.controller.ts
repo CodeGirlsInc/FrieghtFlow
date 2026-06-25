@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ShipmentsService } from './shipments.service';
 import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
@@ -69,7 +69,8 @@ export class QuotesController {
   @Get('market-rate')
   @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Estimate a market rate from completed shipments' })
-  getMarketRate(@Query() query: MarketRateQueryDto) {
+  @ApiResponse({ status: 200, description: 'Estimated market rate response' })
+  getMarketRate(@Query() query: MarketRateQueryDto): Promise<unknown> {
     return this.shipmentsService.getMarketRate(query);
   }
 

@@ -44,7 +44,12 @@ import {
 } from './events/shipment.events';
 import { EtaService, resolveZone } from './eta.service';
 import { Redis } from 'ioredis';
-import { ZONE_BASE_RATES, RATE_PER_KG, CATEGORY_MULTIPLIERS, DEFAULT_ZONE_BASE_RATE } from './quotes.config';
+import {
+  ZONE_BASE_RATES,
+  RATE_PER_KG,
+  CATEGORY_MULTIPLIERS,
+  DEFAULT_ZONE_BASE_RATE,
+} from './quotes.config';
 
 export interface PaginatedShipments {
   data: Shipment[];
@@ -80,6 +85,18 @@ interface ShipmentExportResult {
   stream: Readable;
   contentType: string;
   fileName: string;
+}
+
+interface MarketRateResponse {
+  insufficient_data?: boolean;
+  message?: string;
+  min?: number;
+  max?: number;
+  average?: number;
+  median?: number;
+  sampleSize?: number;
+  currency?: string;
+  broadened?: boolean;
 }
 
 type ShipmentExportValue = string | number | Date | null | undefined;
@@ -209,19 +226,26 @@ export class ShipmentsService {
     return value.trim().toLowerCase().replace(/\s+/g, '-');
   }
 
-  private async getCachedMarketRate(key: string) {
+  private async getCachedMarketRate(
+    key: string,
+  ): Promise<MarketRateResponse | null> {
     const client = this.getRedisClient();
     if (!client) return null;
 
     try {
       const cachedValue = await client.get(key);
-      return cachedValue ? JSON.parse(cachedValue) : null;
+      return cachedValue
+        ? (JSON.parse(cachedValue) as MarketRateResponse)
+        : null;
     } catch {
       return null;
     }
   }
 
-  private async setCachedMarketRate(key: string, value: unknown): Promise<void> {
+  private async setCachedMarketRate(
+    key: string,
+    value: MarketRateResponse,
+  ): Promise<void> {
     const client = this.getRedisClient();
     if (!client) return;
 
@@ -239,10 +263,9 @@ export class ShipmentsService {
     destination: string,
   ): boolean {
     return (
-      shipmentOrigin?.toLowerCase().includes(origin.toLowerCase()) || false
-    ) && (
-      shipmentDestination?.toLowerCase().includes(destination.toLowerCase()) ||
-      false
+      (shipmentOrigin?.toLowerCase().includes(origin.toLowerCase()) || false) &&
+      (shipmentDestination?.toLowerCase().includes(destination.toLowerCase()) ||
+        false)
     );
   }
 
@@ -254,22 +277,28 @@ export class ShipmentsService {
     return (parts.at(-1) ?? value).toLowerCase();
   }
 
-  private buildRateStats(prices: Array<number | null | undefined>, currency: string) {
+  private buildRateStats(
+    prices: Array<number | null | undefined>,
+    currency: string,
+  ): MarketRateResponse {
     const validPrices = prices.filter(
-      (price): price is number => typeof price === 'number' && Number.isFinite(price),
+      (price): price is number =>
+        typeof price === 'number' && Number.isFinite(price),
     );
 
     if (validPrices.length === 0) {
       return {
         insufficient_data: true,
-        message: 'Not enough completed shipments on this lane to estimate a rate',
+        message:
+          'Not enough completed shipments on this lane to estimate a rate',
       };
     }
 
     const sorted = [...validPrices].sort((a, b) => a - b);
     const min = sorted[0];
     const max = sorted[sorted.length - 1];
-    const average = sorted.reduce((sum, value) => sum + value, 0) / sorted.length;
+    const average =
+      sorted.reduce((sum, value) => sum + value, 0) / sorted.length;
     const median =
       sorted.length % 2 === 0
         ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
@@ -288,10 +317,12 @@ export class ShipmentsService {
   // ── CRUD ─────────────────────────────────────────────────────────────────────
 
   async create(shipperId: string, dto: CreateShipmentDto): Promise<Shipment> {
-    const effectivePrice = dto.isRFQ && dto.price === undefined ? null : dto.price;
-    const insurancePremium = dto.isInsured && effectivePrice !== null && effectivePrice !== undefined
-      ? Math.round(effectivePrice * 0.015 * 100) / 100
-      : null;
+    const effectivePrice =
+      dto.isRFQ && dto.price === undefined ? null : dto.price;
+    const insurancePremium =
+      dto.isInsured && effectivePrice !== null && effectivePrice !== undefined
+        ? Math.round(effectivePrice * 0.015 * 100) / 100
+        : null;
 
     const shipment = this.shipmentRepo.create({
       trackingNumber: this.generateTrackingNumber(),
@@ -347,10 +378,16 @@ export class ShipmentsService {
 
     try {
       for (const shipmentDto of dto.shipments) {
-        const effectivePrice = shipmentDto.isRFQ && shipmentDto.price === undefined ? null : shipmentDto.price;
-        const insurancePremium = shipmentDto.isInsured && effectivePrice !== null && effectivePrice !== undefined
-          ? Math.round(effectivePrice * 0.015 * 100) / 100
-          : null;
+        const effectivePrice =
+          shipmentDto.isRFQ && shipmentDto.price === undefined
+            ? null
+            : shipmentDto.price;
+        const insurancePremium =
+          shipmentDto.isInsured &&
+          effectivePrice !== null &&
+          effectivePrice !== undefined
+            ? Math.round(effectivePrice * 0.015 * 100) / 100
+            : null;
 
         const shipment = this.shipmentRepo.create({
           trackingNumber: this.generateTrackingNumber(),
@@ -454,7 +491,7 @@ export class ShipmentsService {
     destination: string;
     weightKg?: number;
     cargoCategory?: CargoCategory;
-  }) {
+  }): Promise<MarketRateResponse> {
     const origin = query.origin?.trim();
     const destination = query.destination?.trim();
     const cargoCategory = query.cargoCategory;
@@ -482,20 +519,30 @@ export class ShipmentsService {
     });
 
     const sameLane = shipments.filter((shipment) =>
-      this.matchesLane(shipment.origin, shipment.destination, origin, destination),
+      this.matchesLane(
+        shipment.origin,
+        shipment.destination,
+        origin,
+        destination,
+      ),
     );
 
-    const laneToUse = sameLane.length >= 5 ? sameLane : shipments.filter((shipment) => {
-      return (
-        this.getCountry(shipment.origin) === this.getCountry(origin) &&
-        this.getCountry(shipment.destination) === this.getCountry(destination)
-      );
-    });
+    const laneToUse =
+      sameLane.length >= 5
+        ? sameLane
+        : shipments.filter((shipment) => {
+            return (
+              this.getCountry(shipment.origin) === this.getCountry(origin) &&
+              this.getCountry(shipment.destination) ===
+                this.getCountry(destination)
+            );
+          });
 
     if (laneToUse.length < 5) {
       return {
         insufficient_data: true,
-        message: 'Not enough completed shipments on this lane to estimate a rate',
+        message:
+          'Not enough completed shipments on this lane to estimate a rate',
       };
     }
 
@@ -517,7 +564,7 @@ export class ShipmentsService {
     return response;
   }
 
-  async estimatePrice(dto: {
+  estimatePrice(dto: {
     origin: string;
     destination: string;
     weightKg: number;
@@ -525,7 +572,9 @@ export class ShipmentsService {
     cargoCategory?: CargoCategory;
   }) {
     if (!dto.origin || !dto.destination || dto.weightKg <= 0) {
-      throw new BadRequestException('origin, destination, and weightKg are required');
+      throw new BadRequestException(
+        'origin, destination, and weightKg are required',
+      );
     }
 
     const originZone = resolveZone(dto.origin);
@@ -533,11 +582,16 @@ export class ShipmentsService {
     const zoneKey = `${originZone}-${destinationZone}`;
     const reverseKey = `${destinationZone}-${originZone}`;
     const baseRate =
-      ZONE_BASE_RATES[zoneKey] ?? ZONE_BASE_RATES[reverseKey] ?? DEFAULT_ZONE_BASE_RATE;
+      ZONE_BASE_RATES[zoneKey] ??
+      ZONE_BASE_RATES[reverseKey] ??
+      DEFAULT_ZONE_BASE_RATE;
     const weightCharge = dto.weightKg * RATE_PER_KG;
     const categoryMultiplier =
-      CATEGORY_MULTIPLIERS[dto.cargoCategory ?? CargoCategory.GENERAL_CARGO] ?? 1;
-    const estimatedMin = Number((baseRate * categoryMultiplier + weightCharge).toFixed(2));
+      CATEGORY_MULTIPLIERS[dto.cargoCategory ?? CargoCategory.GENERAL_CARGO] ??
+      1;
+    const estimatedMin = Number(
+      (baseRate * categoryMultiplier + weightCharge).toFixed(2),
+    );
     const estimatedMax = Number((estimatedMin * 1.15).toFixed(2));
     const eta = this.etaService.estimate({
       origin: dto.origin,

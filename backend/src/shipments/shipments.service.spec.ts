@@ -127,7 +127,15 @@ describe('ShipmentsService', () => {
           useValue: historyRepo,
         },
         { provide: EventEmitter2, useValue: eventEmitter },
-        { provide: EtaService, useValue: { estimate: jest.fn().mockReturnValue({ estimatedTransitDays: 5, estimatedDeliveryDate: '2026-06-30' }) } },
+        {
+          provide: EtaService,
+          useValue: {
+            estimate: jest.fn().mockReturnValue({
+              estimatedTransitDays: 5,
+              estimatedDeliveryDate: '2026-06-30',
+            }),
+          },
+        },
       ],
     }).compile();
 

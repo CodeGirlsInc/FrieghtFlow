@@ -20,10 +20,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CargoCategory } from '../../common/enums/cargo-category.enum';
 
 function IsPriceOrRFQ(validationOptions?: ValidationOptions) {
-  return function (target: object) {
+  return function (target: object): void {
+    const decoratorTarget = target as Parameters<
+      typeof registerDecorator
+    >[0]['target'];
     registerDecorator({
       name: 'isPriceOrRFQ',
-      target: target as Function,
+      target: decoratorTarget,
       propertyName: '',
       options: validationOptions,
       validator: {
@@ -59,7 +62,10 @@ export class CreateShipmentDto {
   @MaxLength(2000)
   cargoDescription!: string;
 
-  @ApiPropertyOptional({ enum: CargoCategory, example: CargoCategory.ELECTRONICS })
+  @ApiPropertyOptional({
+    enum: CargoCategory,
+    example: CargoCategory.ELECTRONICS,
+  })
   @IsOptional()
   @IsEnum(CargoCategory)
   cargoCategory?: CargoCategory;
@@ -87,7 +93,10 @@ export class CreateShipmentDto {
   @Min(0.01)
   price?: number;
 
-  @ApiPropertyOptional({ example: false, description: 'Open the shipment to RFQ pricing' })
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Open the shipment to RFQ pricing',
+  })
   @IsOptional()
   @IsBoolean()
   isRFQ?: boolean;

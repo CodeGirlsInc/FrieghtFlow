@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 export interface ShipmentTemplate {
   id: string;
@@ -50,8 +54,16 @@ export class ShipmentTemplateService {
     this.templates.delete(id);
   }
 
-  buildShipmentFromTemplate(id: string, userId: string): Omit<ShipmentTemplate, 'id' | 'userId' | 'name'> {
-    const { name: _n, id: _id, userId: _u, ...shipmentData } = this.findOne(id, userId);
+  buildShipmentFromTemplate(
+    id: string,
+    userId: string,
+  ): Omit<ShipmentTemplate, 'id' | 'userId' | 'name'> {
+    const {
+      name: _n,
+      id: _id,
+      userId: _u,
+      ...shipmentData
+    } = this.findOne(id, userId);
     return shipmentData;
   }
 }

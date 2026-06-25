@@ -7,6 +7,7 @@ import { ShipmentStatusHistory } from './entities/shipment-status-history.entity
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
+import { EtaService } from './eta.service';
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
@@ -18,6 +19,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     role: UserRole.ADMIN,
     isEmailVerified: true,
     isActive: true,
+    isTwoFactorEnabled: false,
+    twoFactorSecret: null,
+    recoveryCodes: [],
     walletAddress: null,
     refreshToken: null,
     verificationToken: null,
@@ -90,6 +94,12 @@ describe('ShipmentsService.getAnalytics()', () => {
         { provide: getRepositoryToken(Shipment), useValue: shipmentRepo },
         { provide: getRepositoryToken(ShipmentStatusHistory), useValue: {} },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        {
+          provide: EtaService,
+          useValue: {
+            estimate: jest.fn().mockReturnValue({ estimatedTransitDays: 3 }),
+          },
+        },
       ],
     }).compile();
 

@@ -19,9 +19,9 @@ export const CATEGORY_MULTIPLIERS: Record<string, number> = {
   Perishables: 1.4,
   Furniture: 1.1,
   Machinery: 1.2,
-  'Textiles': 1.0,
+  Textiles: 1.0,
   'Food & Beverage': 1.1,
   Automotive: 1.1,
-  'Pharmaceuticals': 1.3,
+  Pharmaceuticals: 1.3,
   'Construction Materials': 1.2,
 };
