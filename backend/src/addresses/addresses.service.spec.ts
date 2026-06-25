@@ -31,7 +31,12 @@ describe('AddressesService', () => {
 
   describe('create', () => {
     it('creates an address', async () => {
-      const dto = { label: 'HQ', address: '1 Main St', city: 'Lagos', country: 'Nigeria' };
+      const dto = {
+        label: 'HQ',
+        address: '1 Main St',
+        city: 'Lagos',
+        country: 'Nigeria',
+      };
       const saved = { id: 'uuid', userId: 'user1', ...dto, isDefault: false };
       repo.create.mockReturnValue(saved);
       repo.save.mockResolvedValue(saved);
@@ -42,13 +47,22 @@ describe('AddressesService', () => {
     });
 
     it('clears other defaults when isDefault=true', async () => {
-      const dto = { label: 'HQ', address: '1 Main St', city: 'Lagos', country: 'Nigeria', isDefault: true };
+      const dto = {
+        label: 'HQ',
+        address: '1 Main St',
+        city: 'Lagos',
+        country: 'Nigeria',
+        isDefault: true,
+      };
       const saved = { id: 'uuid', userId: 'user1', ...dto };
       repo.create.mockReturnValue(saved);
       repo.save.mockResolvedValue(saved);
 
       await service.create('user1', dto);
-      expect(repo.update).toHaveBeenCalledWith({ userId: 'user1' }, { isDefault: false });
+      expect(repo.update).toHaveBeenCalledWith(
+        { userId: 'user1' },
+        { isDefault: false },
+      );
     });
   });
 
@@ -56,19 +70,25 @@ describe('AddressesService', () => {
     it('returns addresses for user', async () => {
       repo.find.mockResolvedValue([]);
       await service.findAll('user1');
-      expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user1' } }));
+      expect(repo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 'user1' } }),
+      );
     });
   });
 
   describe('findOne', () => {
     it('throws NotFoundException when not found', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.findOne('id', 'user1')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('id', 'user1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws ForbiddenException when wrong owner', async () => {
       repo.findOne.mockResolvedValue({ id: 'id', userId: 'other' });
-      await expect(service.findOne('id', 'user1')).rejects.toThrow(ForbiddenException);
+      await expect(service.findOne('id', 'user1')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 

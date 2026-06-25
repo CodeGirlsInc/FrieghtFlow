@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { Review } from './entities/review.entity';
 import { Shipment } from '../shipments/entities/shipment.entity';
@@ -26,6 +30,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     resetPasswordExpiry: null,
     createdAt: new Date(),
     updatedAt: new Date(),
+    isTwoFactorEnabled: false,
+    twoFactorSecret: undefined as any,
+    recoveryCodes: [],
     ...overrides,
   };
 }
@@ -61,7 +68,12 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
 
 describe('ReviewsService', () => {
   let service: ReviewsService;
-  let reviewRepo: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock; createQueryBuilder: jest.Mock };
+  let reviewRepo: {
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
   let shipmentRepo: { findOne: jest.Mock };
 
   beforeEach(async () => {
@@ -99,28 +111,40 @@ describe('ReviewsService', () => {
 
       expect(result).toBe(review);
       expect(reviewRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ reviewerId: 'shipper-1', revieweeId: 'carrier-1', rating: 5 }),
+        expect.objectContaining({
+          reviewerId: 'shipper-1',
+          revieweeId: 'carrier-1',
+          rating: 5,
+        }),
       );
     });
 
     it('throws BadRequestException if shipment not COMPLETED', async () => {
-      shipmentRepo.findOne.mockResolvedValue(makeShipment({ status: ShipmentStatus.DELIVERED }));
+      shipmentRepo.findOne.mockResolvedValue(
+        makeShipment({ status: ShipmentStatus.DELIVERED }),
+      );
 
-      await expect(service.create('ship-1', makeUser(), { rating: 4 })).rejects.toThrow(BadRequestException);
+      await expect(
+        service.create('ship-1', makeUser(), { rating: 4 }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('throws ForbiddenException if reviewer is not a party', async () => {
       shipmentRepo.findOne.mockResolvedValue(makeShipment());
       const outsider = makeUser({ id: 'outsider-1' });
 
-      await expect(service.create('ship-1', outsider, { rating: 3 })).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.create('ship-1', outsider, { rating: 3 }),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('throws ConflictException on duplicate review', async () => {
       shipmentRepo.findOne.mockResolvedValue(makeShipment());
       reviewRepo.findOne.mockResolvedValue({ id: 'existing-review' });
 
-      await expect(service.create('ship-1', makeUser(), { rating: 5 })).rejects.toThrow(ConflictException);
+      await expect(
+        service.create('ship-1', makeUser(), { rating: 5 }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 

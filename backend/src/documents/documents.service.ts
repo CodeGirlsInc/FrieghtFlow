@@ -94,17 +94,12 @@ export class DocumentsService {
 
     const saved = await this.documentRepo.save(doc);
 
-    this.enqueueIpfsPin(saved.id, saved.storedUrl!).catch(() => {
-      // Silently ignore — job will be retried or handled by worker
-    });
+    this.enqueueIpfsPin(saved.id, saved.storedUrl!);
 
     return saved;
   }
 
-  private async enqueueIpfsPin(
-    documentId: string,
-    cloudinaryUrl: string,
-  ): Promise<void> {
+  private enqueueIpfsPin(documentId: string, cloudinaryUrl: string): void {
     // TODO: Replace with BullMQ queue.add('ipfs-pin', { documentId, cloudinaryUrl })
     console.log(
       `[IPFS Pin] Enqueued: documentId=${documentId}, url=${cloudinaryUrl}`,
