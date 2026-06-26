@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ExecutionContext } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -24,6 +25,18 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AppMailerModule } from './mailer/mailer.module';
 import { EnvValidationModule } from '../../package/env-validation/env-validation.module';
+import { DisputesModule } from './disputes/disputes.module';
+import { CertificationReviewModule } from './certification-review/certification-review.module';
+import { BulkShipmentsModule } from './bulk-shipments/bulk-shipments.module';
+import { MarketplaceSearchModule } from './marketplace-search/marketplace-search.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { RequestLoggerModule } from './request-logger/request-logger.module';
+import { DocumentPipelineModule } from './document-pipeline/document-pipeline.module';
+import { StellarEscrowModule } from './stellar-escrow/stellar-escrow.module';
+import { ReputationCalculatorModule } from './reputation-calculator/reputation-calculator.module';
+import { LocationUpdatesModule } from './location-updates/location-updates.module';
+import { ETAModule } from './eta/eta.module';
+import { BidExpiryModule } from './bid-expiry/bid-expiry.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -54,6 +67,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
   imports: [
     EnvValidationModule,
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       errorMessage: throttlerErrorMessage,
       throttlers: [
@@ -104,6 +118,12 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     CarriersModule,
     ReviewsModule,
     CloudinaryModule,
+    DisputesModule,
+    CertificationReviewModule,
+    BulkShipmentsModule,
+    MarketplaceSearchModule,
+    OnboardingModule,
+    RequestLoggerModule,
   ],
   controllers: [AppController],
   providers: [
