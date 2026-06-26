@@ -7,6 +7,7 @@ import type { ShipmentDocument } from './components/DocumentChecklist';
 import type { CostItem } from './components/CostBreakdownChart';
 import { CurrencyToggle } from './components/CurrencyToggle';
 import { useCurrency } from '@/hooks/useCurrency';
+import { CarrierVerificationBadge } from './components/CarrierVerificationBadge';
 
 const STEPPER_DEMOS: {
   title: string;
@@ -231,6 +232,18 @@ export default function SandboxPage() {
             All prices below convert in real time.
           </p>
           <CurrencyDemo />
+        </section>
+
+        {/* Carrier Verification Badge demo */}
+        <section className="mb-10 rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="mb-1 text-base font-semibold text-gray-900">Carrier Verification Badge</h2>
+          <p className="mb-4 text-sm text-gray-500">Hover each badge to see carrier details.</p>
+          <div className="flex flex-wrap gap-4">
+            <CarrierVerificationBadge score={10}  deliveries={3}    memberSince="Jun 2026" />
+            <CarrierVerificationBadge score={55}  deliveries={120}  memberSince="Jan 2025" />
+            <CarrierVerificationBadge score={78}  deliveries={540}  memberSince="Mar 2024" />
+            <CarrierVerificationBadge score={95}  deliveries={1800} memberSince="Sep 2022" />
+          </div>
         </section>
 
         <SandboxTabs
