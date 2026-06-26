@@ -24,6 +24,7 @@ import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AppMailerModule } from './mailer/mailer.module';
+import { AvatarUploadModule } from './avatar-upload/avatar-upload.module';
 import { EnvValidationModule } from '../../package/env-validation/env-validation.module';
 import { DisputesModule } from './disputes/disputes.module';
 import { CertificationReviewModule } from './certification-review/certification-review.module';
@@ -118,6 +119,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     CarriersModule,
     ReviewsModule,
     CloudinaryModule,
+    AvatarUploadModule,
     DisputesModule,
     CertificationReviewModule,
     BulkShipmentsModule,
