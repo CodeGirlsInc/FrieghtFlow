@@ -17,14 +17,18 @@ export interface ShipmentNotification {
 interface NotificationState {
   notifications: ShipmentNotification[];
   unreadCount: number;
+  messageUnreadCount: number;
   addNotification: (n: Omit<ShipmentNotification, 'id' | 'read'>) => void;
   markAllRead: () => void;
   clearAll: () => void;
+  incrementMessageUnread: () => void;
+  clearMessageUnread: () => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set) => ({
   notifications: [],
   unreadCount: 0,
+  messageUnreadCount: 0,
 
   addNotification: (n) =>
     set((state) => {
@@ -45,4 +49,9 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     })),
 
   clearAll: () => set({ notifications: [], unreadCount: 0 }),
+
+  incrementMessageUnread: () =>
+    set((state) => ({ messageUnreadCount: state.messageUnreadCount + 1 })),
+
+  clearMessageUnread: () => set({ messageUnreadCount: 0 }),
 }));
