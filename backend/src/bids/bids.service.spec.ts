@@ -84,8 +84,12 @@ describe('BidsService', () => {
     });
 
     it('throws if shipment not PENDING', async () => {
-      shipmentRepo.findOne.mockResolvedValue(pendingShipment({ status: ShipmentStatus.ACCEPTED }));
-      await expect(service.submitBid('ship1', 'carrier1', { proposedPrice: 100 })).rejects.toThrow(BadRequestException);
+      shipmentRepo.findOne.mockResolvedValue(
+        pendingShipment({ status: ShipmentStatus.ACCEPTED }),
+      );
+      await expect(
+        service.submitBid('ship1', 'carrier1', { proposedPrice: 100 }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('throws if carrier already has a pending bid', async () => {
@@ -97,8 +101,12 @@ describe('BidsService', () => {
 
   describe('getBids', () => {
     it('throws ForbiddenException if requester is not the shipper', async () => {
-      shipmentRepo.findOne.mockResolvedValue(pendingShipment({ shipperId: 'other' }));
-      await expect(service.getBids('ship1', 'shipper1')).rejects.toThrow(ForbiddenException);
+      shipmentRepo.findOne.mockResolvedValue(
+        pendingShipment({ shipperId: 'other' }),
+      );
+      await expect(service.getBids('ship1', 'shipper1')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('returns bids with isExpired for the shipment owner', async () => {
@@ -122,7 +130,10 @@ describe('BidsService', () => {
       const result = await service.acceptBid('ship1', 'bid1', 'shipper1');
       expect(result.status).toBe(BidStatus.ACCEPTED);
       expect(bidRepo.update).toHaveBeenCalled();
-      expect(shipmentRepo.update).toHaveBeenCalledWith('ship1', expect.objectContaining({ carrierId: 'carrier1' }));
+      expect(shipmentRepo.update).toHaveBeenCalledWith(
+        'ship1',
+        expect.objectContaining({ carrierId: 'carrier1' }),
+      );
     });
 
     it('throws BadRequestException for expired bid', async () => {
@@ -133,14 +144,20 @@ describe('BidsService', () => {
     });
 
     it('throws ForbiddenException if not the shipper', async () => {
-      shipmentRepo.findOne.mockResolvedValue(pendingShipment({ shipperId: 'other' }));
-      await expect(service.acceptBid('ship1', 'bid1', 'shipper1')).rejects.toThrow(ForbiddenException);
+      shipmentRepo.findOne.mockResolvedValue(
+        pendingShipment({ shipperId: 'other' }),
+      );
+      await expect(
+        service.acceptBid('ship1', 'bid1', 'shipper1'),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('throws NotFoundException if bid not found', async () => {
       shipmentRepo.findOne.mockResolvedValue(pendingShipment());
       bidRepo.findOne.mockResolvedValue(null);
-      await expect(service.acceptBid('ship1', 'bid1', 'shipper1')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.acceptBid('ship1', 'bid1', 'shipper1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

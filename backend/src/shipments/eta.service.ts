@@ -22,9 +22,10 @@ const ZONE_MAP: Record<string, number> = {
   'AS-US': 12,
 };
 
-function resolveZone(location: string): string {
+export function resolveZone(location: string): string {
   const l = location.toUpperCase();
-  if (/\b(US|CA|MX|BR|AR)\b/.test(l)) return l.includes('CA') ? 'CA' : l.includes('MX') ? 'MX' : 'US';
+  if (/\b(US|CA|MX|BR|AR)\b/.test(l))
+    return l.includes('CA') ? 'CA' : l.includes('MX') ? 'MX' : 'US';
   if (/\b(UK|DE|FR|IT|ES|NL|PL|SE)\b/.test(l)) return 'EU';
   if (/\b(CN|JP|KR|IN|SG|TH|VN)\b/.test(l)) return 'AS';
   return 'US';

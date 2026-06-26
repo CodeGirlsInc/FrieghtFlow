@@ -72,8 +72,11 @@ export class Shipment {
 
   // ── Pricing ──────────────────────────────────────────────────────────────────
 
-  @Column({ type: 'decimal', precision: 14, scale: 2 })
-  price: number;
+  @Column({ type: 'decimal', precision: 14, scale: 2, nullable: true })
+  price: number | null;
+
+  @Column({ default: false, name: 'is_rfq' })
+  isRFQ: boolean;
 
   @Column({ default: 'USD', length: 3 })
   currency: string;
