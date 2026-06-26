@@ -136,6 +136,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     CarriersModule,
     ReviewsModule,
     CloudinaryModule,
+    AvatarUploadModule,
   ],
   controllers: [AppController],
   providers: [
