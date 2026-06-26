@@ -24,6 +24,10 @@ import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AppMailerModule } from './mailer/mailer.module';
+import { DocumentPipelineModule } from './document-pipeline/document-pipeline.module';
+import { StellarEscrowModule } from './stellar-escrow/stellar-escrow.module';
+import { ReputationCalculatorModule } from './reputation-calculator/reputation-calculator.module';
+import { LocationUpdatesModule } from './location-updates/location-updates.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -135,6 +139,10 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     CarriersModule,
     ReviewsModule,
     CloudinaryModule,
+    DocumentPipelineModule,
+    StellarEscrowModule,
+    ReputationCalculatorModule,
+    LocationUpdatesModule,
   ],
   controllers: [AppController],
   providers: [
