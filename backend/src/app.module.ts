@@ -24,6 +24,8 @@ import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AppMailerModule } from './mailer/mailer.module';
+import { DisputesModule } from './disputes/disputes.module';
+import { CertificationReviewModule } from './certification-review/certification-review.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -135,6 +137,8 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     CarriersModule,
     ReviewsModule,
     CloudinaryModule,
+    DisputesModule,
+    CertificationReviewModule,
   ],
   controllers: [AppController],
   providers: [
