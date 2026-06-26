@@ -24,6 +24,7 @@ import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AppMailerModule } from './mailer/mailer.module';
+import { AvatarUploadModule } from './avatar-upload/avatar-upload.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
