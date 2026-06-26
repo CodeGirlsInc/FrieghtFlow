@@ -23,6 +23,7 @@ import { AdminAuditInterceptor } from './audit-log/admin-audit.interceptor';
 import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { AppMailerModule } from './mailer/mailer.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -119,6 +120,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         synchronize: configService.get('NODE_ENV') !== 'production',
       }),
     }),
+    AppMailerModule,
     UsersModule,
     AuthModule,
     ShipmentsModule,

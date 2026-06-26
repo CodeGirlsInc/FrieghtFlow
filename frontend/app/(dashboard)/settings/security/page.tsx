@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { authApi, Setup2FAResponse } from '@/lib/api/auth.api'
 import { 
-  Shield, ShieldAlert, ShieldCheck, Copy, Check, 
+  ShieldAlert, ShieldCheck, Copy, Check, 
   Download, Loader2, KeyRound, Smartphone, AlertTriangle 
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -43,7 +43,7 @@ export default function SecuritySettingsPage() {
       setStep(1)
       setSetupModalOpen(true)
     } catch (err: unknown) {
-      alert((err as { message?: string }).message || 'Could not initialize 2FA configuration.')
+      alert((err as {message?: string}).message || 'Could not initialize 2FA configuration.')
     } finally {
       setLoading(false)
     }
@@ -59,8 +59,8 @@ export default function SecuritySettingsPage() {
       setRecoveryCodes(data.recoveryCodes)
       setIs2FAEnabled(true)
       setStep(3)
-    } catch (err: any) {
-      setInlineError(err.message)
+    } catch (err: unknown) {
+      setInlineError((err as {message?: string}).message ?? null)
     } finally {
       setLoading(false)
     }
@@ -75,8 +75,8 @@ export default function SecuritySettingsPage() {
       setIs2FAEnabled(false)
       setDisableModalOpen(false)
       setConfirmPassword('')
-    } catch (err: any) {
-      setInlineError(err.message)
+    } catch (err: unknown) {
+      setInlineError((err as {message?: string}).message ?? null)
     } finally {
       setLoading(false)
     }

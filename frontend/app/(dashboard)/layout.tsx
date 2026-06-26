@@ -16,6 +16,7 @@ const SHIPPER_NAV = [
   { href: '/shipments', label: 'My Shipments' },
   { href: '/shipments/new', label: 'Create Shipment' },
   { href: '/messages', label: 'Messages' },
+  { href: '/documents', label: 'Documents' },
 ];
 
 const CARRIER_NAV = [
@@ -23,12 +24,15 @@ const CARRIER_NAV = [
   { href: '/shipments', label: 'My Jobs' },
   { href: '/marketplace', label: 'Marketplace' },
   { href: '/messages', label: 'Messages' },
+  { href: '/bids', label: 'My Bids' },
+  { href: '/documents', label: 'Documents' },
 ];
 
 const ADMIN_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'All Shipments' },
   { href: '/marketplace', label: 'Marketplace' },
+  { href: '/documents', label: 'Documents' },
   { href: '/admin', label: 'Admin Panel' },
   { href: '/admin/users', label: 'Manage Users' },
   { href: '/admin/shipments', label: 'Shipment Oversight' },

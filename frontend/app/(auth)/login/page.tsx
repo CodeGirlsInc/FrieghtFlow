@@ -4,6 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api/auth.api'
 import { ShieldCheck, ArrowLeft, Loader2, Lock } from 'lucide-react'
+import { ShieldCheck, ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -55,7 +56,7 @@ export default function LoginPage() {
         router.push('/dashboard')
       }
     } catch (err: unknown) {
-      setGlobalError((err as { message?: string }).message || 'Authentication sequence failure.')
+      setGlobalError((err as {message?: string}).message || 'Authentication sequence failure.')
     } finally {
       setLoading(false)
     }
@@ -78,7 +79,7 @@ export default function LoginPage() {
       router.push('/dashboard')
     } catch (err: unknown) {
       // Acceptance Criteria: Keep verification fields populated upon input rejections
-      setGlobalError((err as { message?: string }).message || 'Invalid confirmation code. Please try again.')
+      setGlobalError((err as {message?: string}).message || 'Invalid confirmation code. Please try again.')
     } finally {
       setLoading(false)
     }

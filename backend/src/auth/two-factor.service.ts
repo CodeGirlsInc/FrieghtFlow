@@ -1,7 +1,12 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { authenticator } from 'otplib';
+import { Repository, IsNull } from 'typeorm';
+// import { authenticator } from 'otplib';
+import { authenticator } from '@otplib/preset-v11';
 import * as qrcode from 'qrcode';
 import * as bcrypt from 'bcrypt';
 import { Redis } from 'ioredis'; // Assuming BE-02 Redis instance wrapper setup
@@ -19,7 +24,9 @@ export class TwoFactorService {
     private readonly recoveryRepository: Repository<TwoFactorRecovery>,
   ) {
     // Standard workspace constructor assignment for Redis connection
-    this.redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+    this.redisClient = new Redis(
+      process.env.REDIS_URL || 'redis://localhost:6379',
+    );
   }
 
   async initiateSetup(userId: number, email: string) {
@@ -40,12 +47,16 @@ export class TwoFactorService {
     const secret = await this.redisClient.get(redisKey);
 
     if (!secret) {
-      throw new BadRequestException('2FA setup session expired. Please regenerate the QR configuration.');
+      throw new BadRequestException(
+        '2FA setup session expired. Please regenerate the QR configuration.',
+      );
     }
 
     const isValid = authenticator.verify({ token: otp, secret });
     if (!isValid) {
-      throw new BadRequestException('Invalid confirmation code. Verification rejected.');
+      throw new BadRequestException(
+        'Invalid confirmation code. Verification rejected.',
+      );
     }
 
     // Persist configuration settings to user entity
@@ -63,7 +74,10 @@ export class TwoFactorService {
 
     for (let i = 0; i < 8; i++) {
       // Create readable 8-character structural split code chunks
-      const plainCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const plainCode = Math.random()
+        .toString(36)
+        .substring(2, 10)
+        .toUpperCase();
       plainRecoveryCodes.push(plainCode);
 
       const codeHash = await bcrypt.hash(plainCode, 10);
@@ -75,23 +89,35 @@ export class TwoFactorService {
     return { recoveryCodes: plainRecoveryCodes };
   }
 
-  async verifyTokenOrRecovery(userId: number, inputToken: string): Promise<boolean> {
-    const user = await this.userRepository.createQueryBuilder('user')
+  async verifyTokenOrRecovery(
+    userId: number,
+    inputToken: string,
+  ): Promise<boolean> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
       .addSelect('user.twoFactorSecret')
       .where('user.id = :userId', { userId })
       .getOne();
 
     if (!user || !user.twoFactorSecret) {
-      throw new UnauthorizedException('Multi-factor authorization is not configured for this account.');
+      throw new UnauthorizedException(
+        'Multi-factor authorization is not configured for this account.',
+      );
     }
 
     // Path A: Validate via standard time-based dynamic OTP first
-    const isTotpValid = authenticator.verify({ token: inputToken, secret: user.twoFactorSecret });
+    const isTotpValid = authenticator.verify({
+      token: inputToken,
+      secret: user.twoFactorSecret,
+    });
     if (isTotpValid) return true;
 
     // Path B: Fall back to un-used emergency recovery tokens
-    const records = await this.recoveryRepository.find({ where: { userId, usedAt: null } });
-    
+    // const records = await this.recoveryRepository.find({ where: { userId, usedAt: null } });
+    const records = await this.recoveryRepository.find({
+      where: { userId, usedAt: IsNull() },
+    });
+
     for (const record of records) {
       const match = await bcrypt.compare(inputToken, record.codeHash);
       if (match) {

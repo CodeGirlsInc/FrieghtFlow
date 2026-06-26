@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Your dispute has been resolved</title></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:20px">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden">
+    <div style="background:#1e3a5f;padding:24px;text-align:center">
+      <h1 style="color:#fff;margin:0;font-size:24px">FreightFlow</h1>
+    </div>
+    <div style="padding:32px">
+      <h2 style="color:#1e3a5f">Dispute Resolved</h2>
+      <p style="color:#555;line-height:1.6">Hi {{recipientName}}, your dispute has been reviewed and resolved by our team.</p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0">
+        <tr><td style="padding:8px;color:#888;font-size:14px">Tracking #</td><td style="padding:8px;font-weight:bold">{{trackingNumber}}</td></tr>
+        <tr style="background:#f8f8f8"><td style="padding:8px;color:#888;font-size:14px">Origin</td><td style="padding:8px">{{origin}}</td></tr>
+        <tr><td style="padding:8px;color:#888;font-size:14px">Destination</td><td style="padding:8px">{{destination}}</td></tr>
+      </table>
+      <div style="text-align:center;margin:32px 0">
+        <a href="{{ctaUrl}}" style="background:#2563eb;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">{{ctaLabel}}</a>
+      </div>
+    </div>
+    <div style="background:#f8f8f8;padding:16px;text-align:center;border-top:1px solid #eee">
+      <a href="{{unsubscribeUrl}}" style="color:#aaa;font-size:12px;text-decoration:none">Unsubscribe from email notifications</a>
+    </div>
+  </div>
+</body>
+</html>
