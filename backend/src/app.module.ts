@@ -25,6 +25,10 @@ import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AppMailerModule } from './mailer/mailer.module';
+import { BulkShipmentsModule } from './bulk-shipments/bulk-shipments.module';
+import { MarketplaceSearchModule } from './marketplace-search/marketplace-search.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { RequestLoggerModule } from './request-logger/request-logger.module';
 import { DocumentPipelineModule } from './document-pipeline/document-pipeline.module';
 import { StellarEscrowModule } from './stellar-escrow/stellar-escrow.module';
 import { ReputationCalculatorModule } from './reputation-calculator/reputation-calculator.module';
@@ -143,12 +147,10 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     CarriersModule,
     ReviewsModule,
     CloudinaryModule,
-    DocumentPipelineModule,
-    StellarEscrowModule,
-    ReputationCalculatorModule,
-    LocationUpdatesModule,
-    ETAModule,
-    BidExpiryModule,
+    BulkShipmentsModule,
+    MarketplaceSearchModule,
+    OnboardingModule,
+    RequestLoggerModule,
   ],
   controllers: [AppController],
   providers: [
