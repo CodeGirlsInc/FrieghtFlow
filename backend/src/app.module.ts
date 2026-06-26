@@ -23,6 +23,7 @@ import { AdminAuditInterceptor } from './audit-log/admin-audit.interceptor';
 import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { RouteCalculatorModule } from './route-calculator/route-calculator.module';
 import { AppMailerModule } from './mailer/mailer.module';
 import { AvatarUploadModule } from './avatar-upload/avatar-upload.module';
 import { EnvValidationModule } from '../../package/env-validation/env-validation.module';
@@ -119,6 +120,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     CarriersModule,
     ReviewsModule,
     CloudinaryModule,
+    RouteCalculatorModule,
     AvatarUploadModule,
     DisputesModule,
     CertificationReviewModule,
