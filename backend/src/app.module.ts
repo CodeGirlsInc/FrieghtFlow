@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ExecutionContext } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -28,6 +29,8 @@ import { DocumentPipelineModule } from './document-pipeline/document-pipeline.mo
 import { StellarEscrowModule } from './stellar-escrow/stellar-escrow.module';
 import { ReputationCalculatorModule } from './reputation-calculator/reputation-calculator.module';
 import { LocationUpdatesModule } from './location-updates/location-updates.module';
+import { ETAModule } from './eta/eta.module';
+import { BidExpiryModule } from './bid-expiry/bid-expiry.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -89,6 +92,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
       },
     }),
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       errorMessage: throttlerErrorMessage,
       throttlers: [
@@ -143,6 +147,8 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     StellarEscrowModule,
     ReputationCalculatorModule,
     LocationUpdatesModule,
+    ETAModule,
+    BidExpiryModule,
   ],
   controllers: [AppController],
   providers: [
