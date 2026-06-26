@@ -8,6 +8,8 @@ import type { CostItem } from './components/CostBreakdownChart';
 import { CurrencyToggle } from './components/CurrencyToggle';
 import { useCurrency } from '@/hooks/useCurrency';
 import { CarrierVerificationBadge } from './components/CarrierVerificationBadge';
+import { CargoTypeSelector } from './components/CargoTypeSelector';
+import type { CargoType } from './components/CargoTypeSelector';
 
 const STEPPER_DEMOS: {
   title: string;
@@ -244,6 +246,15 @@ export default function SandboxPage() {
             <CarrierVerificationBadge score={78}  deliveries={540}  memberSince="Mar 2024" />
             <CarrierVerificationBadge score={95}  deliveries={1800} memberSince="Sep 2022" />
           </div>
+        </section>
+
+        {/* Cargo Type Selector demo */}
+        <section className="mb-10 rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="mb-1 text-base font-semibold text-gray-900">Cargo Type Selector</h2>
+          <p className="mb-4 text-sm text-gray-500">
+            Select a cargo type. Choosing Hazardous Materials reveals a UN number field.
+          </p>
+          <CargoTypeSelector onSelect={(t: CargoType) => console.log('selected:', t)} />
         </section>
 
         <SandboxTabs
