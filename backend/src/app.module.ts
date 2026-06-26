@@ -8,7 +8,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import * as Joi from 'joi';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ShipmentsModule } from './shipments/shipments.module';
@@ -25,6 +24,7 @@ import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AppMailerModule } from './mailer/mailer.module';
+import { EnvValidationModule } from '../../package/env-validation/env-validation.module';
 import { DisputesModule } from './disputes/disputes.module';
 import { CertificationReviewModule } from './certification-review/certification-review.module';
 import { BulkShipmentsModule } from './bulk-shipments/bulk-shipments.module';
@@ -65,39 +65,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      validationSchema: Joi.object({
-        DATABASE_HOST: Joi.string().required(),
-        DATABASE_PORT: Joi.number().default(5432),
-        DATABASE_NAME: Joi.string().required(),
-        DATABASE_USERNAME: Joi.string().required(),
-        DATABASE_PASSWORD: Joi.string().required(),
-        NODE_ENV: Joi.string()
-          .valid('development', 'production', 'test')
-          .default('development'),
-        PORT: Joi.number().default(6000),
-        FRONTEND_URL: Joi.string().default('http://localhost:3000'),
-        JWT_SECRET: Joi.string().min(32).required(),
-        JWT_EXPIRES_IN: Joi.string().default('15m'),
-        JWT_REFRESH_SECRET: Joi.string().min(32).required(),
-        JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
-        MAIL_HOST: Joi.string().required(),
-        MAIL_PORT: Joi.number().default(2525),
-        MAIL_USER: Joi.string().required(),
-        MAIL_PASS: Joi.string().required(),
-        MAIL_FROM: Joi.string().default('noreply@freightflow.io'),
-        UPLOAD_DIR: Joi.string().default('./uploads'),
-        CLOUDINARY_CLOUD_NAME: Joi.string().required(),
-        CLOUDINARY_API_KEY: Joi.string().required(),
-        CLOUDINARY_API_SECRET: Joi.string().required(),
-        REDIS_URL: Joi.string().required(),
-      }),
-      validationOptions: {
-        allowUnknown: true,
-        abortEarly: false,
-      },
-    }),
+    EnvValidationModule,
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
