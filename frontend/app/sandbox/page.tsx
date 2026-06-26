@@ -1,8 +1,12 @@
+'use client';
+
 import { SandboxTabs } from './components/SandboxTabs';
 import type { ShipmentStep } from './components/ShipmentStepper';
 import type { CarrierQuote } from './components/QuoteComparisonTable';
 import type { ShipmentDocument } from './components/DocumentChecklist';
 import type { CostItem } from './components/CostBreakdownChart';
+import { CurrencyToggle } from './components/CurrencyToggle';
+import { useCurrency } from '@/hooks/useCurrency';
 
 const STEPPER_DEMOS: {
   title: string;
@@ -186,12 +190,49 @@ const COST_DEMOS: { title: string; breakdown: CostItem[]; currency?: string }[] 
   },
 ];
 
+const SAMPLE_PRICES = [
+  { label: 'Lagos → Abuja (Standard)', usd: 245.0 },
+  { label: 'Port Harcourt → Kano (Express)', usd: 520.0 },
+  { label: 'Ibadan → Enugu (Economy)', usd: 175.0 },
+];
+
+function CurrencyDemo() {
+  const { format } = useCurrency();
+  return (
+    <ul className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+      {SAMPLE_PRICES.map(({ label, usd }) => (
+        <li key={label} className="flex items-center justify-between px-4 py-3 text-sm">
+          <span className="text-gray-700">{label}</span>
+          <span className="font-semibold text-gray-900">{format(usd)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function SandboxPage() {
   return (
     <main className="min-h-screen bg-gray-50 px-6 py-12">
       <div className="mx-auto max-w-5xl">
-        <h1 className="mb-1 text-2xl font-bold text-gray-900">Component Sandbox</h1>
-        <p className="mb-8 text-sm text-gray-500">FrieghtFlow UI component demos</p>
+        {/* Header with currency toggle */}
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="mb-1 text-2xl font-bold text-gray-900">Component Sandbox</h1>
+            <p className="text-sm text-gray-500">FrieghtFlow UI component demos</p>
+          </div>
+          <CurrencyToggle />
+        </div>
+
+        {/* Currency demo section */}
+        <section className="mb-10 rounded-xl border border-blue-100 bg-blue-50 p-5">
+          <h2 className="mb-1 text-base font-semibold text-blue-900">Multi-Currency Price Display</h2>
+          <p className="mb-3 text-sm text-blue-700">
+            Use the currency selector above to switch between USD, EUR, GBP, and NGN.
+            All prices below convert in real time.
+          </p>
+          <CurrencyDemo />
+        </section>
+
         <SandboxTabs
           stepperDemos={STEPPER_DEMOS}
           quotes={MOCK_QUOTES}
