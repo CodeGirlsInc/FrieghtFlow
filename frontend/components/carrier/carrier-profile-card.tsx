@@ -5,7 +5,6 @@ interface Props { carrierId: string; companyName: string; verificationStatus: 'p
 const COLORS = { pending: 'bg-yellow-100 text-yellow-700', verified: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-700' };
 
 export function CarrierProfileCard({ companyName, verificationStatus, fleet, serviceAreas }: Props) {
-  void _ => _ as unknown; // satisfy unused carrierId via destructuring
   return (
     <div className="rounded-xl border p-5 space-y-4">
       <div className="flex items-center justify-between">

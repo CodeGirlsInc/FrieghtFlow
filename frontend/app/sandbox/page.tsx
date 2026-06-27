@@ -236,6 +236,8 @@ export default function SandboxPage() {
           <p className="mb-6 text-sm text-gray-500">Select a tier and enter a declared value to see the real-time premium.</p>
           <InsuranceSelectorDemo />
         </div>
+      </div>
+
       <div className="mx-auto max-w-5xl">
         {/* Header with currency toggle */}
         <div className="mb-8 flex items-center justify-between">
