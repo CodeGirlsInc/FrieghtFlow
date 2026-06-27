@@ -4,6 +4,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { generateSecret, verify, generateURI } from 'otplib';
 import { Repository, IsNull } from 'typeorm';
 import { TOTP, generateURI } from 'otplib';
 // import { authenticator } from 'otplib';
@@ -13,6 +15,7 @@ import * as bcrypt from 'bcrypt';
 import { Redis } from 'ioredis';
 import { User } from '../users/entities/user.entity';
 import { TwoFactorRecovery } from '../users/entities/two-factor-recovery.entity';
+import { IsNull } from 'typeorm';
 
 const authenticator = new TOTP();
 
@@ -33,7 +36,7 @@ export class TwoFactorService {
   }
 
   async initiateSetup(userId: number, email: string) {
-    const secret = authenticator.generateSecret();
+    const secret = generateSecret();
     const appName = 'YieldLadder platform';
     const otpauthUrl = generateURI({ secret, issuer: appName, label: email });
     const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
