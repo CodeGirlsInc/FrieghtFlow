@@ -10,11 +10,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UsersModule } from '../users/users.module';
+import { AvatarUploadModule } from '../avatar-upload/avatar-upload.module';
 
 @Module({
   imports: [
     UsersModule,
     PassportModule,
+    AvatarUploadModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

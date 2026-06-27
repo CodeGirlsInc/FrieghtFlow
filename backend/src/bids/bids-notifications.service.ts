@@ -25,11 +25,17 @@ export class BidsNotificationsService {
     private readonly shipmentRepo: Repository<Shipment>,
   ) {}
 
-  private async sendSafe(to: string, subject: string, html: string): Promise<void> {
+  private async sendSafe(
+    to: string,
+    subject: string,
+    html: string,
+  ): Promise<void> {
     try {
       await this.mailerService.sendMail({ to, subject, html });
     } catch (err: unknown) {
-      this.logger.warn(`Failed to send email to ${to}: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn(
+        `Failed to send email to ${to}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -43,7 +49,10 @@ export class BidsNotificationsService {
       </div>`;
   }
 
-  private async loadRelations(bid: Bid, shipment: Shipment): Promise<{ carrier: User | null; shipper: User | null }> {
+  private async loadRelations(
+    bid: Bid,
+    shipment: Shipment,
+  ): Promise<{ carrier: User | null; shipper: User | null }> {
     const fullShipment = await this.shipmentRepo.findOne({
       where: { id: shipment.id },
       relations: ['shipper'],

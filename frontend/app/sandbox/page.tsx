@@ -1,9 +1,17 @@
+'use client';
+
 import { SandboxTabs } from './components/SandboxTabs';
 import type { ShipmentStep } from './components/ShipmentStepper';
 import type { CarrierQuote } from './components/QuoteComparisonTable';
 import type { ShipmentDocument } from './components/DocumentChecklist';
 import type { CostItem } from './components/CostBreakdownChart';
 import { InsuranceSelectorDemo } from './components/InsuranceSelectorDemo';
+import { CurrencyToggle } from './components/CurrencyToggle';
+import { useCurrency } from '@/hooks/useCurrency';
+import { CarrierVerificationBadge } from './components/CarrierVerificationBadge';
+import { CargoTypeSelector } from './components/CargoTypeSelector';
+import type { CargoType } from './components/CargoTypeSelector';
+import { EmissionsCalculator } from './components/EmissionsCalculator';
 
 const STEPPER_DEMOS: {
   title: string;
@@ -187,6 +195,26 @@ const COST_DEMOS: { title: string; breakdown: CostItem[]; currency?: string }[] 
   },
 ];
 
+const SAMPLE_PRICES = [
+  { label: 'Lagos → Abuja (Standard)', usd: 245.0 },
+  { label: 'Port Harcourt → Kano (Express)', usd: 520.0 },
+  { label: 'Ibadan → Enugu (Economy)', usd: 175.0 },
+];
+
+function CurrencyDemo() {
+  const { format } = useCurrency();
+  return (
+    <ul className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+      {SAMPLE_PRICES.map(({ label, usd }) => (
+        <li key={label} className="flex items-center justify-between px-4 py-3 text-sm">
+          <span className="text-gray-700">{label}</span>
+          <span className="font-semibold text-gray-900">{format(usd)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function SandboxPage() {
   return (
     <main className="min-h-screen bg-gray-50 px-6 py-12">
@@ -208,6 +236,51 @@ export default function SandboxPage() {
           <p className="mb-6 text-sm text-gray-500">Select a tier and enter a declared value to see the real-time premium.</p>
           <InsuranceSelectorDemo />
         </div>
+      <div className="mx-auto max-w-5xl">
+        {/* Header with currency toggle */}
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="mb-1 text-2xl font-bold text-gray-900">Component Sandbox</h1>
+            <p className="text-sm text-gray-500">FrieghtFlow UI component demos</p>
+          </div>
+          <CurrencyToggle />
+        </div>
+
+        {/* Currency demo section */}
+        <section className="mb-10 rounded-xl border border-blue-100 bg-blue-50 p-5">
+          <h2 className="mb-1 text-base font-semibold text-blue-900">Multi-Currency Price Display</h2>
+          <p className="mb-3 text-sm text-blue-700">
+            Use the currency selector above to switch between USD, EUR, GBP, and NGN.
+            All prices below convert in real time.
+          </p>
+          <CurrencyDemo />
+        </section>
+
+        {/* Carrier Verification Badge demo */}
+        <section className="mb-10 rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="mb-1 text-base font-semibold text-gray-900">Carrier Verification Badge</h2>
+          <p className="mb-4 text-sm text-gray-500">Hover each badge to see carrier details.</p>
+          <div className="flex flex-wrap gap-4">
+            <CarrierVerificationBadge score={10}  deliveries={3}    memberSince="Jun 2026" />
+            <CarrierVerificationBadge score={55}  deliveries={120}  memberSince="Jan 2025" />
+            <CarrierVerificationBadge score={78}  deliveries={540}  memberSince="Mar 2024" />
+            <CarrierVerificationBadge score={95}  deliveries={1800} memberSince="Sep 2022" />
+          </div>
+        </section>
+
+        {/* Emissions Calculator demo */}
+        <section className="mb-10 rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="mb-1 text-base font-semibold text-gray-900">CO₂ Emissions Calculator</h2>
+          <p className="mb-4 text-sm text-gray-500">Estimate the carbon footprint of a shipment.</p>
+          <EmissionsCalculator />
+        </section>
+
+        <SandboxTabs
+          stepperDemos={STEPPER_DEMOS}
+          quotes={MOCK_QUOTES}
+          checklistDemos={CHECKLIST_DEMOS}
+          costDemos={COST_DEMOS}
+        />
       </div>
     </main>
   );

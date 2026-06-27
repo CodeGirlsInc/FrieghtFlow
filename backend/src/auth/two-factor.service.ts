@@ -4,14 +4,20 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { generateSecret, verify, generateURI } from 'otplib';
 import { Repository, IsNull } from 'typeorm';
+import { TOTP, generateURI } from 'otplib';
 // import { authenticator } from 'otplib';
 import { authenticator } from '@otplib/preset-v11';
 import * as qrcode from 'qrcode';
 import * as bcrypt from 'bcrypt';
-import { Redis } from 'ioredis'; // Assuming BE-02 Redis instance wrapper setup
+import { Redis } from 'ioredis';
 import { User } from '../users/entities/user.entity';
 import { TwoFactorRecovery } from '../users/entities/two-factor-recovery.entity';
+import { IsNull } from 'typeorm';
+
+const authenticator = new TOTP();
 
 @Injectable()
 export class TwoFactorService {
@@ -30,9 +36,9 @@ export class TwoFactorService {
   }
 
   async initiateSetup(userId: number, email: string) {
-    const secret = authenticator.generateSecret();
+    const secret = generateSecret();
     const appName = 'YieldLadder platform';
-    const otpauthUrl = authenticator.keyuri(email, appName, secret);
+    const otpauthUrl = generateURI({ secret, issuer: appName, label: email });
     const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
 
     // Cache the temporary secret safely inside Redis with a strict 10 minute TTL
@@ -132,7 +138,7 @@ export class TwoFactorService {
 
   async deactivate(userId: number) {
     await this.userRepository.update(userId, {
-      twoFactorSecret: null,
+      twoFactorSecret: '' as unknown as string,
       isTwoFactorEnabled: false,
     });
     // Wipe matching system recovery database objects safely

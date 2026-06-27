@@ -41,14 +41,19 @@ export class WebhooksService {
       userId,
       url: dto.url,
       secret: dto.secret,
+      events: dto.events ?? null,
     });
 
     return this.webhookRepo.save(webhook);
   }
 
-  async findAllForUser(userId: string): Promise<Webhook[]> {
+  async findAllForUser(userId: string, event?: string): Promise<Webhook[]> {
+    const where: Record<string, unknown> = { userId, active: true };
+    if (event) {
+      where.events = event;
+    }
     return this.webhookRepo.find({
-      where: { userId },
+      where,
       order: { createdAt: 'DESC' },
     });
   }
@@ -70,7 +75,7 @@ export class WebhooksService {
   }
 
   async deliverShipmentStatusChange(event: ShipmentEvent): Promise<void> {
-    const webhooks = await this.findAllForUser(event.shipment.shipperId);
+    const webhooks = await this.findAllForUser(event.shipment.shipperId, 'shipment.status_changed');
 
     if (webhooks.length === 0) {
       return;
@@ -113,20 +118,26 @@ export class WebhooksService {
     const payloadJson = JSON.stringify(payload);
     const timestamp = new Date().toISOString();
     const signature = this.signPayload(payloadJson, webhook.secret, timestamp);
+    let lastError: string | null = null;
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         await this.postWebhook(webhook.url, payloadJson, timestamp, signature);
+        await this.webhookRepo.update(webhook.id, {
+          lastDeliveryStatus: 'success',
+          lastDeliveryAt: new Date(),
+        });
         return;
       } catch (error) {
+        lastError = error instanceof Error ? error.message : 'Unknown webhook delivery error';
         if (attempt === 3) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : 'Unknown webhook delivery error';
           this.logger.warn(
-            `Failed to deliver webhook ${webhook.id} after 3 attempts: ${message}`,
+            `Failed to deliver webhook ${webhook.id} after 3 attempts: ${lastError}`,
           );
+          await this.webhookRepo.update(webhook.id, {
+            lastDeliveryStatus: 'failed',
+            lastDeliveryAt: new Date(),
+          });
           return;
         }
 
@@ -147,7 +158,7 @@ export class WebhooksService {
         'content-type': 'application/json',
         'x-freightflow-event': 'shipment.status_changed',
         'x-freightflow-timestamp': timestamp,
-        'x-freightflow-signature': signature,
+        'X-FreightFlow-Signature': signature,
       },
       body: payload,
       signal: AbortSignal.timeout(5000),

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { QueryProvider } from "../providers/query-provider";
-import ToastContainer from "../components/ui/ToastContainer";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -40,8 +39,7 @@ export default function RootLayout({
       >
         <QueryProvider>
           {children}
-          <Toaster position="top-right" richColors />
-          <ToastContainer />
+          <Toaster position="top-right" richColors duration={4000} />
         </QueryProvider>
       </body>
     </html>

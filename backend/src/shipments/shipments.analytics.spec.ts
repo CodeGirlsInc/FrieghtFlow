@@ -28,8 +28,14 @@ function makeUser(overrides: Partial<User> = {}): User {
     verificationTokenExpiry: null,
     resetPasswordToken: null,
     resetPasswordExpiry: null,
+    isTwoFactorEnabled: false,
+    twoFactorSecret: '',
+    recoveryCodes: [],
     createdAt: new Date(),
     updatedAt: new Date(),
+    isTwoFactorEnabled: false,
+    twoFactorSecret: undefined as any,
+    recoveryCodes: [],
     ...overrides,
   };
 }

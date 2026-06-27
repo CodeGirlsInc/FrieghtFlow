@@ -25,8 +25,16 @@ export class NotificationInboxController {
 
   @Get()
   @ApiOperation({ summary: 'Fetch my notification inbox (paginated)' })
-  async getInbox(@CurrentUser() user: User, @Query() query: NotificationQueryDto) {
-    return this.inboxService.findAll(user.id, query.page, query.limit, query.isRead);
+  async getInbox(
+    @CurrentUser() user: User,
+    @Query() query: NotificationQueryDto,
+  ) {
+    return this.inboxService.findAll(
+      user.id,
+      query.page,
+      query.limit,
+      query.isRead,
+    );
   }
 
   @Get('unread-count')

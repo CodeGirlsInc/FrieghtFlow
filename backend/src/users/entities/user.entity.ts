@@ -83,6 +83,9 @@ export class User {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
+  @Column({ nullable: true })
+  avatarUrl: string;
+
   @Column({ default: false })
   isTwoFactorEnabled: boolean;
 
