@@ -333,6 +333,7 @@ export default function ShipmentDetailPage() {
   const [history, setHistory] = useState<ShipmentStatusHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [msgLoading, setMsgLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('details');
 
   const reload = useCallback(async () => {
@@ -554,29 +555,7 @@ export default function ShipmentDetailPage() {
                   >
                     Confirm Delivery
                   </Button>
-                </>
-              )}
-
-              {[ShipmentStatus.COMPLETED, ShipmentStatus.CANCELLED].includes(shipment.status) && (
-                <p className="text-sm text-muted-foreground">
-                  This shipment is {shipment.status} — no further actions available.
-                </p>
-              )}
-
-              {/* Message button — visible once a carrier is assigned */}
-              {shipment.carrierId && (isShipper || isCarrier) && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={msgLoading}
-                  onClick={handleMessage}
-                >
-                  {msgLoading ? 'Opening…' : isShipper ? 'Message Carrier' : 'Message Shipper'}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                )}
 
                 {/* Cancel */}
                 {[ShipmentStatus.PENDING, ShipmentStatus.ACCEPTED].includes(shipment.status) &&
@@ -656,6 +635,18 @@ export default function ShipmentDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     This shipment is {shipment.status} — no further actions available.
                   </p>
+                )}
+
+                {/* Message button — visible once a carrier is assigned */}
+                {shipment.carrierId && (isShipper || isCarrier) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={msgLoading}
+                    onClick={handleMessage}
+                  >
+                    {msgLoading ? 'Opening…' : isShipper ? 'Message Carrier' : 'Message Shipper'}
+                  </Button>
                 )}
               </CardContent>
             </Card>

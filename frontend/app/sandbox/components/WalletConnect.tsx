@@ -26,8 +26,8 @@ export function WalletConnect() {
   async function connect() {
     setLoading(true); setError(null);
     try {
-      const { getPublicKey } = await import('@stellar/freighter-api');
-      const address = await getPublicKey();
+      const { getAddress } = await import('@stellar/freighter-api');
+      const { address } = await getAddress();
       const balance = await fetchBalance(address).catch(() => null);
       setWallet({ address, balance });
     } catch (e) {
