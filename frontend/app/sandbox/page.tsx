@@ -10,6 +10,7 @@ import { useCurrency } from '@/hooks/useCurrency';
 import { CarrierVerificationBadge } from './components/CarrierVerificationBadge';
 import { CargoTypeSelector } from './components/CargoTypeSelector';
 import type { CargoType } from './components/CargoTypeSelector';
+import { EmissionsCalculator } from './components/EmissionsCalculator';
 
 const STEPPER_DEMOS: {
   title: string;
@@ -248,13 +249,11 @@ export default function SandboxPage() {
           </div>
         </section>
 
-        {/* Cargo Type Selector demo */}
+        {/* Emissions Calculator demo */}
         <section className="mb-10 rounded-xl border border-gray-200 bg-white p-5">
-          <h2 className="mb-1 text-base font-semibold text-gray-900">Cargo Type Selector</h2>
-          <p className="mb-4 text-sm text-gray-500">
-            Select a cargo type. Choosing Hazardous Materials reveals a UN number field.
-          </p>
-          <CargoTypeSelector onSelect={(t: CargoType) => console.log('selected:', t)} />
+          <h2 className="mb-1 text-base font-semibold text-gray-900">CO₂ Emissions Calculator</h2>
+          <p className="mb-4 text-sm text-gray-500">Estimate the carbon footprint of a shipment.</p>
+          <EmissionsCalculator />
         </section>
 
         <SandboxTabs
