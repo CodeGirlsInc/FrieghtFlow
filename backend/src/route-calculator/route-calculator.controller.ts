@@ -8,6 +8,12 @@ import {
 import { ShipmentsService } from '../shipments/shipments.service';
 import { RouteCalculatorService } from './route-calculator.service';
 
+interface ShipmentWithCoords {
+  origin: { latitude?: number; longitude?: number };
+  destination: { latitude?: number; longitude?: number };
+  weightKg: number;
+}
+
 @Controller('shipments')
 export class RouteCalculatorController {
   constructor(
@@ -23,13 +29,14 @@ export class RouteCalculatorController {
       throw new NotFoundException('Shipment not found');
     }
 
-    const { origin, destination, weight } = shipment;
+    const typed = shipment as unknown as ShipmentWithCoords;
+    const { origin, destination, weightKg } = typed;
 
     if (
-      !origin.latitude ||
-      !origin.longitude ||
-      !destination.latitude ||
-      !destination.longitude
+      !origin?.latitude ||
+      !origin?.longitude ||
+      !destination?.latitude ||
+      !destination?.longitude
     ) {
       throw new UnprocessableEntityException(
         'Shipment is missing coordinates on either the origin or destination',
@@ -51,7 +58,7 @@ export class RouteCalculatorController {
     const carbonEstimateKg =
       this.routeCalculatorService.estimateCarbonFootprint(
         distanceKm,
-        weight,
+        weightKg / 1000,
       );
 
     return {

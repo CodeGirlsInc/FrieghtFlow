@@ -6,9 +6,10 @@ import { Shipment } from './entities/shipment.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
 import { QuotesController } from './quotes.controller';
 import { EtaService } from './eta.service';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Shipment, ShipmentStatusHistory])],
+  imports: [TypeOrmModule.forFeature([Shipment, ShipmentStatusHistory]), CacheModule],
   controllers: [ShipmentsController, QuotesController],
   providers: [ShipmentsService, EtaService],
   exports: [ShipmentsService],
