@@ -19,6 +19,7 @@ import {
 import { AddressesService } from './addresses.service';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
+import { AddressResponseDto } from './dto/address-response.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 
@@ -37,6 +38,11 @@ export class AddressesController {
 
   @Get()
   @ApiOperation({ summary: 'List all saved addresses' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of saved addresses',
+    type: [AddressResponseDto],
+  })
   findAll(@CurrentUser() user: User) {
     return this.addressesService.findAll(user.id);
   }

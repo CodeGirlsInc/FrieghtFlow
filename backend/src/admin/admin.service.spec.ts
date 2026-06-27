@@ -1,4 +1,3 @@
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AdminService } from './admin.service';
@@ -69,12 +68,20 @@ describe('AdminService', () => {
   describe('listUsers', () => {
     it('should return cached data if available for carriers', async () => {
       const query = { role: UserRole.CARRIER, page: 1, limit: 10 };
-      const cachedData = { data: [], total: 0, page: 1, limit: 10, totalPages: 1 };
+      const cachedData = {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+      };
       mockCacheManager.get.mockResolvedValue(cachedData);
 
       const result = await service.listUsers(query);
 
-      expect(mockCacheManager.get).toHaveBeenCalledWith(`carriers:${JSON.stringify(query)}`);
+      expect(mockCacheManager.get).toHaveBeenCalledWith(
+        `carriers:${JSON.stringify(query)}`,
+      );
       expect(response.header).toHaveBeenCalledWith('X-Cache', 'HIT');
       expect(result).toEqual(cachedData);
       expect(userRepository.findAndCount).not.toHaveBeenCalled();
@@ -88,9 +95,14 @@ describe('AdminService', () => {
 
       const result = await service.listUsers(query);
 
-      expect(mockCacheManager.get).toHaveBeenCalledWith(`carriers:${JSON.stringify(query)}`);
+      expect(mockCacheManager.get).toHaveBeenCalledWith(
+        `carriers:${JSON.stringify(query)}`,
+      );
       expect(userRepository.findAndCount).toHaveBeenCalled();
-      expect(mockCacheManager.set).toHaveBeenCalledWith(`carriers:${JSON.stringify(query)}`, dbData);
+      expect(mockCacheManager.set).toHaveBeenCalledWith(
+        `carriers:${JSON.stringify(query)}`,
+        dbData,
+      );
       expect(response.header).toHaveBeenCalledWith('X-Cache', 'MISS');
       expect(result).toEqual(dbData);
     });

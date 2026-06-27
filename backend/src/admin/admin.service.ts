@@ -1,4 +1,3 @@
-
 import {
   Injectable,
   NotFoundException,
@@ -66,7 +65,8 @@ export class AdminService {
 
   async listUsers(query: QueryUsersDto): Promise<PaginatedUsers> {
     if (query.role === UserRole.CARRIER) {
-      const cachedData = await this.carrierCacheService.getCarriers<PaginatedUsers>(query);
+      const cachedData =
+        await this.carrierCacheService.getCarriers<PaginatedUsers>(query);
       if (cachedData) {
         this.request.res.header('X-Cache', 'HIT');
         return cachedData;
@@ -87,7 +87,13 @@ export class AdminService {
       take: limit,
     });
 
-    const result = { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    const result = {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
 
     if (query.role === UserRole.CARRIER) {
       await this.carrierCacheService.setCarriers(query, result as any);

@@ -142,7 +142,7 @@ export class BidsService {
     }
     if (shipment.status !== ShipmentStatus.PENDING) {
       throw new BadRequestException('Shipment is no longer accepting bids');
-    }   
+    }
 
     const bid = await this.bidRepo.findOne({
       where: { id: bidId, shipmentId },
@@ -150,7 +150,9 @@ export class BidsService {
     if (!bid) throw new NotFoundException(`Bid ${bidId} not found`);
 
     if (this.isBidExpired(bid)) {
-      throw new BadRequestException('This bid has expired and can no longer be accepted');
+      throw new BadRequestException(
+        'This bid has expired and can no longer be accepted',
+      );
     }
 
     bid.status = BidStatus.ACCEPTED;

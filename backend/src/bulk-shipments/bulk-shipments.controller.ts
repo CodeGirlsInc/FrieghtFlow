@@ -23,7 +23,9 @@ export class BulkShipmentsController {
   }
 
   @Post('update-status')
-  @ApiOperation({ summary: 'Update status of multiple shipments at once (max 50)' })
+  @ApiOperation({
+    summary: 'Update status of multiple shipments at once (max 50)',
+  })
   updateStatus(@CurrentUser() user: User, @Body() dto: BulkUpdateStatusDto) {
     return this.bulkShipmentsService.updateStatus(user.id, dto.ids, dto.status);
   }

@@ -16,7 +16,10 @@ describe('BidExpiryService', () => {
       providers: [
         BidExpiryService,
         { provide: getRepositoryToken(Bid), useValue: mockBidRepo },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(72) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue(72) },
+        },
       ],
     }).compile();
     service = module.get(BidExpiryService);

@@ -3,7 +3,12 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ShipmentAnalyticsService } from './shipment-analytics.service';
 import { Shipment } from '../../shipments/entities/shipment.entity';
 
-function makeQb(statusRows: object[], weeklyRows: object[], durationRow: object, routeRows: object[]) {
+function makeQb(
+  statusRows: object[],
+  weeklyRows: object[],
+  durationRow: object,
+  routeRows: object[],
+) {
   let cloneCallCount = 0;
   const results = [statusRows, weeklyRows, [durationRow], routeRows];
 
@@ -40,7 +45,10 @@ describe('ShipmentAnalyticsService', () => {
 
   beforeEach(async () => {
     const qb = makeQb(
-      [{ status: 'completed', count: '10' }, { status: 'pending', count: '5' }],
+      [
+        { status: 'completed', count: '10' },
+        { status: 'pending', count: '5' },
+      ],
       [{ week: '2024-01-01', count: '4' }],
       { avg_hours: '48.5' },
       [{ origin: 'Lagos', destination: 'Abuja', count: '8' }],
@@ -71,10 +79,17 @@ describe('ShipmentAnalyticsService', () => {
   });
 
   it('applies startDate and endDate filters when provided', async () => {
-    await service.getAnalytics({ startDate: '2024-01-01', endDate: '2024-12-31' });
+    await service.getAnalytics({
+      startDate: '2024-01-01',
+      endDate: '2024-12-31',
+    });
     const qb = mockRepo.createQueryBuilder('s') as { andWhere: jest.Mock };
-    expect(qb.andWhere).toHaveBeenCalledWith('s.created_at >= :startDate', { startDate: '2024-01-01' });
-    expect(qb.andWhere).toHaveBeenCalledWith('s.created_at <= :endDate', { endDate: '2024-12-31' });
+    expect(qb.andWhere).toHaveBeenCalledWith('s.created_at >= :startDate', {
+      startDate: '2024-01-01',
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('s.created_at <= :endDate', {
+      endDate: '2024-12-31',
+    });
   });
 
   it('returns null avgDeliveryDurationHours when no rows', async () => {

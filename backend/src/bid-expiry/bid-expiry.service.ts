@@ -16,7 +16,8 @@ export class BidExpiryService {
 
   @Cron(CronExpression.EVERY_HOUR)
   async expireStaleBids(): Promise<void> {
-    const expiryHours = this.configService.get<number>('BID_EXPIRY_HOURS') ?? 72;
+    const expiryHours =
+      this.configService.get<number>('BID_EXPIRY_HOURS') ?? 72;
     const threshold = new Date(Date.now() - expiryHours * 3600_000);
 
     const result = await this.bidRepo.update(
