@@ -19,6 +19,7 @@ import * as Joi from 'joi';
         JWT_SECRET: Joi.string().default('secret'),
         JWT_EXPIRES_IN: Joi.string().default('15m'),
         REDIS_URL: Joi.string().default('redis://localhost:6379'),
+        FRONTEND_URL: Joi.string().default('http://localhost:3000'),
         CLOUDINARY_CLOUD_NAME: Joi.string().optional(),
         CLOUDINARY_API_KEY: Joi.string().optional(),
         CLOUDINARY_API_SECRET: Joi.string().optional(),
@@ -29,7 +30,10 @@ import * as Joi from 'joi';
         STELLAR_SECRET: Joi.string().optional(),
         STELLAR_NETWORK: Joi.string().optional(),
       }),
-      validationOptions: { abortEarly: false },
+      validationOptions: {
+        allowUnknown: true,
+        abortEarly: false,
+      },
     }),
   ],
 })

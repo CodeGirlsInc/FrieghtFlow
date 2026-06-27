@@ -9,8 +9,8 @@ import { ShipmentsService } from '../shipments/shipments.service';
 import { RouteCalculatorService } from './route-calculator.service';
 
 interface ShipmentWithCoords {
-  origin: { latitude?: number; longitude?: number };
-  destination: { latitude?: number; longitude?: number };
+  origin: { latitude: number; longitude: number } | string;
+  destination: { latitude: number; longitude: number } | string;
   weightKg: number;
 }
 
@@ -29,29 +29,36 @@ export class RouteCalculatorController {
       throw new NotFoundException('Shipment not found');
     }
 
-    const typed = shipment as unknown as ShipmentWithCoords;
-    const { origin, destination, weightKg } = typed;
+    const shipmentData = shipment as unknown as ShipmentWithCoords;
+    const { origin, destination, weightKg } = shipmentData;
+
+    const originCoords = typeof origin === 'string' ? null : origin;
+    const destinationCoords =
+      typeof destination === 'string' ? null : destination;
 
     if (
-      !origin?.latitude ||
-      !origin?.longitude ||
-      !destination?.latitude ||
-      !destination?.longitude
+      !originCoords?.latitude ||
+      !originCoords?.longitude ||
+      !destinationCoords?.latitude ||
+      !destinationCoords?.longitude
     ) {
       throw new UnprocessableEntityException(
         'Shipment is missing coordinates on either the origin or destination',
       );
     }
 
-    const originCoords: [number, number] = [origin.latitude, origin.longitude];
-    const destinationCoords: [number, number] = [
-      destination.latitude,
-      destination.longitude,
+    const originPair: [number, number] = [
+      originCoords.latitude,
+      originCoords.longitude,
+    ];
+    const destinationPair: [number, number] = [
+      destinationCoords.latitude,
+      destinationCoords.longitude,
     ];
 
     const distanceKm = this.routeCalculatorService.calculateDistance(
-      originCoords,
-      destinationCoords,
+      originPair,
+      destinationPair,
     );
     const estimatedHours =
       this.routeCalculatorService.estimateDuration(distanceKm);

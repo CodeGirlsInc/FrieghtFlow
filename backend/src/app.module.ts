@@ -1,6 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ExecutionContext } from '@nestjs/common';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { HealthModule } from './health/health.module';
+import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -103,9 +106,11 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         port: +configService.get('DATABASE_PORT'),
         host: configService.get('DATABASE_HOST'),
         autoLoadEntities: true,
-        synchronize: configService.get('NODE_ENV') !== 'production',
+        synchronize: false,
       }),
     }),
+    PrometheusModule.register(),
+    HealthModule,
     AppMailerModule,
     UsersModule,
     AuthModule,
@@ -144,4 +149,8 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

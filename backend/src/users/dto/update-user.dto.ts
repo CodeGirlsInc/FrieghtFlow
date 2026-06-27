@@ -9,7 +9,7 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsUrl()
   avatarUrl?: string;
 
-  @ApiPropertyOptional({ description: "User's blockchain wallet address" })
+  @ApiPropertyOptional({ example: '0x1234...abcd' })
   @IsOptional()
   @IsString()
   walletAddress?: string;
