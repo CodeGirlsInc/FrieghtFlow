@@ -1,27 +1,30 @@
 import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
-import { DbHealthIndicator } from './indicators/db.health.indicator';
-import { SmtpHealthIndicator } from './indicators/smtp.health.indicator';
-import { CloudinaryHealthIndicator } from './indicators/cloudinary.health.indicator';
+import {
+  HealthCheck,
+  HealthCheckService,
+  TypeOrmHealthIndicator,
+} from '@nestjs/terminus';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
+import { RedisHealthIndicator } from './redis-health.indicator';
 
+@ApiTags('Health')
 @Controller('health')
 export class HealthController {
   constructor(
-    private health: HealthCheckService,
-    private dbHealthIndicator: DbHealthIndicator,
-    private smtpHealthIndicator: SmtpHealthIndicator,
-    private cloudinaryHealthIndicator: CloudinaryHealthIndicator,
+    private readonly health: HealthCheckService,
+    private readonly db: TypeOrmHealthIndicator,
+    private readonly redis: RedisHealthIndicator,
   ) {}
 
   @Get()
   @Public()
   @HealthCheck()
+  @ApiOperation({ summary: 'Application health check with DB and Redis indicators' })
   check() {
     return this.health.check([
-      () => this.dbHealthIndicator.isHealthy('database'),
-      () => this.smtpHealthIndicator.isHealthy('smtp'),
-      () => this.cloudinaryHealthIndicator.isHealthy('cloudinary'),
+      () => this.db.pingCheck('database'),
+      () => this.redis.isHealthy('redis'),
     ]);
   }
 }
