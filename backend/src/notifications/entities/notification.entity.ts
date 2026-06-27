@@ -35,7 +35,11 @@ export class Notification {
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column({ type: 'enum', enum: NotificationType, default: NotificationType.GENERAL })
+  @Column({
+    type: 'enum',
+    enum: NotificationType,
+    default: NotificationType.GENERAL,
+  })
   type: NotificationType;
 
   @Column({ type: 'varchar', length: 255 })

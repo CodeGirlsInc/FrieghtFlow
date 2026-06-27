@@ -29,10 +29,7 @@ export class MessagingController {
   }
 
   @Post()
-  findOrCreate(
-    @Body() dto: CreateConversationDto,
-    @CurrentUser() user: User,
-  ) {
+  findOrCreate(@Body() dto: CreateConversationDto, @CurrentUser() user: User) {
     return this.messagingService.findOrCreateConversation(dto, user);
   }
 
