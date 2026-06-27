@@ -13,6 +13,7 @@ import {
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { UserRole } from '../../../src/common/enums/role.enum';
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -80,7 +81,7 @@ describe('AuthService', () => {
         password: 'password',
         firstName: 'Test',
         lastName: 'User',
-        role: 'user',
+        role: UserRole.SHIPPER,
       };
       const user = {
         id: '1',
@@ -113,7 +114,7 @@ describe('AuthService', () => {
         password: 'password',
         firstName: 'Test',
         lastName: 'User',
-        role: 'user',
+        role: UserRole.SHIPPER,
       };
       mockUsersService.create.mockRejectedValue(
         new ConflictException('Email already exists'),
@@ -130,7 +131,7 @@ describe('AuthService', () => {
         password: '123',
         firstName: 'Test',
         lastName: 'User',
-        role: 'user',
+        role: UserRole.SHIPPER,
       };
       mockUsersService.create.mockRejectedValue(
         new BadRequestException('Password is too weak'),
@@ -150,7 +151,7 @@ describe('AuthService', () => {
         passwordHash: 'hashedPassword',
         refreshToken: null,
         isActive: true,
-        role: 'user',
+        role: UserRole.SHIPPER,
       };
       mockJwtService.signAsync.mockResolvedValue('test-token');
 
@@ -179,7 +180,7 @@ describe('AuthService', () => {
         passwordHash: 'hashedPassword',
         refreshToken: null,
         isActive: false,
-        role: 'user',
+        role: UserRole.SHIPPER,
       };
 
       await expect(authService.login(user as any)).rejects.toThrow(
@@ -196,7 +197,7 @@ describe('AuthService', () => {
         passwordHash: 'hashedPassword',
         refreshToken: 'hashed-refresh-token',
         isActive: true,
-        role: 'user',
+        role: UserRole.SHIPPER,
       };
       mockUsersService.findOne.mockResolvedValue(user);
       mockUsersService.findByEmail.mockResolvedValue(user as any);
@@ -223,7 +224,7 @@ describe('AuthService', () => {
         passwordHash: 'hashedPassword',
         refreshToken: 'hashed-refresh-token',
         isActive: true,
-        role: 'user',
+        role: UserRole.SHIPPER,
       };
       mockUsersService.findOne.mockResolvedValue(user);
       mockUsersService.findByEmail.mockResolvedValue(user as any);

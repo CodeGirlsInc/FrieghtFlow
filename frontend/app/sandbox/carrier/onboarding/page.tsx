@@ -15,8 +15,8 @@ const step1Schema = z.object({
 
 const step2Schema = z.object({
   vehicleTypes: z.string().min(2, 'Vehicle types are required'),
-  capacityTons: z.coerce.number().positive('Capacity must be positive'),
-  fleetCount: z.coerce.number().int().positive('Fleet count must be positive'),
+  capacityTons: z.number().positive('Capacity must be positive'),
+  fleetCount: z.number().int().positive('Fleet count must be positive'),
 });
 
 const step3Schema = z.object({
@@ -112,10 +112,10 @@ function Step2Form({ data, onNext, onBack }: { data: Partial<Step2>; onNext: (d:
         <input className={inputCls} {...register('vehicleTypes')} placeholder="Truck, Flatbed" />
       </Field>
       <Field label="Total Capacity (tons)" error={errors.capacityTons?.message}>
-        <input className={inputCls} type="number" step="0.1" {...register('capacityTons')} placeholder="50" />
+        <input className={inputCls} type="number" step="0.1" {...register('capacityTons', { valueAsNumber: true })} placeholder="50" />
       </Field>
       <Field label="Fleet Count" error={errors.fleetCount?.message}>
-        <input className={inputCls} type="number" {...register('fleetCount')} placeholder="10" />
+        <input className={inputCls} type="number" {...register('fleetCount', { valueAsNumber: true })} placeholder="10" />
       </Field>
       <div className="flex gap-3 mt-2">
         <button type="button" onClick={onBack} className="flex-1 rounded-md border border-gray-300 py-2 text-sm text-gray-700 hover:bg-gray-50">← Back</button>

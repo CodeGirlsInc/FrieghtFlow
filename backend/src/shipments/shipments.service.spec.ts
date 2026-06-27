@@ -38,6 +38,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     updatedAt: new Date(),
     twoFactorSecret: null,
     recoveryCodes: [],
+    avatarUrl: '',
     ...overrides,
   };
 }
