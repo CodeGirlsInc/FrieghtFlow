@@ -281,7 +281,7 @@ export class AuthService {
   private buildAuthResponse(user: User, tokens: AuthTokens): AuthResponse {
     const { passwordHash: _ph, refreshToken: _rt, ...safeUser } = user;
     return {
-      user: safeUser,
+      user: { ...safeUser, avatarUrl: user.avatarUrl },
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     };

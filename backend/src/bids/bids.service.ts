@@ -142,16 +142,15 @@ export class BidsService {
     }
     if (shipment.status !== ShipmentStatus.PENDING) {
       throw new BadRequestException('Shipment is no longer accepting bids');
-    }
+    }   
 
-    const bid = await this.getBidOrFail(bidId, shipmentId);
-    if (bid.status !== BidStatus.PENDING) {
-      throw new BadRequestException('Bid is no longer pending');
-    }
+    const bid = await this.bidRepo.findOne({
+      where: { id: bidId, shipmentId },
+    });
+    if (!bid) throw new NotFoundException(`Bid ${bidId} not found`);
+
     if (this.isBidExpired(bid)) {
-      throw new BadRequestException(
-        'This bid has expired and cannot be accepted',
-      );
+      throw new BadRequestException('This bid has expired and can no longer be accepted');
     }
 
     bid.status = BidStatus.ACCEPTED;

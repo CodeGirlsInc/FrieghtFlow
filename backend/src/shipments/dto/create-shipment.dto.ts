@@ -11,30 +11,56 @@ import {
   IsISO4217CurrencyCode,
   IsEnum,
   IsBoolean,
+  registerDecorator,
+  ValidationArguments,
+  ValidationOptions,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CargoCategory } from '../../common/enums/cargo-category.enum';
 
+function IsPriceOrRFQ(validationOptions?: ValidationOptions) {
+  return function (target: object): void {
+    const decoratorTarget = target as Parameters<
+      typeof registerDecorator
+    >[0]['target'];
+    registerDecorator({
+      name: 'isPriceOrRFQ',
+      target: decoratorTarget,
+      propertyName: '',
+      options: validationOptions,
+      validator: {
+        validate(_value: unknown, args: ValidationArguments) {
+          const dto = args.object as CreateShipmentDto;
+          return typeof dto.price === 'number' || dto.isRFQ === true;
+        },
+        defaultMessage: () =>
+          'Either price must be provided or isRFQ must be true',
+      },
+    });
+  };
+}
+
+@IsPriceOrRFQ()
 export class CreateShipmentDto {
   @ApiProperty({ example: 'Lagos, Nigeria' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  origin: string;
+  origin!: string;
 
   @ApiProperty({ example: 'Abuja, Nigeria' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  destination: string;
+  destination!: string;
 
   @ApiProperty({ example: 'Electronics — 200 units of laptop computers' })
   @IsString()
   @IsNotEmpty()
   @MinLength(10)
   @MaxLength(2000)
-  cargoDescription: string;
+  cargoDescription!: string;
 
   @ApiPropertyOptional({
     enum: CargoCategory,
@@ -48,7 +74,7 @@ export class CreateShipmentDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
-  weightKg: number;
+  weightKg!: number;
 
   @ApiPropertyOptional({ example: 2.5, description: 'Volume in cubic metres' })
   @IsOptional()
@@ -57,14 +83,23 @@ export class CreateShipmentDto {
   @IsPositive()
   volumeCbm?: number;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 1500.0,
     description: 'Quoted price for the shipment',
   })
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
-  price: number;
+  price?: number;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Open the shipment to RFQ pricing',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isRFQ?: boolean;
 
   @ApiPropertyOptional({ example: 'USD', default: 'USD' })
   @IsOptional()

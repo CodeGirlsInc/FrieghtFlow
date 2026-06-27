@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../stores/auth.store';
 import { useShipmentSocket } from '../../hooks/useShipmentSocket';
+import { useNotificationStore } from '../../stores/notification.store';
 import { NotificationBell } from '../../components/notifications/notification-bell';
 import { ThemeToggle } from '../../components/ui/ThemeToggle';
 import { MobileNav } from '../../components/layout/mobile-nav';
@@ -14,6 +15,7 @@ const SHIPPER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'My Shipments' },
   { href: '/shipments/new', label: 'Create Shipment' },
+  { href: '/messages', label: 'Messages' },
   { href: '/documents', label: 'Documents' },
 ];
 
@@ -21,6 +23,7 @@ const CARRIER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'My Jobs' },
   { href: '/marketplace', label: 'Marketplace' },
+  { href: '/messages', label: 'Messages' },
   { href: '/bids', label: 'My Bids' },
   { href: '/documents', label: 'Documents' },
 ];
@@ -34,11 +37,13 @@ const ADMIN_NAV = [
   { href: '/admin/users', label: 'Manage Users' },
   { href: '/admin/shipments', label: 'Shipment Oversight' },
   { href: '/admin/disputes', label: 'Disputes' },
+  { href: '/messages', label: 'Messages' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
+  const { messageUnreadCount } = useNotificationStore();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Connect to WebSocket and receive real-time shipment notifications
@@ -103,6 +108,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 ? pathname === item.href
                 : pathname.startsWith(item.href);
 
+            const isMessages = item.href === '/messages';
+
             return (
               <Link
                 key={item.href}
@@ -115,6 +122,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 )}
               >
                 {item.label}
+                {isMessages && messageUnreadCount > 0 && (
+                  <span className="ml-auto h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+                    {messageUnreadCount > 9 ? '9+' : messageUnreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}

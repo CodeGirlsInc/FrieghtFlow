@@ -19,6 +19,9 @@ function makeUser(): User {
     role: UserRole.SHIPPER,
     isEmailVerified: true,
     isActive: true,
+    isTwoFactorEnabled: false,
+    twoFactorSecret: null,
+    recoveryCodes: [],
     walletAddress: null,
     refreshToken: null,
     verificationToken: null,
@@ -27,6 +30,9 @@ function makeUser(): User {
     resetPasswordExpiry: null,
     createdAt: new Date(),
     updatedAt: new Date(),
+    isTwoFactorEnabled: false,
+    twoFactorSecret: undefined as any,
+    recoveryCodes: [],
   };
 }
 
@@ -46,6 +52,7 @@ function makeShipment(): Shipment {
     price: 5000,
     currency: 'USD',
     cargoCategory: null,
+    isRFQ: false,
     isInsured: false,
     insurancePremium: null,
     status: ShipmentStatus.IN_TRANSIT,
@@ -143,7 +150,9 @@ describe('WebhooksService', () => {
     );
 
     expect(webhookRepo.find).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: shipment.shipperId } }),
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: shipment.shipperId }),
+      }),
     );
     expect(global.fetch).toHaveBeenCalledWith(
       'https://example.com/webhook',
@@ -151,7 +160,7 @@ describe('WebhooksService', () => {
         method: 'POST',
         headers: expect.objectContaining({
           'x-freightflow-event': 'shipment.status_changed',
-          'x-freightflow-signature': expect.any(String),
+          'X-FreightFlow-Signature': expect.any(String),
         }),
       }),
     );

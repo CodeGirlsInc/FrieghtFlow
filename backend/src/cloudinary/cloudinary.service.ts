@@ -20,11 +20,15 @@ export class CloudinaryService {
     return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         { folder, public_id: publicId, resource_type: 'auto' },
-        (error: unknown, result: UploadApiResponse) => {
-          if (error)
-            return reject(
-              error instanceof Error ? error : new Error(JSON.stringify(error)),
-            );
+        (error: unknown, result?: UploadApiResponse) => {
+          if (error) {
+            if (error instanceof Error) return reject(error);
+            const message =
+              typeof error === 'string' ? error : 'Cloudinary upload failed';
+            return reject(new Error(message));
+          }
+          if (!result)
+            return reject(new Error('Cloudinary upload returned no result'));
           resolve(result);
         },
       );

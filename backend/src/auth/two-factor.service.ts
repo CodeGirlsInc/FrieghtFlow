@@ -6,12 +6,18 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { generateSecret, verify, generateURI } from 'otplib';
+import { Repository, IsNull } from 'typeorm';
+import { TOTP, generateURI } from 'otplib';
+// import { authenticator } from 'otplib';
+import { authenticator } from '@otplib/preset-v11';
 import * as qrcode from 'qrcode';
 import * as bcrypt from 'bcrypt';
 import { Redis } from 'ioredis';
 import { User } from '../users/entities/user.entity';
 import { TwoFactorRecovery } from '../users/entities/two-factor-recovery.entity';
 import { IsNull } from 'typeorm';
+
+const authenticator = new TOTP();
 
 @Injectable()
 export class TwoFactorService {
@@ -32,11 +38,7 @@ export class TwoFactorService {
   async initiateSetup(userId: number, email: string) {
     const secret = generateSecret();
     const appName = 'YieldLadder platform';
-    const otpauthUrl = generateURI({
-      issuer: appName,
-      label: email,
-      secret: secret,
-    });
+    const otpauthUrl = generateURI({ secret, issuer: appName, label: email });
     const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
 
     // Cache the temporary secret safely inside Redis with a strict 10 minute TTL
@@ -56,8 +58,8 @@ export class TwoFactorService {
       );
     }
 
-    const isValid = await verify({ token: otp, secret });
-    if (!isValid.valid) {
+    const isValid = authenticator.verify({ token: otp, secret });
+    if (!isValid) {
       throw new BadRequestException(
         'Invalid confirmation code. Verification rejected.',
       );
@@ -110,13 +112,14 @@ export class TwoFactorService {
     }
 
     // Path A: Validate via standard time-based dynamic OTP first
-    const isTotpValid = await verify({
+    const isTotpValid = authenticator.verify({
       token: inputToken,
       secret: user.twoFactorSecret,
     });
-    if (isTotpValid.valid) return true;
+    if (isTotpValid) return true;
 
     // Path B: Fall back to un-used emergency recovery tokens
+    // const records = await this.recoveryRepository.find({ where: { userId, usedAt: null } });
     const records = await this.recoveryRepository.find({
       where: { userId, usedAt: IsNull() },
     });
@@ -135,7 +138,7 @@ export class TwoFactorService {
 
   async deactivate(userId: number) {
     await this.userRepository.update(userId, {
-      twoFactorSecret: '',
+      twoFactorSecret: '' as unknown as string,
       isTwoFactorEnabled: false,
     });
     // Wipe matching system recovery database objects safely

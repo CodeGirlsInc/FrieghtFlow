@@ -10,6 +10,7 @@ import { BidsService } from './bids.service';
 import { Bid, BidStatus } from './entities/bid.entity';
 import { Shipment } from '../shipments/entities/shipment.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
+import { User } from '../users/entities/user.entity';
 
 const mockBidRepo = () => ({
   create: jest.fn(),
@@ -22,6 +23,11 @@ const mockBidRepo = () => ({
 const mockShipmentRepo = () => ({
   findOne: jest.fn(),
   update: jest.fn(),
+});
+
+const mockUserRepo = () => ({
+  findOne: jest.fn(),
+  find: jest.fn(),
 });
 
 const mockEventEmitter = () => ({ emit: jest.fn() });
@@ -58,6 +64,7 @@ describe('BidsService', () => {
         BidsService,
         { provide: getRepositoryToken(Bid), useFactory: mockBidRepo },
         { provide: getRepositoryToken(Shipment), useFactory: mockShipmentRepo },
+        { provide: getRepositoryToken(User), useFactory: mockUserRepo },
         { provide: EventEmitter2, useFactory: mockEventEmitter },
       ],
     }).compile();
