@@ -6,6 +6,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { TOTP, generateURI } from 'otplib';
+// import { authenticator } from 'otplib';
+import { authenticator } from '@otplib/preset-v11';
 import * as qrcode from 'qrcode';
 import * as bcrypt from 'bcrypt';
 import { Redis } from 'ioredis';
@@ -53,8 +55,8 @@ export class TwoFactorService {
       );
     }
 
-    const isValid = await authenticator.verify(otp, { secret });
-    if (!isValid.valid) {
+    const isValid = authenticator.verify({ token: otp, secret });
+    if (!isValid) {
       throw new BadRequestException(
         'Invalid confirmation code. Verification rejected.',
       );
@@ -107,12 +109,14 @@ export class TwoFactorService {
     }
 
     // Path A: Validate via standard time-based dynamic OTP first
-    const isTotpValid = await authenticator.verify(inputToken, {
+    const isTotpValid = authenticator.verify({
+      token: inputToken,
       secret: user.twoFactorSecret,
     });
-    if (isTotpValid.valid) return true;
+    if (isTotpValid) return true;
 
     // Path B: Fall back to un-used emergency recovery tokens
+    // const records = await this.recoveryRepository.find({ where: { userId, usedAt: null } });
     const records = await this.recoveryRepository.find({
       where: { userId, usedAt: IsNull() },
     });

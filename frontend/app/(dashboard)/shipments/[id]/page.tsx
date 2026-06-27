@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { Shipment, ShipmentStatus, ShipmentStatusHistory } from '../../../../types/shipment.types';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
+import { messagingApi } from '../../../../lib/api/messaging.api';
 import { bidApi, Bid, CounterBidPayload } from '../../../../lib/api/bid.api';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { StatusBadge } from '../../../../components/shipment/status-badge';
@@ -332,6 +333,7 @@ export default function ShipmentDetailPage() {
   const [history, setHistory] = useState<ShipmentStatusHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [msgLoading, setMsgLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('details');
 
   const reload = useCallback(async () => {
@@ -387,6 +389,19 @@ export default function ShipmentDetailPage() {
   const isCarrier = user?.id === shipment.carrierId;
   const isAdmin = user?.role === 'admin';
   const showBidsTab = isShipper && shipment.status === ShipmentStatus.PENDING;
+
+  const handleMessage = async () => {
+    if (!shipment.carrierId) return;
+    setMsgLoading(true);
+    try {
+      const conv = await messagingApi.getOrCreateConversation(shipment.id);
+      router.push(`/messages?conversationId=${conv.id}`);
+    } catch {
+      toast.error('Could not open conversation');
+    } finally {
+      setMsgLoading(false);
+    }
+  };
 
   const formattedPrice = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -620,6 +635,18 @@ export default function ShipmentDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     This shipment is {shipment.status} — no further actions available.
                   </p>
+                )}
+
+                {/* Message button — visible once a carrier is assigned */}
+                {shipment.carrierId && (isShipper || isCarrier) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={msgLoading}
+                    onClick={handleMessage}
+                  >
+                    {msgLoading ? 'Opening…' : isShipper ? 'Message Carrier' : 'Message Shipper'}
+                  </Button>
                 )}
               </CardContent>
             </Card>

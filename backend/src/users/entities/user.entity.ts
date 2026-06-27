@@ -83,11 +83,14 @@ export class User {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
+  @Column({ nullable: true })
+  avatarUrl: string;
+
   @Column({ default: false })
   isTwoFactorEnabled: boolean;
 
   @Column({ nullable: true, select: false })
-  twoFactorSecret: string;
+  twoFactorSecret: string | null;
 
   @OneToMany(() => TwoFactorRecovery, (recovery) => recovery.user)
   recoveryCodes: TwoFactorRecovery[];
