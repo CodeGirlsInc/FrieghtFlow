@@ -5,6 +5,7 @@ import type { ShipmentStep } from './components/ShipmentStepper';
 import type { CarrierQuote } from './components/QuoteComparisonTable';
 import type { ShipmentDocument } from './components/DocumentChecklist';
 import type { CostItem } from './components/CostBreakdownChart';
+import { InsuranceSelectorDemo } from './components/InsuranceSelectorDemo';
 import { CurrencyToggle } from './components/CurrencyToggle';
 import { useCurrency } from '@/hooks/useCurrency';
 import { CarrierVerificationBadge } from './components/CarrierVerificationBadge';
@@ -217,6 +218,24 @@ function CurrencyDemo() {
 export default function SandboxPage() {
   return (
     <main className="min-h-screen bg-gray-50 px-6 py-12">
+      <div className="mx-auto max-w-5xl space-y-12">
+        <div>
+          <h1 className="mb-1 text-2xl font-bold text-gray-900">Component Sandbox</h1>
+          <p className="mb-8 text-sm text-gray-500">FrieghtFlow UI component demos</p>
+          <SandboxTabs
+            stepperDemos={STEPPER_DEMOS}
+            quotes={MOCK_QUOTES}
+            checklistDemos={CHECKLIST_DEMOS}
+            costDemos={COST_DEMOS}
+          />
+        </div>
+
+        {/* Insurance Selector demo */}
+        <div>
+          <h2 className="mb-1 text-xl font-bold text-gray-900">Insurance Selector</h2>
+          <p className="mb-6 text-sm text-gray-500">Select a tier and enter a declared value to see the real-time premium.</p>
+          <InsuranceSelectorDemo />
+        </div>
       <div className="mx-auto max-w-5xl">
         {/* Header with currency toggle */}
         <div className="mb-8 flex items-center justify-between">
