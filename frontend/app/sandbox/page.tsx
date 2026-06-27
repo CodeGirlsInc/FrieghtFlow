@@ -8,6 +8,8 @@ import type { CostItem } from './components/CostBreakdownChart';
 import { CurrencyToggle } from './components/CurrencyToggle';
 import { useCurrency } from '@/hooks/useCurrency';
 import { CarrierVerificationBadge } from './components/CarrierVerificationBadge';
+import { CargoTypeSelector } from './components/CargoTypeSelector';
+import type { CargoType } from './components/CargoTypeSelector';
 import { EmissionsCalculator } from './components/EmissionsCalculator';
 
 const STEPPER_DEMOS: {
