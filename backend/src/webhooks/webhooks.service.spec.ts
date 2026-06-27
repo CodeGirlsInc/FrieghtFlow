@@ -30,6 +30,9 @@ function makeUser(): User {
     resetPasswordExpiry: null,
     createdAt: new Date(),
     updatedAt: new Date(),
+    isTwoFactorEnabled: false,
+    twoFactorSecret: undefined as any,
+    recoveryCodes: [],
   };
 }
 

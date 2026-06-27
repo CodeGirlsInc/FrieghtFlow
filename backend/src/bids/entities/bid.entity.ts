@@ -53,7 +53,13 @@ export class Bid {
   @Column({ type: 'enum', enum: BidStatus, default: BidStatus.PENDING })
   status: BidStatus;
 
-  @Column({ name: 'counter_price', type: 'decimal', precision: 14, scale: 2, nullable: true })
+  @Column({
+    name: 'counter_price',
+    type: 'decimal',
+    precision: 14,
+    scale: 2,
+    nullable: true,
+  })
   counterPrice: number | null;
 
   @Column({ name: 'counter_message', type: 'text', nullable: true })

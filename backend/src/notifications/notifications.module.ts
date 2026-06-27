@@ -24,7 +24,11 @@ import { Notification } from './entities/notification.entity';
     }),
   ],
   controllers: [NotificationInboxController],
-  providers: [NotificationsService, NotificationsGateway, NotificationInboxService],
+  providers: [
+    NotificationsService,
+    NotificationsGateway,
+    NotificationInboxService,
+  ],
   exports: [NotificationInboxService],
 })
 export class NotificationsModule {}

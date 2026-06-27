@@ -33,7 +33,14 @@ export class NotificationInboxService {
       take: limit,
     });
     const unread = await this.repo.count({ where: { userId, isRead: false } });
-    return { items, total, unread, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      items,
+      total,
+      unread,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async markRead(id: string, userId: string): Promise<void> {

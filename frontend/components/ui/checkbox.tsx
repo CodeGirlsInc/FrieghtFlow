@@ -7,6 +7,10 @@ export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputE
 }
 
 export function Checkbox({ className, onCheckedChange, onChange, ...props }: CheckboxProps) {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange?.(e);
+    onCheckedChange?.(e.target.checked);
+  };
   return (
     <input
       type="checkbox"

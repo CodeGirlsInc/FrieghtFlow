@@ -328,7 +328,7 @@ function NotFound({ onBack }: { onBack: () => void }) {
       <div>
         <h1 className="text-lg font-bold">Carrier not found</h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-          This profile doesn't exist or hasn't been made public yet.
+          This profile doesn&apos;t exist or hasn&apos;t been made public yet.
         </p>
       </div>
       <Button variant="outline" onClick={onBack}>Go back</Button>

@@ -43,11 +43,11 @@ const registerSchema = z
       .regex(/[A-Z]/, 'Password must include at least one uppercase letter')
       .regex(/[0-9]/, 'Password must include at least one number'),
     confirmPassword: z.string().min(1, 'Please confirm your password'),
-    role: z.enum(['shipper', 'carrier'], {
-      required_error: 'Please select a role',
+    role: z.enum(['shipper', 'carrier'] as const, {
+      error: 'Please select a role',
     }),
     acceptTerms: z.literal(true, {
-      errorMap: () => ({ message: 'You must accept the terms to continue' }),
+      error: 'You must accept the terms to continue',
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
