@@ -16,6 +16,16 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": true,
     "strictBindCallApply": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@nestjs/*": ["./node_modules/@nestjs/*"],
+      "joi": ["./node_modules/joi"],
+      "joi/*": ["./node_modules/joi/*"],
+      "cache-manager": ["./node_modules/cache-manager"],
+      "cache-manager/*": ["./node_modules/cache-manager/*"],
+      "cache-manager-redis-yet": ["./node_modules/cache-manager-redis-yet"],
+      "@willsoto/nestjs-prometheus": ["./node_modules/@willsoto/nestjs-prometheus"],
+      "@willsoto/nestjs-prometheus/*": ["./node_modules/@willsoto/nestjs-prometheus/*"]
+    }
   }
 }

@@ -9,7 +9,9 @@ import {
   Res,
   ParseUUIDPipe,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -118,6 +120,8 @@ export class ShipmentsController {
   // ── Carrier actions ──────────────────────────────────────────────────────────
 
   @Get('marketplace')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(300000)
   @ApiOperation({ summary: 'Browse available (PENDING) shipments — carriers' })
   findMarketplace(@Query() query: QueryShipmentDto) {
     return this.shipmentsService.findMarketplace(query);
