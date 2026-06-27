@@ -39,6 +39,7 @@ import { ReputationCalculatorModule } from './reputation-calculator/reputation-c
 import { LocationUpdatesModule } from './location-updates/location-updates.module';
 import { ETAModule } from './eta/eta.module';
 import { BidExpiryModule } from './bid-expiry/bid-expiry.module';
+import { HealthModule } from './health/health.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -128,6 +129,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     MarketplaceSearchModule,
     OnboardingModule,
     RequestLoggerModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
