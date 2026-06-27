@@ -1,7 +1,13 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuditLogService } from './audit-log.service';
 import { QueryAuditLogDto } from './dto/query-audit-log.dto';
+import { PaginatedAuditLogResponseDto } from './dto/audit-log-response.dto';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums/role.enum';
@@ -18,6 +24,7 @@ export class AuditLogController {
   @ApiOperation({
     summary: 'Get paginated admin audit logs (filterable by action)',
   })
+  @ApiResponse({ status: 200, type: PaginatedAuditLogResponseDto })
   findAll(@Query() query: QueryAuditLogDto) {
     return this.auditLogService.findAll(query);
   }

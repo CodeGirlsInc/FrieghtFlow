@@ -24,7 +24,10 @@ describe('AuditLogController', () => {
   });
 
   it('should not have a DELETE endpoint', () => {
-    const prototype = Object.getPrototypeOf(controller);
+    const prototype = Object.getPrototypeOf(controller) as Record<
+      string,
+      unknown
+    >;
     const methodNames = Object.getOwnPropertyNames(prototype).filter(
       (name) => name !== 'constructor' && typeof prototype[name] === 'function',
     );
@@ -32,7 +35,7 @@ describe('AuditLogController', () => {
     for (const methodName of methodNames) {
       const httpMethod = Reflect.getMetadata(
         METHODS_METADATA,
-        prototype[methodName],
+        prototype[methodName] as object,
       );
       expect(httpMethod).not.toBe(RequestMethod.DELETE);
     }

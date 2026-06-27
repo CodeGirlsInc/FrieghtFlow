@@ -11,8 +11,8 @@ import { REQUEST } from '@nestjs/core';
 describe('AdminService', () => {
   let service: AdminService;
   let cacheService: CarrierCacheService;
-  let userRepository: any;
-  let response: any;
+  let userRepository: { findAndCount: jest.Mock };
+  let response: { header: jest.Mock };
 
   const mockUserRepository = {
     findAndCount: jest.fn(),
@@ -57,8 +57,10 @@ describe('AdminService', () => {
 
     service = module.get<AdminService>(AdminService);
     cacheService = module.get<CarrierCacheService>(CarrierCacheService);
-    userRepository = module.get(getRepositoryToken(User));
-    response = module.get(REQUEST).res;
+    userRepository = module.get<{ findAndCount: jest.Mock }>(
+      getRepositoryToken(User),
+    );
+    response = module.get<{ res: { header: jest.Mock } }>(REQUEST).res;
   });
 
   it('should be defined', () => {

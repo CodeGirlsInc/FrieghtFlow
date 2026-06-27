@@ -40,6 +40,8 @@ import { LocationUpdatesModule } from './location-updates/location-updates.modul
 import { ETAModule } from './eta/eta.module';
 import { BidExpiryModule } from './bid-expiry/bid-expiry.module';
 import { HealthModule } from './health/health.module';
+import { QueuesModule } from './queues/queues.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -130,6 +132,14 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     OnboardingModule,
     RequestLoggerModule,
     HealthModule,
+    DocumentPipelineModule,
+    StellarEscrowModule,
+    ReputationCalculatorModule,
+    LocationUpdatesModule,
+    ETAModule,
+    BidExpiryModule,
+    QueuesModule,
+    ApiKeysModule,
   ],
   controllers: [AppController],
   providers: [

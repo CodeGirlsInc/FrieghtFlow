@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { Shipment } from '../shipments/entities/shipment.entity';
-import { UserRole } from '../common/enums/role.enum';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 
 @Injectable()
@@ -34,7 +33,7 @@ export class AdminStatsService {
       .createQueryBuilder('shipment')
       .select('SUM(shipment.price)', 'total')
       .where('shipment.status = :status', { status: ShipmentStatus.COMPLETED })
-      .getRawOne();
+      .getRawOne<{ total: string | null }>();
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -67,7 +66,7 @@ export class AdminStatsService {
     return {
       totalUsersByRole,
       totalShipmentsByStatus,
-      totalPlatformRevenue: totalPlatformRevenue.total || 0,
+      totalPlatformRevenue: totalPlatformRevenue?.total ?? 0,
       newUsersThisWeek,
       shipmentsCreatedThisWeek,
       openDisputeCount,

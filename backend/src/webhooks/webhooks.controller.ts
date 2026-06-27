@@ -21,6 +21,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
+import { WebhookResponseDto } from './dto/webhook-response.dto';
 import { WebhooksService } from './webhooks.service';
 
 @ApiTags('webhooks')
@@ -44,6 +45,7 @@ export class WebhooksController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER, UserRole.ADMIN)
   @ApiOperation({ summary: 'List my registered webhooks' })
+  @ApiResponse({ status: 200, type: [WebhookResponseDto] })
   findAll(@CurrentUser() user: User) {
     return this.webhooksService.findAllForUser(user.id);
   }
