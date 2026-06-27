@@ -1,14 +1,31 @@
 import { applyDecorators, Type } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiExtraModels, ApiOkResponse, ApiOperation, ApiProperty, ApiPropertyOptional, ApiResponse, ApiUnauthorizedResponse, getSchemaPath } from '@nestjs/swagger';
-import { ReferenceObject, SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiExtraModels,
+  ApiOkResponse,
+  ApiUnauthorizedResponse,
+  getSchemaPath,
+} from '@nestjs/swagger';
 
-export function ApiPaginatedResponse<TModel extends Type<unknown>>(model: TModel) {
+export function ApiPaginatedResponse<TModel extends Type<unknown>>(
+  model: TModel,
+) {
   return applyDecorators(
     ApiExtraModels(model),
     ApiOkResponse({
       schema: {
         allOf: [
-          { properties: { data: { type: 'array', items: { $ref: getSchemaPath(model) } }, total: { type: 'number' }, page: { type: 'number' }, limit: { type: 'number' }, totalPages: { type: 'number' } } },
+          {
+            properties: {
+              data: { type: 'array', items: { $ref: getSchemaPath(model) } },
+              total: { type: 'number' },
+              page: { type: 'number' },
+              limit: { type: 'number' },
+              totalPages: { type: 'number' },
+            },
+          },
         ],
       },
     }),
@@ -16,7 +33,10 @@ export function ApiPaginatedResponse<TModel extends Type<unknown>>(model: TModel
 }
 
 export function ApiJwtAuth() {
-  return applyDecorators(ApiBearerAuth(), ApiUnauthorizedResponse({ description: 'Unauthorized' }));
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiUnauthorizedResponse({ description: 'Unauthorized' }),
+  );
 }
 
 export function ApiFileUpload(fieldName = 'file') {

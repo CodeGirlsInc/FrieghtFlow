@@ -42,7 +42,6 @@ import { ReputationCalculatorModule } from './reputation-calculator/reputation-c
 import { LocationUpdatesModule } from './location-updates/location-updates.module';
 import { ETAModule } from './eta/eta.module';
 import { BidExpiryModule } from './bid-expiry/bid-expiry.module';
-import { HealthModule } from './health/health.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -79,13 +78,13 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
       throttlers: [
         {
           name: 'default',
-          ttl: 60_000, // 1 minute window
-          limit: 60, // 60 requests per minute (general)
+          ttl: 60_000,
+          limit: 60,
         },
         {
           name: 'auth',
-          ttl: 60_000, // 1 minute window
-          limit: 10, // 10 requests per minute (auth routes)
+          ttl: 60_000,
+          limit: 10,
         },
         {
           name: 'shipmentCreate',
@@ -134,7 +133,12 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     MarketplaceSearchModule,
     OnboardingModule,
     RequestLoggerModule,
-    HealthModule,
+    DocumentPipelineModule,
+    StellarEscrowModule,
+    ReputationCalculatorModule,
+    LocationUpdatesModule,
+    ETAModule,
+    BidExpiryModule,
   ],
   controllers: [AppController],
   providers: [

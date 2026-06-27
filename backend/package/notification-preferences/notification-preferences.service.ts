@@ -21,7 +21,10 @@ export class NotificationPreferencesService {
     return this.createDefaults(userId);
   }
 
-  async updatePreferences(userId: string, dto: UpdatePreferencesDto): Promise<NotificationPreference[]> {
+  async updatePreferences(
+    userId: string,
+    dto: UpdatePreferencesDto,
+  ): Promise<NotificationPreference[]> {
     for (const item of dto.preferences) {
       const pref = await this.repo.findOne({
         where: { userId, eventType: item.eventType, channel: item.channel },
@@ -36,11 +39,15 @@ export class NotificationPreferencesService {
     return this.getPreferences(userId);
   }
 
-  private async createDefaults(userId: string): Promise<NotificationPreference[]> {
+  private async createDefaults(
+    userId: string,
+  ): Promise<NotificationPreference[]> {
     const defaults: NotificationPreference[] = [];
     for (const eventType of Object.values(NotificationEventType)) {
       for (const channel of Object.values(NotificationChannel)) {
-        defaults.push(this.repo.create({ userId, eventType, channel, enabled: true }));
+        defaults.push(
+          this.repo.create({ userId, eventType, channel, enabled: true }),
+        );
       }
     }
     return this.repo.save(defaults);

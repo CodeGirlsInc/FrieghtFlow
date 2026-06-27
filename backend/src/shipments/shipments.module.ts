@@ -9,7 +9,10 @@ import { EtaService } from './eta.service';
 import { CacheModule } from '../cache/cache.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Shipment, ShipmentStatusHistory]), CacheModule],
+  imports: [
+    TypeOrmModule.forFeature([Shipment, ShipmentStatusHistory]),
+    CacheModule,
+  ],
   controllers: [ShipmentsController, QuotesController],
   providers: [ShipmentsService, EtaService],
   exports: [ShipmentsService],

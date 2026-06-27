@@ -1,4 +1,14 @@
-import { Controller, Get, Patch, Param, Body, Query, ParseUUIDPipe, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Param,
+  Body,
+  Query,
+  ParseUUIDPipe,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CertificationReviewService } from './certification-review.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -29,7 +39,11 @@ export class CertificationReviewController {
 
   @Patch(':id/reject')
   @ApiOperation({ summary: 'Reject a carrier certification with reason' })
-  reject(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User, @Body('reason') reason: string) {
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+    @Body('reason') reason: string,
+  ) {
     if (!reason) throw new BadRequestException('Rejection reason is required');
     return this.service.reject(id, user.id, reason);
   }

@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
+import {
+  Repository,
+  FindOptionsWhere,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
+} from 'typeorm';
 import { Response } from 'express';
+import { Shipment } from '../../src/shipments/entities/shipment.entity';
 
 export interface ShipmentExportRow {
   trackingNumber: string;
@@ -74,7 +81,7 @@ function rowToCsv(s: ShipmentLike): string {
 @Injectable()
 export class ShipmentExportService {
   constructor(
-    @InjectRepository('Shipment')
+    @InjectRepository(Shipment)
     private readonly shipmentRepo: Repository<ShipmentLike>,
   ) {}
 
@@ -90,7 +97,10 @@ export class ShipmentExportService {
     if (query.status) where['status'] = query.status;
 
     if (query.startDate && query.endDate) {
-      where['createdAt'] = Between(new Date(query.startDate), new Date(query.endDate));
+      where['createdAt'] = Between(
+        new Date(query.startDate),
+        new Date(query.endDate),
+      );
     } else if (query.startDate) {
       where['createdAt'] = MoreThanOrEqual(new Date(query.startDate));
     } else if (query.endDate) {

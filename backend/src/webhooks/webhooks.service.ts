@@ -75,7 +75,10 @@ export class WebhooksService {
   }
 
   async deliverShipmentStatusChange(event: ShipmentEvent): Promise<void> {
-    const webhooks = await this.findAllForUser(event.shipment.shipperId, 'shipment.status_changed');
+    const webhooks = await this.findAllForUser(
+      event.shipment.shipperId,
+      'shipment.status_changed',
+    );
 
     if (webhooks.length === 0) {
       return;
@@ -129,7 +132,10 @@ export class WebhooksService {
         });
         return;
       } catch (error) {
-        lastError = error instanceof Error ? error.message : 'Unknown webhook delivery error';
+        lastError =
+          error instanceof Error
+            ? error.message
+            : 'Unknown webhook delivery error';
         if (attempt === 3) {
           this.logger.warn(
             `Failed to deliver webhook ${webhook.id} after 3 attempts: ${lastError}`,

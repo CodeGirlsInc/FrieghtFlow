@@ -25,11 +25,15 @@ describe('AuditLogController', () => {
 
   it('should not have a DELETE endpoint', () => {
     const prototype = Object.getPrototypeOf(controller);
-    const methodNames = Object.getOwnPropertyNames(prototype)
-      .filter((name) => name !== 'constructor' && typeof prototype[name] === 'function');
+    const methodNames = Object.getOwnPropertyNames(prototype).filter(
+      (name) => name !== 'constructor' && typeof prototype[name] === 'function',
+    );
 
     for (const methodName of methodNames) {
-      const httpMethod = Reflect.getMetadata(METHODS_METADATA, prototype[methodName]);
+      const httpMethod = Reflect.getMetadata(
+        METHODS_METADATA,
+        prototype[methodName],
+      );
       expect(httpMethod).not.toBe(RequestMethod.DELETE);
     }
   });

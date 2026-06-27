@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OnboardingService } from './onboarding.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -19,7 +19,10 @@ export class OnboardingController {
 
   @Post('step/:stepName')
   @ApiOperation({ summary: 'Mark an onboarding step as complete (idempotent)' })
-  markStep(@CurrentUser() user: User, @Param('stepName') stepName: OnboardingStep) {
+  markStep(
+    @CurrentUser() user: User,
+    @Param('stepName') stepName: OnboardingStep,
+  ) {
     return this.onboardingService.markStep(user.id, stepName);
   }
 }

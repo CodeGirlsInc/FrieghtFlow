@@ -20,7 +20,9 @@ export class HealthController {
   @Get()
   @Public()
   @HealthCheck()
-  @ApiOperation({ summary: 'Application health check with DB and Redis indicators' })
+  @ApiOperation({
+    summary: 'Application health check with DB and Redis indicators',
+  })
   check() {
     return this.health.check([
       () => this.db.pingCheck('database'),
