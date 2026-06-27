@@ -15,18 +15,37 @@ export interface ShipmentAnalytics {
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
 
-  async getUserAnalytics(userId: string, from: string, to: string): Promise<ShipmentAnalytics> {
+  getUserAnalytics(
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<ShipmentAnalytics> {
     this.logger.log(`Analytics user=${userId} ${from}–${to}`);
-    return { userId, totalShipments: 0, totalSpend: 0, totalRevenue: 0, onTimeRate: 0, cancelledCount: 0, dateRange: { from, to } };
+    return Promise.resolve({
+      userId,
+      totalShipments: 0,
+      totalSpend: 0,
+      totalRevenue: 0,
+      onTimeRate: 0,
+      cancelledCount: 0,
+      dateRange: { from, to },
+    });
   }
 
-  async exportCsv(userId: string): Promise<string> {
+  exportCsv(userId: string): Promise<string> {
     this.logger.log(`CSV export for user ${userId}`);
-    return 'id,shipmentId,status,amount,createdAt
-';
+    return Promise.resolve('id,shipmentId,status,amount,createdAt\n');
   }
 
-  async getPlatformStats(): Promise<{ totalUsers: number; totalShipments: number; totalRevenue: number }> {
-    return { totalUsers: 0, totalShipments: 0, totalRevenue: 0 };
+  getPlatformStats(): Promise<{
+    totalUsers: number;
+    totalShipments: number;
+    totalRevenue: number;
+  }> {
+    return Promise.resolve({
+      totalUsers: 0,
+      totalShipments: 0,
+      totalRevenue: 0,
+    });
   }
 }

@@ -1,4 +1,3 @@
-
 import { Injectable, BadRequestException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -9,7 +8,9 @@ export class CurrencyConversionService {
 
   constructor() {
     const ratesPath = path.join(__dirname, '..', 'rates.json');
-    this.exchangeRates = JSON.parse(fs.readFileSync(ratesPath, 'utf8'));
+    this.exchangeRates = JSON.parse(fs.readFileSync(ratesPath, 'utf8')) as {
+      [key: string]: number;
+    };
   }
 
   convert(amount: number, fromCurrency: string, toCurrency: string): number {

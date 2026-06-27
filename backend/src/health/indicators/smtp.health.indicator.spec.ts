@@ -8,7 +8,7 @@ jest.mock('nodemailer');
 describe('SmtpHealthIndicator', () => {
   let indicator: SmtpHealthIndicator;
   let configService: jest.Mocked<ConfigService>;
-  let mockTransporter: any;
+  let mockTransporter: { verify: jest.Mock };
 
   beforeEach(async () => {
     mockTransporter = {

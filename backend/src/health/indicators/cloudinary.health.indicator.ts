@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { HealthCheckResult } from '@nestjs/terminus';
+import { HealthIndicatorResult } from '@nestjs/terminus';
 import { v2 as cloudinary } from 'cloudinary';
 
 @Injectable()
@@ -13,9 +13,9 @@ export class CloudinaryHealthIndicator {
     });
   }
 
-  async isHealthy(key: string): Promise<HealthCheckResult> {
+  async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
-      const result = await cloudinary.api.ping();
+      const result = (await cloudinary.api.ping()) as { status: string };
       if (result && result.status === 'ok') {
         return {
           [key]: {
@@ -33,7 +33,10 @@ export class CloudinaryHealthIndicator {
       return {
         [key]: {
           status: 'down',
-          message: error instanceof Error ? error.message : 'Cloudinary connection failed',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Cloudinary connection failed',
         },
       };
     }

@@ -1,6 +1,5 @@
-
 import { Test, TestingModule } from '@nestjs/testing';
-import { CurrencyConversionService } from './currency-conversion.service';
+import { CurrencyConversionService } from '../src/currency-conversion.service';
 import { BadRequestException } from '@nestjs/common';
 
 describe('CurrencyConversionService', () => {
@@ -41,12 +40,12 @@ describe('CurrencyConversionService', () => {
   it('should return the correct rates', () => {
     const rates = service.getRates();
     expect(rates).toEqual({
-        "USD": 1,
-        "EUR": 0.93,
-        "GBP": 0.79,
-        "NGN": 1481.58,
-        "KES": 128.5,
-        "ZAR": 18.24
+      USD: 1,
+      EUR: 0.93,
+      GBP: 0.79,
+      NGN: 1481.58,
+      KES: 128.5,
+      ZAR: 18.24,
     });
   });
 });

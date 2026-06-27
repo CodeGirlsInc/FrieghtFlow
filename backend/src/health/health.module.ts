@@ -8,6 +8,10 @@ import { CloudinaryHealthIndicator } from './indicators/cloudinary.health.indica
 @Module({
   imports: [TerminusModule],
   controllers: [HealthController],
-  providers: [DbHealthIndicator, SmtpHealthIndicator, CloudinaryHealthIndicator],
+  providers: [
+    DbHealthIndicator,
+    SmtpHealthIndicator,
+    CloudinaryHealthIndicator,
+  ],
 })
 export class HealthModule {}

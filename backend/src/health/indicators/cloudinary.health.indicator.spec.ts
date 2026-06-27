@@ -22,7 +22,9 @@ describe('CloudinaryHealthIndicator', () => {
       ],
     }).compile();
 
-    indicator = module.get<CloudinaryHealthIndicator>(CloudinaryHealthIndicator);
+    indicator = module.get<CloudinaryHealthIndicator>(
+      CloudinaryHealthIndicator,
+    );
     configService = module.get(ConfigService);
 
     jest.clearAllMocks();
@@ -101,7 +103,9 @@ describe('CloudinaryHealthIndicator', () => {
       return config[key];
     });
 
-    (cloudinary.api.ping as jest.Mock).mockRejectedValue(new Error('API Error'));
+    (cloudinary.api.ping as jest.Mock).mockRejectedValue(
+      new Error('API Error'),
+    );
 
     const result = await indicator.isHealthy('cloudinary');
 
