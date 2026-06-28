@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.9",
+    "@types/node": "^26.0.1"
+  }
+}
