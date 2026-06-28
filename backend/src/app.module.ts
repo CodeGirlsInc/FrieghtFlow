@@ -42,6 +42,10 @@ import { ReputationCalculatorModule } from './reputation-calculator/reputation-c
 import { LocationUpdatesModule } from './location-updates/location-updates.module';
 import { ETAModule } from './eta/eta.module';
 import { BidExpiryModule } from './bid-expiry/bid-expiry.module';
+import { BullModule } from '@nestjs/bullmq';
+import { QueueModule } from './queue/queue.module';
+import { TasksModule } from './tasks/tasks.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -94,6 +98,17 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         },
       ],
     }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        connection: {
+          host: configService.get<string>('REDIS_HOST') ?? 'localhost',
+          port: configService.get<number>('REDIS_PORT') ?? 6379,
+          password: configService.get<string>('REDIS_PASSWORD'),
+        },
+      }),
+    }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -139,6 +154,9 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     LocationUpdatesModule,
     ETAModule,
     BidExpiryModule,
+    QueueModule,
+    TasksModule,
+    ApiKeysModule,
   ],
   controllers: [AppController],
   providers: [

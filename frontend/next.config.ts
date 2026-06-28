@@ -29,18 +29,21 @@ const securityHeaders = [
       "connect-src 'self' wss://localhost:* https://horizon-testnet.stellar.org",
     ].join("; "),
   },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
 const nextConfig: NextConfig = {
-  async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
-  },
+  output: "standalone",
 
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "*.amazonaws.com" },
     ],
+  },
+
+  async headers() {
+    return [{ source: "/(.*)", headers: securityHeaders }];
   },
 };
 

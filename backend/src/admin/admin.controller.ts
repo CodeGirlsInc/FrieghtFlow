@@ -16,6 +16,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { AdminService } from './admin.service';
 import { CarrierCertificationsService } from '../carriers/carrier-certifications.service';
 import { QueryUsersDto } from './dto/query-users.dto';
@@ -28,6 +30,11 @@ import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  QUEUE_EMAIL_SEND,
+  QUEUE_PDF_GENERATE,
+  QUEUE_STELLAR_ANCHOR,
+} from '../queue/queue.constants';
 
 class ChangeRoleDto {
   @ApiProperty({ enum: UserRole })
@@ -44,6 +51,9 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly certificationsService: CarrierCertificationsService,
+    @InjectQueue(QUEUE_STELLAR_ANCHOR) private readonly stellarQueue: Queue,
+    @InjectQueue(QUEUE_EMAIL_SEND) private readonly emailQueue: Queue,
+    @InjectQueue(QUEUE_PDF_GENERATE) private readonly pdfQueue: Queue,
   ) {}
 
   // ── Stats ────────────────────────────────────────────────────────────────────
@@ -53,6 +63,41 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Platform stats' })
   getStats() {
     return this.adminService.getStats();
+  }
+
+  @Get('queue/stats')
+  @ApiOperation({ summary: 'Get job counts for all queues (admin only)' })
+  @ApiResponse({ status: 200, description: 'Queue job counts' })
+  async getQueueStats() {
+    const [stellar, email, pdf] = await Promise.all([
+      this.stellarQueue.getJobCounts(
+        'waiting',
+        'active',
+        'completed',
+        'failed',
+        'delayed',
+      ),
+      this.emailQueue.getJobCounts(
+        'waiting',
+        'active',
+        'completed',
+        'failed',
+        'delayed',
+      ),
+      this.pdfQueue.getJobCounts(
+        'waiting',
+        'active',
+        'completed',
+        'failed',
+        'delayed',
+      ),
+    ]);
+
+    return [
+      { queueName: QUEUE_STELLAR_ANCHOR, ...stellar },
+      { queueName: QUEUE_EMAIL_SEND, ...email },
+      { queueName: QUEUE_PDF_GENERATE, ...pdf },
+    ];
   }
 
   // ── Users ────────────────────────────────────────────────────────────────────
