@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  Query,
+  ParseUUIDPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DisputesService } from './disputes.service';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
@@ -32,7 +42,11 @@ export class DisputesController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Resolve a dispute (admin only)' })
-  resolve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User, @Body() dto: ResolveDisputeDto) {
+  resolve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+    @Body() dto: ResolveDisputeDto,
+  ) {
     return this.disputesService.resolve(id, user.id, dto);
   }
 
@@ -40,7 +54,11 @@ export class DisputesController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'List disputes for admin (filterable by status)' })
-  findAllAdmin(@Query('page') page?: number, @Query('limit') limit?: number, @Query('status') status?: DisputeStatus) {
+  findAllAdmin(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: DisputeStatus,
+  ) {
     return this.disputesService.findAllAdmin({ page, limit, status });
   }
 }

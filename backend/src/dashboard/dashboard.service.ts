@@ -17,10 +17,21 @@ export class DashboardService {
 
   async getSummary(userId: string, role: string): Promise<DashboardSummary> {
     this.logger.log(`Dashboard summary user=${userId} role=${role}`);
-    return { totalShipments: 0, activeShipments: 0, totalSpend: 0, totalEarnings: 0, onTimeRate: 0, pendingBids: 0, openDisputes: 0 };
+    return {
+      totalShipments: 0,
+      activeShipments: 0,
+      totalSpend: 0,
+      totalEarnings: 0,
+      onTimeRate: 0,
+      pendingBids: 0,
+      openDisputes: 0,
+    };
   }
 
-  async getActivityFeed(userId: string, limit = 10): Promise<{ type: string; message: string; createdAt: Date }[]> {
+  async getActivityFeed(
+    userId: string,
+    limit = 10,
+  ): Promise<{ type: string; message: string; createdAt: Date }[]> {
     this.logger.log(`Activity feed user=${userId} limit=${limit}`);
     return [];
   }

@@ -1,6 +1,9 @@
 import { Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { DocumentIntegrityService, IntegrityResult } from './document-integrity.service';
+import {
+  DocumentIntegrityService,
+  IntegrityResult,
+} from './document-integrity.service';
 
 @Controller('api/documents')
 @UseGuards(JwtAuthGuard)

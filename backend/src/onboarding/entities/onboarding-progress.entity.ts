@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index, Unique } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  Index,
+  Unique,
+} from 'typeorm';
 
 export enum OnboardingStep {
   PROFILE_COMPLETE = 'PROFILE_COMPLETE',

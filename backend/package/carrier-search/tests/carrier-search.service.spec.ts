@@ -9,7 +9,11 @@ describe('CarrierSearchService', () => {
   });
 
   function dto(overrides: Partial<CarrierSearchDto> = {}): CarrierSearchDto {
-    return Object.assign(new CarrierSearchDto(), { page: 1, limit: 20 }, overrides);
+    return Object.assign(
+      new CarrierSearchDto(),
+      { page: 1, limit: 20 },
+      overrides,
+    );
   }
 
   it('returns all carriers with no filters', () => {
@@ -43,26 +47,34 @@ describe('CarrierSearchService', () => {
     const result = service.search(dto({ origin: 'lagos' }));
     expect(result.data.length).toBeGreaterThan(0);
     result.data.forEach((c) =>
-      expect(c.routes.some((r) => r.origin.toLowerCase().includes('lagos'))).toBe(true),
+      expect(
+        c.routes.some((r) => r.origin.toLowerCase().includes('lagos')),
+      ).toBe(true),
     );
   });
 
   it('filters by vehicleType', () => {
     const result = service.search(dto({ vehicleType: 'van' }));
-    expect(result.data.every((c) => c.vehicleTypes.some((v) => v.includes('van')))).toBe(true);
+    expect(
+      result.data.every((c) => c.vehicleTypes.some((v) => v.includes('van'))),
+    ).toBe(true);
   });
 
   it('sorts by completedShipments descending', () => {
     const result = service.search(dto({ sortBy: 'completedShipments' }));
     for (let i = 1; i < result.data.length; i++) {
-      expect(result.data[i - 1].completedShipments).toBeGreaterThanOrEqual(result.data[i].completedShipments);
+      expect(result.data[i - 1].completedShipments).toBeGreaterThanOrEqual(
+        result.data[i].completedShipments,
+      );
     }
   });
 
   it('default sort is rating descending', () => {
     const result = service.search(dto());
     for (let i = 1; i < result.data.length; i++) {
-      expect(result.data[i - 1].rating).toBeGreaterThanOrEqual(result.data[i].rating);
+      expect(result.data[i - 1].rating).toBeGreaterThanOrEqual(
+        result.data[i].rating,
+      );
     }
   });
 

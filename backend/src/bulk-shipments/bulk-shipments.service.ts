@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Shipment } from '../shipments/entities/shipment.entity';
@@ -7,20 +7,34 @@ import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 @Injectable()
 export class BulkShipmentsService {
   constructor(
-    @InjectRepository(Shipment) private readonly shipmentRepo: Repository<Shipment>,
+    @InjectRepository(Shipment)
+    private readonly shipmentRepo: Repository<Shipment>,
   ) {}
 
-  async cancel(userId: string, ids: string[]): Promise<{ succeeded: string[]; failed: { id: string; reason: string }[] }> {
-    return this.bulkOperation(userId, ids, async (shipment) => {
+  async cancel(
+    userId: string,
+    ids: string[],
+  ): Promise<{
+    succeeded: string[];
+    failed: { id: string; reason: string }[];
+  }> {
+    return this.bulkOperation(userId, ids, (shipment) => {
       shipment.status = ShipmentStatus.CANCELLED;
-      return shipment;
+      return Promise.resolve(shipment);
     });
   }
 
-  async updateStatus(userId: string, ids: string[], status: ShipmentStatus): Promise<{ succeeded: string[]; failed: { id: string; reason: string }[] }> {
-    return this.bulkOperation(userId, ids, async (shipment) => {
+  async updateStatus(
+    userId: string,
+    ids: string[],
+    status: ShipmentStatus,
+  ): Promise<{
+    succeeded: string[];
+    failed: { id: string; reason: string }[];
+  }> {
+    return this.bulkOperation(userId, ids, (shipment) => {
       shipment.status = status;
-      return shipment;
+      return Promise.resolve(shipment);
     });
   }
 
@@ -28,15 +42,19 @@ export class BulkShipmentsService {
     userId: string,
     ids: string[],
     operation: (shipment: Shipment) => Promise<Shipment>,
-  ): Promise<{ succeeded: string[]; failed: { id: string; reason: string }[] }> {
-    if (ids.length > 50) throw new BadRequestException('Maximum 50 IDs per request');
+  ): Promise<{
+    succeeded: string[];
+    failed: { id: string; reason: string }[];
+  }> {
+    if (ids.length > 50)
+      throw new BadRequestException('Maximum 50 IDs per request');
 
     const shipments = await this.shipmentRepo.find({ where: { id: In(ids) } });
     const succeeded: string[] = [];
     const failed: { id: string; reason: string }[] = [];
 
     for (const id of ids) {
-      const shipment = shipments.find(s => s.id === id);
+      const shipment = shipments.find((s) => s.id === id);
       if (!shipment) {
         failed.push({ id, reason: 'Shipment not found' });
         continue;

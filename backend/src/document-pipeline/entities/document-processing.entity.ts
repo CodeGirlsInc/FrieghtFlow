@@ -1,4 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+} from 'typeorm';
 
 export enum ProcessingStatus {
   PENDING = 'PENDING',
@@ -15,7 +20,11 @@ export class DocumentProcessing {
   @Column({ name: 'document_id', type: 'uuid' })
   documentId: string;
 
-  @Column({ type: 'enum', enum: ProcessingStatus, default: ProcessingStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: ProcessingStatus,
+    default: ProcessingStatus.PENDING,
+  })
   status: ProcessingStatus;
 
   @Column({ name: 'mime_type', nullable: true, length: 100 })

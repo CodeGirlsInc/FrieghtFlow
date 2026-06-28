@@ -22,8 +22,7 @@ export class AnalyticsService {
 
   async exportCsv(userId: string): Promise<string> {
     this.logger.log(`CSV export for user ${userId}`);
-    return 'id,shipmentId,status,amount,createdAt
-';
+    return 'id,shipmentId,status,amount,createdAt\n';
   }
 
   async getPlatformStats(): Promise<{ totalUsers: number; totalShipments: number; totalRevenue: number }> {

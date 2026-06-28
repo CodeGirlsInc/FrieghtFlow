@@ -2,6 +2,10 @@ import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 
+interface RequestWithCorrelation extends Request {
+  correlationId: string;
+}
+
 const SENSITIVE_HEADERS = ['authorization', 'cookie', 'x-api-key'];
 
 @Injectable()
@@ -10,7 +14,7 @@ export class RequestLoggerMiddleware implements NestMiddleware {
 
   use(req: Request, res: Response, next: NextFunction): void {
     const correlationId = uuidv4();
-    (req as any).correlationId = correlationId;
+    (req as RequestWithCorrelation).correlationId = correlationId;
     res.setHeader('X-Correlation-Id', correlationId);
 
     const redactedHeaders = { ...req.headers };
@@ -23,8 +27,15 @@ export class RequestLoggerMiddleware implements NestMiddleware {
 
     res.on('finish', () => {
       const duration = Date.now() - start;
-      const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'log';
-      this.logger[level](`<-- ${res.statusCode} ${req.method} ${req.path} ${duration}ms [${correlationId}]`);
+      const level =
+        res.statusCode >= 500
+          ? 'error'
+          : res.statusCode >= 400
+            ? 'warn'
+            : 'log';
+      this.logger[level](
+        `<-- ${res.statusCode} ${req.method} ${req.path} ${duration}ms [${correlationId}]`,
+      );
     });
 
     next();

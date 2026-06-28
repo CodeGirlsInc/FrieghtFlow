@@ -13,7 +13,13 @@ const CHANNELS = Object.values(NotificationChannel);
 function buildDefaults(userId = 'user-1'): NotificationPreference[] {
   return EVENT_TYPES.flatMap((eventType) =>
     CHANNELS.map((channel) =>
-      Object.assign(new NotificationPreference(), { id: `${eventType}-${channel}`, userId, eventType, channel, enabled: true }),
+      Object.assign(new NotificationPreference(), {
+        id: `${eventType}-${channel}`,
+        userId,
+        eventType,
+        channel,
+        enabled: true,
+      }),
     ),
   );
 }
@@ -21,8 +27,12 @@ function buildDefaults(userId = 'user-1'): NotificationPreference[] {
 const mockRepo = () => ({
   find: jest.fn(),
   findOne: jest.fn(),
-  create: jest.fn((dto: Partial<NotificationPreference>) => Object.assign(new NotificationPreference(), dto)),
-  save: jest.fn(async (entity: NotificationPreference | NotificationPreference[]) => entity),
+  create: jest.fn((dto: Partial<NotificationPreference>) =>
+    Object.assign(new NotificationPreference(), dto),
+  ),
+  save: jest.fn(
+    async (entity: NotificationPreference | NotificationPreference[]) => entity,
+  ),
 });
 
 describe('NotificationPreferencesService', () => {
@@ -33,7 +43,10 @@ describe('NotificationPreferencesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationPreferencesService,
-        { provide: getRepositoryToken(NotificationPreference), useFactory: mockRepo },
+        {
+          provide: getRepositoryToken(NotificationPreference),
+          useFactory: mockRepo,
+        },
       ],
     }).compile();
 
@@ -52,7 +65,7 @@ describe('NotificationPreferencesService', () => {
 
     it('creates defaults (all enabled) when no preferences exist', async () => {
       repo.find
-        .mockResolvedValueOnce([])          // first call: empty → triggers creation
+        .mockResolvedValueOnce([]) // first call: empty → triggers creation
         .mockResolvedValueOnce(buildDefaults()); // second call: after save
       repo.save.mockResolvedValue(buildDefaults());
 
@@ -71,10 +84,18 @@ describe('NotificationPreferencesService', () => {
       repo.save.mockResolvedValue({ ...target, enabled: false });
 
       await service.updatePreferences('user-1', {
-        preferences: [{ eventType: target.eventType, channel: target.channel, enabled: false }],
+        preferences: [
+          {
+            eventType: target.eventType,
+            channel: target.channel,
+            enabled: false,
+          },
+        ],
       });
 
-      expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ enabled: false }),
+      );
     });
 
     it('creates a new preference record when it does not exist yet', async () => {
@@ -83,7 +104,11 @@ describe('NotificationPreferencesService', () => {
 
       await service.updatePreferences('user-1', {
         preferences: [
-          { eventType: NotificationEventType.BID_PLACED, channel: NotificationChannel.PUSH, enabled: false },
+          {
+            eventType: NotificationEventType.BID_PLACED,
+            channel: NotificationChannel.PUSH,
+            enabled: false,
+          },
         ],
       });
 

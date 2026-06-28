@@ -5,27 +5,17 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { generateSecret, verify, generateURI } from 'otplib';
 import { Repository, IsNull } from 'typeorm';
+import { generateSecret, generateURI } from 'otplib';
 import { authenticator } from '@otplib/preset-v11';
 import * as qrcode from 'qrcode';
 import * as bcrypt from 'bcrypt';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { TOTP, generateURI } from 'otplib';
-// import { authenticator } from 'otplib';
-import { authenticator } from '@otplib/preset-v11';
-import * as qrcode from 'qrcode';
-import * as bcrypt from 'bcrypt';
-import { Redis } from 'ioredis';
 import { User } from '../users/entities/user.entity';
 import { TwoFactorRecovery } from '../users/entities/two-factor-recovery.entity';
-import { IsNull } from 'typeorm';
 
-const authenticator = new TOTP();
-
-const SETUP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const SETUP_TTL_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class TwoFactorService {

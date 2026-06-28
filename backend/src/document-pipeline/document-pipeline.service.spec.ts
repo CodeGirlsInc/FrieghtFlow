@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DocumentPipelineService } from './document-pipeline.service';
-import { DocumentProcessing, ProcessingStatus } from './entities/document-processing.entity';
+import {
+  DocumentProcessing,
+  ProcessingStatus,
+} from './entities/document-processing.entity';
 import { Document } from '../documents/entities/document.entity';
 
 describe('DocumentPipelineService', () => {
@@ -21,7 +24,10 @@ describe('DocumentPipelineService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DocumentPipelineService,
-        { provide: getRepositoryToken(DocumentProcessing), useValue: mockProcRepo },
+        {
+          provide: getRepositoryToken(DocumentProcessing),
+          useValue: mockProcRepo,
+        },
         { provide: getRepositoryToken(Document), useValue: mockDocRepo },
       ],
     }).compile();
@@ -29,7 +35,10 @@ describe('DocumentPipelineService', () => {
   });
 
   it('processes a document successfully', async () => {
-    mockDocRepo.findOne.mockResolvedValue({ id: 'doc-1', fileName: 'test.pdf' });
+    mockDocRepo.findOne.mockResolvedValue({
+      id: 'doc-1',
+      fileName: 'test.pdf',
+    });
     mockProcRepo.findOne.mockResolvedValue(null);
     mockProcRepo.create.mockReturnValue({});
     mockProcRepo.save.mockResolvedValue({ status: ProcessingStatus.READY });

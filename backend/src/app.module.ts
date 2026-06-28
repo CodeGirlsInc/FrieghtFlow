@@ -1,6 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ExecutionContext } from '@nestjs/common';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { HealthModule } from './health/health.module';
+import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -39,7 +42,6 @@ import { ReputationCalculatorModule } from './reputation-calculator/reputation-c
 import { LocationUpdatesModule } from './location-updates/location-updates.module';
 import { ETAModule } from './eta/eta.module';
 import { BidExpiryModule } from './bid-expiry/bid-expiry.module';
-import { HealthModule } from './health/health.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -76,13 +78,13 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
       throttlers: [
         {
           name: 'default',
-          ttl: 60_000, // 1 minute window
-          limit: 60, // 60 requests per minute (general)
+          ttl: 60_000,
+          limit: 60,
         },
         {
           name: 'auth',
-          ttl: 60_000, // 1 minute window
-          limit: 10, // 10 requests per minute (auth routes)
+          ttl: 60_000,
+          limit: 10,
         },
         {
           name: 'shipmentCreate',
@@ -103,9 +105,11 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         port: +configService.get('DATABASE_PORT'),
         host: configService.get('DATABASE_HOST'),
         autoLoadEntities: true,
-        synchronize: configService.get('NODE_ENV') !== 'production',
+        synchronize: false,
       }),
     }),
+    PrometheusModule.register(),
+    HealthModule,
     AppMailerModule,
     UsersModule,
     AuthModule,
@@ -129,7 +133,12 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     MarketplaceSearchModule,
     OnboardingModule,
     RequestLoggerModule,
-    HealthModule,
+    DocumentPipelineModule,
+    StellarEscrowModule,
+    ReputationCalculatorModule,
+    LocationUpdatesModule,
+    ETAModule,
+    BidExpiryModule,
   ],
   controllers: [AppController],
   providers: [
@@ -144,4 +153,8 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

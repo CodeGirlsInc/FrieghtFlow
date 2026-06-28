@@ -18,11 +18,15 @@ export class ShipmentAnalyticsService {
     private readonly shipmentRepo: Repository<Shipment>,
   ) {}
 
-  async getAnalytics(query: AnalyticsQueryDto): Promise<ShipmentAnalyticsResult> {
+  async getAnalytics(
+    query: AnalyticsQueryDto,
+  ): Promise<ShipmentAnalyticsResult> {
     const baseQb = this.shipmentRepo.createQueryBuilder('s');
 
     if (query.startDate) {
-      baseQb.andWhere('s.created_at >= :startDate', { startDate: query.startDate });
+      baseQb.andWhere('s.created_at >= :startDate', {
+        startDate: query.startDate,
+      });
     }
     if (query.endDate) {
       baseQb.andWhere('s.created_at <= :endDate', { endDate: query.endDate });
@@ -50,7 +54,7 @@ export class ShipmentAnalyticsService {
     const durationRow: { avg_hours: string | null } | undefined = await baseQb
       .clone()
       .select(
-        "EXTRACT(EPOCH FROM AVG(s.actual_delivery_date - s.pickup_date)) / 3600",
+        'EXTRACT(EPOCH FROM AVG(s.actual_delivery_date - s.pickup_date)) / 3600',
         'avg_hours',
       )
       .andWhere('s.actual_delivery_date IS NOT NULL')
@@ -78,9 +82,10 @@ export class ShipmentAnalyticsService {
         week: r.week,
         count: Number(r.count),
       })),
-      avgDeliveryDurationHours: durationRow?.avg_hours != null
-        ? parseFloat(durationRow.avg_hours)
-        : null,
+      avgDeliveryDurationHours:
+        durationRow?.avg_hours != null
+          ? parseFloat(durationRow.avg_hours)
+          : null,
       topRoutes: routeRows.map((r) => ({
         origin: r.origin,
         destination: r.destination,

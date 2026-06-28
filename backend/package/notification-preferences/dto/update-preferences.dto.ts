@@ -1,6 +1,9 @@
 import { IsArray, IsBoolean, IsEnum, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { NotificationChannel, NotificationEventType } from '../entities/notification-preference.entity';
+import {
+  NotificationChannel,
+  NotificationEventType,
+} from '../entities/notification-preference.entity';
 
 export class PreferenceItemDto {
   @IsEnum(NotificationEventType)

@@ -10,7 +10,9 @@ export class MarketplaceSearchController {
   constructor(private readonly service: MarketplaceSearchService) {}
 
   @Get('search')
-  @ApiOperation({ summary: 'Search available shipments with filters and pagination' })
+  @ApiOperation({
+    summary: 'Search available shipments with filters and pagination',
+  })
   search(@Query() query: SearchMarketplaceDto) {
     return this.service.search(query);
   }

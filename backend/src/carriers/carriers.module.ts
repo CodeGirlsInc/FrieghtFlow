@@ -14,7 +14,11 @@ import { CarrierCacheService } from '../cache/carrier-cache.service';
     CacheModule,
   ],
   controllers: [CarriersController],
-  providers: [CarriersService, CarrierCertificationsService, CarrierCacheService],
+  providers: [
+    CarriersService,
+    CarrierCertificationsService,
+    CarrierCacheService,
+  ],
   exports: [CarrierCertificationsService, CarrierCacheService],
 })
 export class CarriersModule {}

@@ -1,4 +1,3 @@
-
 import { Injectable } from '@nestjs/common';
 import { Express } from 'express';
 import { v4 as uuidv4 } from 'uuid';
@@ -21,7 +20,9 @@ export class AvatarUploadService {
 
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedMimeTypes.includes(file.mimetype)) {
-      throw new Error('Invalid file type. Only JPEG, PNG, and WEBP are allowed.');
+      throw new Error(
+        'Invalid file type. Only JPEG, PNG, and WEBP are allowed.',
+      );
     }
 
     const maxFileSize = 2 * 1024 * 1024; // 2MB
@@ -43,7 +44,14 @@ export class AvatarUploadService {
     }
 
     const fileName = `${uuidv4()}${path.extname(file.originalname)}`;
-    const filePath = path.join(__dirname, '..', '..', 'uploads', 'avatars', fileName);
+    const filePath = path.join(
+      __dirname,
+      '..',
+      '..',
+      'uploads',
+      'avatars',
+      fileName,
+    );
 
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {

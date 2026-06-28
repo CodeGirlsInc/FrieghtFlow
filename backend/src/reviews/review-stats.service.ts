@@ -1,7 +1,12 @@
 // #990 – Carrier reputation: aggregate review stats per carrier
 import { Injectable, Logger } from '@nestjs/common';
 
-export interface ReviewStats { carrierId: string; averageRating: number; totalReviews: number; ratingBreakdown: Record<number, number>; }
+export interface ReviewStats {
+  carrierId: string;
+  averageRating: number;
+  totalReviews: number;
+  ratingBreakdown: Record<number, number>;
+}
 
 @Injectable()
 export class ReviewStatsService {
@@ -9,7 +14,12 @@ export class ReviewStatsService {
 
   async getCarrierStats(carrierId: string): Promise<ReviewStats> {
     this.logger.log(`Computing review stats for carrier ${carrierId}`);
-    return { carrierId, averageRating: 0, totalReviews: 0, ratingBreakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
+    return {
+      carrierId,
+      averageRating: 0,
+      totalReviews: 0,
+      ratingBreakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    };
   }
 
   computeAverage(ratings: number[]): number {

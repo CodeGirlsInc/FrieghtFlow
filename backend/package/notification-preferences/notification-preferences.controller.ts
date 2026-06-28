@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Patch, Request, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { NotificationPreferencesService } from './notification-preferences.service';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 import { AuthGuard } from '@nestjs/passport';

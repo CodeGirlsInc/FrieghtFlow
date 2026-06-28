@@ -35,7 +35,9 @@ function mockResponse() {
   return {
     res: {
       setHeader: jest.fn(),
-      write: jest.fn((chunk: string) => { chunks.push(chunk); }),
+      write: jest.fn((chunk: string) => {
+        chunks.push(chunk);
+      }),
       end: jest.fn(),
     } as unknown as Response,
     getBody: () => chunks.join(''),
@@ -69,7 +71,10 @@ describe('ShipmentExportService', () => {
     await service.streamCsv(res, 'user-1', false, {});
 
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename=shipments.csv');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      'attachment; filename=shipments.csv',
+    );
 
     const body = getBody();
     expect(body).toContain('Tracking Number,Origin,Destination,Status');
@@ -98,7 +103,9 @@ describe('ShipmentExportService', () => {
     await service.streamCsv(res, 'user-1', false, {});
 
     expect(repo.find).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ shipperId: 'user-1' }) }),
+      expect.objectContaining({
+        where: expect.objectContaining({ shipperId: 'user-1' }),
+      }),
     );
   });
 
@@ -108,7 +115,9 @@ describe('ShipmentExportService', () => {
 
     await service.streamCsv(res, 'admin-1', true, {});
 
-    const callArg = repo.find.mock.calls[0][0] as { where: Record<string, unknown> };
+    const callArg = repo.find.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    };
     expect(callArg.where).not.toHaveProperty('shipperId');
   });
 });
