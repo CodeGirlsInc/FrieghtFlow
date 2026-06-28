@@ -23,6 +23,8 @@ pub enum DocumentError {
     Unauthorized = 4,
     AlreadyVerified = 5,
     HashMismatch = 6,
+    AlreadyRevoked = 7,
+    DuplicateHash = 8,
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ pub struct DocumentRecord {
     pub is_verified: bool,
     pub verified_by: Option<Address>,
     pub verified_at: u64,
+    pub is_revoked: bool,
 }
 
 #[contracttype]
@@ -64,6 +67,7 @@ pub enum DataKey {
     Counter,
     Document(u64),
     ShipmentDocs(u64), // shipment_id → Vec<u64> of doc IDs
+    HashOwner(BytesN<32>, Address), // (content_hash, uploader) → already registered marker
 }
 
 const TTL_LEDGERS: u32 = 6_307_200; // ~1 year
@@ -102,6 +106,11 @@ impl DocumentContract {
     ) -> Result<u64, DocumentError> {
         uploader.require_auth();
 
+        let hash_key = DataKey::HashOwner(content_hash.clone(), uploader.clone());
+        if env.storage().persistent().has(&hash_key) {
+            return Err(DocumentError::DuplicateHash);
+        }
+
         let id = Self::next_id(&env);
         let now = env.ledger().timestamp();
 
@@ -116,12 +125,18 @@ impl DocumentContract {
             is_verified: false,
             verified_by: None,
             verified_at: 0,
+            is_revoked: false,
         };
 
         env.storage().persistent().set(&DataKey::Document(id), &doc);
         env.storage()
             .persistent()
             .extend_ttl(&DataKey::Document(id), TTL_LEDGERS, TTL_LEDGERS);
+
+        env.storage().persistent().set(&hash_key, &true);
+        env.storage()
+            .persistent()
+            .extend_ttl(&hash_key, TTL_LEDGERS, TTL_LEDGERS);
 
         // Append to shipment's document list.
         let mut list: Vec<u64> = env
@@ -167,18 +182,49 @@ impl DocumentContract {
         Ok(())
     }
 
+    // ── Revocation ─────────────────────────────────────────────────────────
+
+    /// Admin revokes a document — e.g. if it was registered in error or later
+    /// found to be fraudulent. Revocation is permanent and causes
+    /// `check_integrity` to always return `false` for this document.
+    pub fn revoke_document(env: Env, revoker: Address, doc_id: u64) -> Result<(), DocumentError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(DocumentError::NotInitialized)?;
+
+        if revoker != admin {
+            return Err(DocumentError::Unauthorized);
+        }
+        revoker.require_auth();
+
+        let mut doc = Self::load(&env, doc_id)?;
+
+        if doc.is_revoked {
+            return Err(DocumentError::AlreadyRevoked);
+        }
+
+        doc.is_revoked = true;
+        Self::store(&env, &doc);
+        Ok(())
+    }
+
     // ── Integrity check ───────────────────────────────────────────────────
 
     /// Verify that a given hash matches the registered content_hash.
-    /// Returns `true` if the hash matches, `false` otherwise.
-    /// This lets anyone prove a document is untampered without downloading
-    /// the full file from IPFS.
+    /// Returns `true` only if the hash matches AND the document has not
+    /// been revoked. Revoked documents always fail integrity checks,
+    /// regardless of hash, since they should no longer be trusted.
     pub fn check_integrity(
         env: Env,
         doc_id: u64,
         hash_to_check: BytesN<32>,
     ) -> Result<bool, DocumentError> {
         let doc = Self::load(&env, doc_id)?;
+        if doc.is_revoked {
+            return Ok(false);
+        }
         Ok(doc.content_hash == hash_to_check)
     }
 
@@ -235,180 +281,5 @@ impl DocumentContract {
     }
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use soroban_sdk::{
-        testutils::{Address as _, BytesN as _},
-        Bytes, BytesN, Env,
-    };
-
-    fn setup() -> (Env, Address, DocumentContractClient<'static>) {
-        let env = Env::default();
-        env.mock_all_auths();
-        let admin = Address::generate(&env);
-        let id = env.register(DocumentContract {}, ());
-        let client = DocumentContractClient::new(&env, &id);
-        client.initialize(&admin);
-        (env, admin, client)
-    }
-
-    fn fake_hash(env: &Env) -> BytesN<32> {
-        BytesN::random(env)
-    }
-
-    fn fake_cid(env: &Env) -> Bytes {
-        // Simulate a CIDv0 string encoded as bytes.
-        Bytes::from_slice(env, b"QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG")
-    }
-
-    fn register(
-        env: &Env,
-        client: &DocumentContractClient,
-        uploader: &Address,
-        shipment_id: u64,
-    ) -> (u64, BytesN<32>) {
-        let hash = fake_hash(env);
-        let id = client.register_document(
-            uploader,
-            &shipment_id,
-            &DocumentType::BillOfLading,
-            &hash,
-            &fake_cid(env),
-        );
-        (id, hash)
-    }
-
-    #[test]
-    fn test_register_document() {
-        let (env, _, client) = setup();
-        let uploader = Address::generate(&env);
-
-        let (id, hash) = register(&env, &client, &uploader, 1);
-
-        assert_eq!(id, 1);
-        assert_eq!(client.get_total_documents(), 1);
-
-        let doc = client.get_document(&id);
-        assert_eq!(doc.id, 1);
-        assert_eq!(doc.shipment_id, 1);
-        assert_eq!(doc.uploader, uploader);
-        assert_eq!(doc.doc_type, DocumentType::BillOfLading);
-        assert_eq!(doc.content_hash, hash);
-        assert!(!doc.is_verified);
-        assert!(doc.verified_by.is_none());
-    }
-
-    #[test]
-    fn test_verify_document() {
-        let (env, admin, client) = setup();
-        let uploader = Address::generate(&env);
-
-        let (id, _) = register(&env, &client, &uploader, 1);
-
-        client.verify_document(&admin, &id);
-
-        let doc = client.get_document(&id);
-        assert!(doc.is_verified);
-        assert_eq!(doc.verified_by, Some(admin));
-    }
-
-    #[test]
-    fn test_double_verify_fails() {
-        let (env, admin, client) = setup();
-        let uploader = Address::generate(&env);
-        let (id, _) = register(&env, &client, &uploader, 1);
-
-        client.verify_document(&admin, &id);
-        let result = client.try_verify_document(&admin, &id);
-        assert_eq!(result, Err(Ok(DocumentError::AlreadyVerified)));
-    }
-
-    #[test]
-    fn test_non_admin_verify_fails() {
-        let (env, _, client) = setup();
-        let uploader = Address::generate(&env);
-        let (id, _) = register(&env, &client, &uploader, 1);
-
-        let stranger = Address::generate(&env);
-        let result = client.try_verify_document(&stranger, &id);
-        assert_eq!(result, Err(Ok(DocumentError::Unauthorized)));
-    }
-
-    #[test]
-    fn test_integrity_check_pass() {
-        let (env, _, client) = setup();
-        let uploader = Address::generate(&env);
-        let (id, original_hash) = register(&env, &client, &uploader, 1);
-
-        assert!(client.check_integrity(&id, &original_hash));
-    }
-
-    #[test]
-    fn test_integrity_check_tampered() {
-        let (env, _, client) = setup();
-        let uploader = Address::generate(&env);
-        let (id, _) = register(&env, &client, &uploader, 1);
-
-        let tampered_hash = BytesN::random(&env);
-        assert!(!client.check_integrity(&id, &tampered_hash));
-    }
-
-    #[test]
-    fn test_multiple_docs_per_shipment() {
-        let (env, _, client) = setup();
-        let uploader = Address::generate(&env);
-
-        let (id1, _) = register(&env, &client, &uploader, 7);
-        let hash2 = fake_hash(&env);
-        let id2 = client.register_document(
-            &uploader,
-            &7u64,
-            &DocumentType::ProofOfDelivery,
-            &hash2,
-            &fake_cid(&env),
-        );
-
-        let docs = client.get_documents_by_shipment(&7u64);
-        assert_eq!(docs.len(), 2);
-        assert_eq!(docs.get(0).unwrap(), id1);
-        assert_eq!(docs.get(1).unwrap(), id2);
-    }
-
-    #[test]
-    fn test_all_document_types() {
-        let (env, _, client) = setup();
-        let uploader = Address::generate(&env);
-
-        let types = [
-            DocumentType::BillOfLading,
-            DocumentType::ProofOfDelivery,
-            DocumentType::Invoice,
-            DocumentType::CustomsDeclaration,
-            DocumentType::InsuranceCertificate,
-            DocumentType::Photo,
-            DocumentType::Other,
-        ];
-
-        for doc_type in types {
-            let id = client.register_document(
-                &uploader,
-                &1u64,
-                &doc_type,
-                &fake_hash(&env),
-                &fake_cid(&env),
-            );
-            let doc = client.get_document(&id);
-            assert_eq!(doc.doc_type, doc_type);
-        }
-    }
-
-    #[test]
-    fn test_not_found_error() {
-        let (_, _, client) = setup();
-        let result = client.try_get_document(&404u64);
-        assert_eq!(result, Err(Ok(DocumentError::NotFound)));
-    }
-}
+mod test;
