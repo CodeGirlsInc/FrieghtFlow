@@ -5,7 +5,10 @@ import { cn } from '../../lib/utils';
 interface PasswordStrengthBarProps {
   password: string;
 }
-
+{
+// //   const { currency, setCurrency, convert, format } = useCurrencyStore();
+// //   return { currency, setCurrency, convert, format };
+// // }
 interface StrengthResult {
   score: number; // 0-4
   label: 'Weak' | 'Fair' | 'Strong' | 'Very Strong';

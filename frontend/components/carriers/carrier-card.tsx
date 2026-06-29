@@ -10,6 +10,10 @@ export interface CarrierSummary {
   totalShipments: number;
   verified: boolean;
 }
+{
+// //   const { currency, setCurrency, convert, format } = useCurrencyStore();
+// //   return { currency, setCurrency, convert, format };
+// // }
 
 export function CarrierCard({ carrier }: { carrier: CarrierSummary }) {
   return (

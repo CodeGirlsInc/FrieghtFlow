@@ -15,7 +15,10 @@ interface UserProfile {
   hasRoutePreferences: boolean;
   hasCertifications: boolean;
   hasAcceptedShipment: boolean;
-}
+}{
+// //   const { currency, setCurrency, convert, format } = useCurrencyStore();
+// //   return { currency, setCurrency, convert, format };
+// // }
 
 const SHIPPER_STEPS = [
   { key: 'emailVerified', label: 'Verify email' },
