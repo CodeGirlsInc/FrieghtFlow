@@ -14,6 +14,9 @@ export enum BidStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',
+  COUNTER_OFFERED = 'COUNTER_OFFERED',
+  COUNTER_ACCEPTED = 'COUNTER_ACCEPTED',
+  COUNTER_REJECTED = 'COUNTER_REJECTED',
   EXPIRED = 'EXPIRED',
 }
 
@@ -50,9 +53,25 @@ export class Bid {
   @Column({ type: 'enum', enum: BidStatus, default: BidStatus.PENDING })
   status: BidStatus;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  @Column({
+    name: 'counter_price',
+    type: 'decimal',
+    precision: 14,
+    scale: 2,
+    nullable: true,
+  })
+  counterPrice: number | null;
+
+  @Column({ name: 'counter_message', type: 'text', nullable: true })
+  counterMessage: string | null;
 
   @Column({ name: 'expires_at', type: 'timestamptz', nullable: true })
   expiresAt: Date | null;
+
+  @Column({ name: 'counter_offered_at', type: 'timestamptz', nullable: true })
+  counterOfferedAt: Date | null;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
 }

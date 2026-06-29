@@ -1,7 +1,9 @@
+
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,6 +13,9 @@ import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { QueryUsersDto } from './dto/query-users.dto';
 import { QueryAdminShipmentsDto } from './dto/query-admin-shipments.dto';
+import { CarrierCacheService } from '../cache/carrier-cache.service';
+import { Response } from 'express';
+import { REQUEST } from '@nestjs/core';
 
 export interface PaginatedUsers {
   data: User[];
@@ -53,11 +58,21 @@ export class AdminService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(Shipment)
     private readonly shipmentRepo: Repository<Shipment>,
+    private readonly carrierCacheService: CarrierCacheService,
+    @Inject(REQUEST) private readonly request: { res: Response },
   ) {}
 
   // ── Users ────────────────────────────────────────────────────────────────────
 
   async listUsers(query: QueryUsersDto): Promise<PaginatedUsers> {
+    if (query.role === UserRole.CARRIER) {
+      const cachedData = await this.carrierCacheService.getCarriers<PaginatedUsers>(query);
+      if (cachedData) {
+        this.request.res.header('X-Cache', 'HIT');
+        return cachedData;
+      }
+    }
+
     const { page = 1, limit = 20, role, isActive } = query;
     const skip = (page - 1) * limit;
 
@@ -72,7 +87,14 @@ export class AdminService {
       take: limit,
     });
 
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    const result = { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+
+    if (query.role === UserRole.CARRIER) {
+      await this.carrierCacheService.setCarriers(query, result as any);
+      this.request.res.header('X-Cache', 'MISS');
+    }
+
+    return result;
   }
 
   async findUser(id: string): Promise<User> {
@@ -92,6 +114,7 @@ export class AdminService {
       throw new BadRequestException('User is already inactive');
     }
     await this.userRepo.update(id, { isActive: false });
+    await this.carrierCacheService.invalidateCache();
     return this.findUser(id);
   }
 
@@ -101,6 +124,7 @@ export class AdminService {
       throw new BadRequestException('User is already active');
     }
     await this.userRepo.update(id, { isActive: true });
+    await this.carrierCacheService.invalidateCache();
     return this.findUser(id);
   }
 
@@ -114,6 +138,7 @@ export class AdminService {
       throw new BadRequestException('Admins cannot change their own role');
     }
     await this.userRepo.update(id, { role });
+    await this.carrierCacheService.invalidateCache();
     return this.findUser(id);
   }
 

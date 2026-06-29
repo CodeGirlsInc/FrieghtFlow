@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { StringValue } from 'ms';
-import { MailerService } from '@nestjs-modules/mailer';
+import { MailService } from '../mailer/mail.service';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { UsersService } from '../users/users.service';
@@ -34,7 +34,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly mailerService: MailerService,
+    private readonly mailService: MailService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -222,22 +222,16 @@ export class AuthService {
       'FRONTEND_URL',
       'http://localhost:3000',
     );
-    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-
-    await this.mailerService.sendMail({
-      to: user.email,
-      subject: 'Reset your FreightFlow password',
-      html: `
-        <h1>Password Reset Request</h1>
-        <p>Hi ${user.firstName},</p>
-        <p>We received a request to reset your FreightFlow password. Click the button below to set a new password:</p>
-        <a href="${resetUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">
-          Reset Password
-        </a>
-        <p>This link expires in <strong>1 hour</strong>.</p>
-        <p>If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.</p>
-      `,
-    });
+    await this.mailService.send(
+      user.email,
+      'Reset your FreightFlow password',
+      'password-reset',
+      {
+        recipientName: `${user.firstName} ${user.lastName}`,
+        ctaUrl: `${frontendUrl}/reset-password?token=${token}`,
+        ctaLabel: 'Reset Password',
+      },
+    );
   }
 
   async sendVerificationEmail(user: User, token: string): Promise<void> {
@@ -245,21 +239,16 @@ export class AuthService {
       'FRONTEND_URL',
       'http://localhost:3000',
     );
-    const verifyUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
-
-    await this.mailerService.sendMail({
-      to: user.email,
-      subject: 'Verify your FreightFlow account',
-      html: `
-        <h1>Welcome to FreightFlow, ${user.firstName}!</h1>
-        <p>Please verify your email address by clicking the link below:</p>
-        <a href="${verifyUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">
-          Verify Email
-        </a>
-        <p>This link expires in 24 hours.</p>
-        <p>If you didn't create an account, you can safely ignore this email.</p>
-      `,
-    });
+    await this.mailService.send(
+      user.email,
+      'Verify your FreightFlow account',
+      'email-verification',
+      {
+        recipientName: `${user.firstName} ${user.lastName}`,
+        ctaUrl: `${frontendUrl}/auth/verify-email?token=${token}`,
+        ctaLabel: 'Verify Email',
+      },
+    );
   }
 
   private async generateTokens(user: User): Promise<AuthTokens> {
@@ -292,7 +281,7 @@ export class AuthService {
   private buildAuthResponse(user: User, tokens: AuthTokens): AuthResponse {
     const { passwordHash: _ph, refreshToken: _rt, ...safeUser } = user;
     return {
-      user: safeUser,
+      user: { ...safeUser, avatarUrl: user.avatarUrl },
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     };

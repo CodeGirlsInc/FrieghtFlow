@@ -12,6 +12,7 @@ import { ShipmentsService } from './shipments.service';
 import { Shipment } from './entities/shipment.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
+import { EtaService } from './eta.service';
 import { UserRole } from '../common/enums/role.enum';
 import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { User } from '../users/entities/user.entity';
@@ -25,6 +26,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     lastName: 'Doe',
     role: UserRole.SHIPPER,
     isEmailVerified: true,
+    isTwoFactorEnabled: false,
     isActive: true,
     walletAddress: null,
     refreshToken: null,
@@ -37,6 +39,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     recoveryCodes: [],
     createdAt: new Date(),
     updatedAt: new Date(),
+    twoFactorSecret: null,
+    recoveryCodes: [],
     ...overrides,
   };
 }
@@ -57,6 +61,7 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     volumeCbm: null,
     price: 5000,
     currency: 'USD',
+    isRFQ: false,
     isInsured: false,
     insurancePremium: null,
     status: ShipmentStatus.PENDING,
@@ -125,6 +130,15 @@ describe('ShipmentsService', () => {
           useValue: historyRepo,
         },
         { provide: EventEmitter2, useValue: eventEmitter },
+        {
+          provide: EtaService,
+          useValue: {
+            estimate: jest.fn().mockReturnValue({
+              estimatedTransitDays: 5,
+              estimatedDeliveryDate: '2026-06-30',
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -155,6 +169,30 @@ describe('ShipmentsService', () => {
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'shipment.created',
         expect.anything(),
+      );
+    });
+
+    it('stores RFQ shipments with null price and the RFQ flag', async () => {
+      const shipment = makeShipment();
+      shipmentRepo.create.mockReturnValue(shipment);
+      shipmentRepo.save.mockResolvedValue(shipment);
+      shipmentRepo.findOne.mockResolvedValue(shipment);
+      historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
+      historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+
+      await service.create('user-uuid-1', {
+        origin: 'Lagos',
+        destination: 'Abuja',
+        cargoDescription: 'Electronics',
+        weightKg: 100,
+        isRFQ: true,
+      });
+
+      expect(shipmentRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isRFQ: true,
+          price: null,
+        }),
       );
     });
   });

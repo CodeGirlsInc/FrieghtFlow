@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ExecutionContext } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import * as Joi from 'joi';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ShipmentsModule } from './shipments/shipments.module';
@@ -22,9 +22,26 @@ import { NotificationPreferencesModule } from './notification-preferences/notifi
 import { AdminAuditInterceptor } from './audit-log/admin-audit.interceptor';
 import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
-import { ScheduleModule } from '@nestjs/schedule';
 import { QueueModule } from './queue/queue.module';
 import { TasksModule } from './tasks/tasks.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { RouteCalculatorModule } from './route-calculator/route-calculator.module';
+import { AppMailerModule } from './mailer/mailer.module';
+import { AvatarUploadModule } from './avatar-upload/avatar-upload.module';
+import { EnvValidationModule } from '../../package/env-validation/env-validation.module';
+import { DisputesModule } from './disputes/disputes.module';
+import { CertificationReviewModule } from './certification-review/certification-review.module';
+import { BulkShipmentsModule } from './bulk-shipments/bulk-shipments.module';
+import { MarketplaceSearchModule } from './marketplace-search/marketplace-search.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { RequestLoggerModule } from './request-logger/request-logger.module';
+import { DocumentPipelineModule } from './document-pipeline/document-pipeline.module';
+import { StellarEscrowModule } from './stellar-escrow/stellar-escrow.module';
+import { ReputationCalculatorModule } from './reputation-calculator/reputation-calculator.module';
+import { LocationUpdatesModule } from './location-updates/location-updates.module';
+import { ETAModule } from './eta/eta.module';
+import { BidExpiryModule } from './bid-expiry/bid-expiry.module';
+import { HealthModule } from './health/health.module';
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
     ip?: string;
@@ -52,38 +69,9 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      validationSchema: Joi.object({
-        DATABASE_HOST: Joi.string().required(),
-        DATABASE_PORT: Joi.number().default(5432),
-        DATABASE_NAME: Joi.string().required(),
-        DATABASE_USERNAME: Joi.string().required(),
-        DATABASE_PASSWORD: Joi.string().required(),
-        NODE_ENV: Joi.string()
-          .valid('development', 'production', 'test')
-          .default('development'),
-        PORT: Joi.number().default(6000),
-        FRONTEND_URL: Joi.string().default('http://localhost:3000'),
-        JWT_SECRET: Joi.string().min(32).required(),
-        JWT_EXPIRES_IN: Joi.string().default('15m'),
-        JWT_REFRESH_SECRET: Joi.string().min(32).required(),
-        JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
-        MAIL_HOST: Joi.string().required(),
-        MAIL_PORT: Joi.number().default(2525),
-        MAIL_USER: Joi.string().required(),
-        MAIL_PASS: Joi.string().required(),
-        MAIL_FROM: Joi.string().default('noreply@freightflow.io'),
-        UPLOAD_DIR: Joi.string().default('./uploads'),
-        REDIS_HOST: Joi.string().default('localhost'),
-        REDIS_PORT: Joi.number().default(6379),
-      }),
-      validationOptions: {
-        allowUnknown: true,
-        abortEarly: false,
-      },
-    }),
+    EnvValidationModule,
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       errorMessage: throttlerErrorMessage,
       throttlers: [
@@ -119,6 +107,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         synchronize: configService.get('NODE_ENV') !== 'production',
       }),
     }),
+    AppMailerModule,
     UsersModule,
     AuthModule,
     ShipmentsModule,
@@ -132,9 +121,18 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     NotificationPreferencesModule,
     CarriersModule,
     ReviewsModule,
-    ScheduleModule.forRoot(),
     QueueModule,
     TasksModule,
+    CloudinaryModule,
+    RouteCalculatorModule,
+    AvatarUploadModule,
+    DisputesModule,
+    CertificationReviewModule,
+    BulkShipmentsModule,
+    MarketplaceSearchModule,
+    OnboardingModule,
+    RequestLoggerModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [

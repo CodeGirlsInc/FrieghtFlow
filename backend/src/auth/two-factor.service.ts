@@ -1,33 +1,31 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import {
   Injectable,
-  UnauthorizedException,
   BadRequestException,
+  UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
-import { authenticator } from 'otplib';
+import { authenticator } from '@otplib/preset-v11';
 import * as qrcode from 'qrcode';
 import * as bcrypt from 'bcrypt';
-import { Redis } from 'ioredis'; // Assuming BE-02 Redis instance wrapper setup
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { User } from '../users/entities/user.entity';
 import { TwoFactorRecovery } from '../users/entities/two-factor-recovery.entity';
 
+const SETUP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
 @Injectable()
 export class TwoFactorService {
-  private readonly redisClient: Redis;
-
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(TwoFactorRecovery)
     private readonly recoveryRepository: Repository<TwoFactorRecovery>,
-  ) {
-    // Standard workspace constructor assignment for Redis connection
-    this.redisClient = new Redis(
-      process.env.REDIS_URL || 'redis://localhost:6379',
-    );
-  }
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+  ) {}
 
   async initiateSetup(userId: number, email: string) {
     const secret = authenticator.generateSecret();
@@ -35,16 +33,14 @@ export class TwoFactorService {
     const otpauthUrl = authenticator.keyuri(email, appName, secret);
     const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
 
-    // Cache the temporary secret safely inside Redis with a strict 10 minute TTL
-    const redisKey = `2fa:setup:${userId}`;
-    await this.redisClient.setex(redisKey, 600, secret);
+    await this.cacheManager.set(`2fa:setup:${userId}`, secret, SETUP_TTL_MS);
 
     return { otpauthUrl, qrCodeDataUrl, secret };
   }
 
   async confirmEnable(userId: number, otp: string) {
-    const redisKey = `2fa:setup:${userId}`;
-    const secret = await this.redisClient.get(redisKey);
+    const cacheKey = `2fa:setup:${userId}`;
+    const secret = await this.cacheManager.get<string>(cacheKey);
 
     if (!secret) {
       throw new BadRequestException(
@@ -59,16 +55,13 @@ export class TwoFactorService {
       );
     }
 
-    // Persist configuration settings to user entity
     await this.userRepository.update(userId, {
       twoFactorSecret: secret,
       isTwoFactorEnabled: true,
     });
 
-    // Clear temporary setup parameters out of cache memory immediately
-    await this.redisClient.del(redisKey);
+    await this.cacheManager.del(cacheKey);
 
-    // Generate 8 individual secure backup validation tokens
     const plainRecoveryCodes: string[] = [];
     const entityPool: Partial<TwoFactorRecovery>[] = [];
 
@@ -120,7 +113,6 @@ export class TwoFactorService {
     for (const record of records) {
       const match = await bcrypt.compare(inputToken, record.codeHash);
       if (match) {
-        // Invalidate single-use tracking item upon execution match matching Acceptance Criteria
         await this.recoveryRepository.update(record.id, { usedAt: new Date() });
         return true;
       }
@@ -131,10 +123,9 @@ export class TwoFactorService {
 
   async deactivate(userId: number) {
     await this.userRepository.update(userId, {
-      twoFactorSecret: null,
+      twoFactorSecret: '' as unknown as string,
       isTwoFactorEnabled: false,
     });
-    // Wipe matching system recovery database objects safely
     await this.recoveryRepository.delete({ userId });
   }
 }

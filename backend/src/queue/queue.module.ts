@@ -17,7 +17,7 @@ import { ShipmentsModule } from '../shipments/shipments.module';
           host: configService.get<string>('REDIS_HOST', 'localhost'),
           port: configService.get<number>('REDIS_PORT', 6379),
         },
-      }),
+      } as any),
     }),
     BullModule.registerQueue(
       {

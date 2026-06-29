@@ -5,13 +5,15 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseInterceptors,
   UploadedFile,
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
-  Res,
   BadRequestException,
+  StreamableFile,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -25,6 +27,7 @@ import {
 import { Response } from 'express';
 import { DocumentsService } from './documents.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
+import { ListDocumentsQueryDto } from './dto/list-documents-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 
@@ -64,7 +67,6 @@ export class DocumentsController {
   @ApiResponse({ status: 201, description: 'Document uploaded successfully' })
   @ApiResponse({ status: 400, description: 'Invalid file or payload' })
   @ApiResponse({ status: 403, description: 'Not a party to this shipment' })
-  // Multer options are configured via MulterModule in DocumentsModule
   @UseInterceptors(FileInterceptor('file'))
   async upload(
     @UploadedFile() file: Express.Multer.File,
@@ -82,6 +84,22 @@ export class DocumentsController {
     return this.documentsService.upload(file, dto, user);
   }
 
+  @Get()
+  @ApiOperation({ summary: 'List authenticated user documents (paginated)' })
+  @ApiResponse({ status: 200, description: 'Paginated document list' })
+  listUserDocuments(
+    @Query() query: ListDocumentsQueryDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.documentsService.listUserDocuments(
+      user,
+      query.page,
+      query.limit,
+      query.documentType,
+      query.shipmentId,
+    );
+  }
+
   @Get('shipment/:shipmentId')
   @ApiOperation({ summary: 'List all documents for a shipment' })
   @ApiResponse({ status: 200, description: 'Document list' })
@@ -95,6 +113,7 @@ export class DocumentsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get document metadata by ID' })
   @ApiResponse({ status: 200, description: 'Document metadata' })
+  @ApiResponse({ status: 403, description: 'Not owner or admin' })
   @ApiResponse({ status: 404, description: 'Document not found' })
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     return this.documentsService.findOne(id, user);
@@ -103,23 +122,29 @@ export class DocumentsController {
   @Get(':id/download')
   @ApiOperation({ summary: 'Download a document file' })
   @ApiResponse({ status: 200, description: 'File stream' })
+  @ApiResponse({ status: 403, description: 'Not owner or admin' })
   @ApiResponse({ status: 404, description: 'File not found' })
   async download(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
-    @Res() res: Response,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const { filePath, originalName } = await this.documentsService.getFilePath(
-      id,
-      user,
-    );
-    res.download(filePath, originalName);
+    const { stream, mimetype, originalName } =
+      await this.documentsService.download(id, user);
+
+    res.set({
+      'Content-Type': mimetype,
+      'Content-Disposition': `attachment; filename="${originalName}"`,
+    });
+
+    return new StreamableFile(stream);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a document (uploader or admin only)' })
   @ApiResponse({ status: 204, description: 'Document deleted' })
+  @ApiResponse({ status: 403, description: 'Not owner or admin' })
   async remove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,

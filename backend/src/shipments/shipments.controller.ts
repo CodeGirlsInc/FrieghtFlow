@@ -9,10 +9,13 @@ import {
   Res,
   ParseUUIDPipe,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import {
   ApiTags,
   ApiBearerAuth,
+  ApiProduces,
   ApiOperation,
   ApiResponse,
   ApiParam,
@@ -117,6 +120,8 @@ export class ShipmentsController {
   // ── Carrier actions ──────────────────────────────────────────────────────────
 
   @Get('marketplace')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(300000)
   @ApiOperation({ summary: 'Browse available (PENDING) shipments — carriers' })
   findMarketplace(@Query() query: QueryShipmentDto) {
     return this.shipmentsService.findMarketplace(query);
@@ -211,6 +216,58 @@ export class ShipmentsController {
   @ApiParam({ name: 'trackingNumber', example: 'FF-ABC123-DEF456' })
   findByTracking(@Param('trackingNumber') trackingNumber: string) {
     return this.shipmentsService.findByTracking(trackingNumber);
+  }
+
+  @Get(':id/bol')
+  @ApiOperation({ summary: 'Download Bill of Lading PDF for a shipment' })
+  @ApiProduces('application/pdf')
+  @ApiResponse({ status: 200, description: 'Bill of Lading PDF file' })
+  @ApiResponse({
+    status: 400,
+    description: 'Shipment not in accepted status or beyond',
+  })
+  @ApiResponse({ status: 403, description: 'Not a party to this shipment' })
+  async downloadBol(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, trackingNumber } = await this.shipmentsService.generateBol(
+      id,
+      user,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="BOL-${trackingNumber}.pdf"`,
+    );
+    res.end(buffer);
+  }
+
+  @Get(':id/invoice')
+  @ApiOperation({
+    summary: 'Download freight invoice PDF for a completed shipment',
+  })
+  @ApiProduces('application/pdf')
+  @ApiResponse({ status: 200, description: 'Invoice PDF file' })
+  @ApiResponse({ status: 400, description: 'Shipment not yet completed' })
+  @ApiResponse({
+    status: 403,
+    description: 'Only the shipper or admin can access the invoice',
+  })
+  async downloadInvoice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, trackingNumber } =
+      await this.shipmentsService.generateInvoice(id, user);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="INV-${trackingNumber}.pdf"`,
+    );
+    res.end(buffer);
   }
 
   @Get(':id')

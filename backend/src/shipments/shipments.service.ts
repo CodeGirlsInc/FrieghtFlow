@@ -7,11 +7,15 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Readable, Transform } from 'node:stream';
+import PDFDocument from 'pdfkit';
+import QRCode from 'qrcode';
+import * as ExcelJS from 'exceljs';
 import {
   Repository,
   FindOptionsWhere,
   ILike,
   SelectQueryBuilder,
+  MoreThanOrEqual,
 } from 'typeorm';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -25,6 +29,7 @@ import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
 import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
+import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { User } from '../users/entities/user.entity';
 import {
   SHIPMENT_CREATED,
@@ -37,6 +42,14 @@ import {
   SHIPMENT_DISPUTE_RESOLVED,
   ShipmentEvent,
 } from './events/shipment.events';
+import { EtaService, resolveZone } from './eta.service';
+import { Redis } from 'ioredis';
+import {
+  ZONE_BASE_RATES,
+  RATE_PER_KG,
+  CATEGORY_MULTIPLIERS,
+  DEFAULT_ZONE_BASE_RATE,
+} from './quotes.config';
 
 export interface PaginatedShipments {
   data: Shipment[];
@@ -74,11 +87,24 @@ interface ShipmentExportResult {
   fileName: string;
 }
 
+interface MarketRateResponse {
+  insufficient_data?: boolean;
+  message?: string;
+  min?: number;
+  max?: number;
+  average?: number;
+  median?: number;
+  sampleSize?: number;
+  currency?: string;
+  broadened?: boolean;
+}
+
 type ShipmentExportValue = string | number | Date | null | undefined;
 
 @Injectable()
 export class ShipmentsService {
   private readonly logger = new Logger(ShipmentsService.name);
+  private redisClient: Redis | null = null;
   private readonly exportColumns: Array<keyof ShipmentExportRow> = [
     'id',
     'trackingNumber',
@@ -105,6 +131,7 @@ export class ShipmentsService {
     @InjectRepository(ShipmentStatusHistory)
     private readonly historyRepo: Repository<ShipmentStatusHistory>,
     private readonly eventEmitter: EventEmitter2,
+    private readonly etaService: EtaService,
   ) {}
 
   // ── Tracking number ──────────────────────────────────────────────────────────
@@ -180,12 +207,122 @@ export class ShipmentsService {
     await this.historyRepo.save(entry);
   }
 
+  private getRedisClient(): Redis | null {
+    if (!this.redisClient) {
+      try {
+        this.redisClient = new Redis(
+          process.env.REDIS_URL || 'redis://localhost:6379',
+          { lazyConnect: true },
+        );
+      } catch {
+        return null;
+      }
+    }
+
+    return this.redisClient;
+  }
+
+  private sanitizeKeyValue(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, '-');
+  }
+
+  private async getCachedMarketRate(
+    key: string,
+  ): Promise<MarketRateResponse | null> {
+    const client = this.getRedisClient();
+    if (!client) return null;
+
+    try {
+      const cachedValue = await client.get(key);
+      return cachedValue
+        ? (JSON.parse(cachedValue) as MarketRateResponse)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async setCachedMarketRate(
+    key: string,
+    value: MarketRateResponse,
+  ): Promise<void> {
+    const client = this.getRedisClient();
+    if (!client) return;
+
+    try {
+      await client.setex(key, 3600, JSON.stringify(value));
+    } catch {
+      // Ignore Redis failures and fall back to in-memory response.
+    }
+  }
+
+  private matchesLane(
+    shipmentOrigin: string | undefined,
+    shipmentDestination: string | undefined,
+    origin: string,
+    destination: string,
+  ): boolean {
+    return (
+      (shipmentOrigin?.toLowerCase().includes(origin.toLowerCase()) || false) &&
+      (shipmentDestination?.toLowerCase().includes(destination.toLowerCase()) ||
+        false)
+    );
+  }
+
+  private getCountry(value: string): string {
+    const parts = value
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    return (parts.at(-1) ?? value).toLowerCase();
+  }
+
+  private buildRateStats(
+    prices: Array<number | null | undefined>,
+    currency: string,
+  ): MarketRateResponse {
+    const validPrices = prices.filter(
+      (price): price is number =>
+        typeof price === 'number' && Number.isFinite(price),
+    );
+
+    if (validPrices.length === 0) {
+      return {
+        insufficient_data: true,
+        message:
+          'Not enough completed shipments on this lane to estimate a rate',
+      };
+    }
+
+    const sorted = [...validPrices].sort((a, b) => a - b);
+    const min = sorted[0];
+    const max = sorted[sorted.length - 1];
+    const average =
+      sorted.reduce((sum, value) => sum + value, 0) / sorted.length;
+    const median =
+      sorted.length % 2 === 0
+        ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+        : sorted[Math.floor(sorted.length / 2)];
+
+    return {
+      min,
+      max,
+      average,
+      median,
+      sampleSize: sorted.length,
+      currency: currency || 'USD',
+    };
+  }
+
   // ── CRUD ─────────────────────────────────────────────────────────────────────
 
   async create(shipperId: string, dto: CreateShipmentDto): Promise<Shipment> {
-    const insurancePremium = dto.isInsured
-      ? Math.round(dto.price * 0.015 * 100) / 100
-      : null;
+    const effectivePrice =
+      dto.isRFQ && dto.price === undefined ? null : dto.price;
+    const insurancePremium =
+      dto.isInsured && effectivePrice !== null && effectivePrice !== undefined
+        ? Math.round(effectivePrice * 0.015 * 100) / 100
+        : null;
 
     const shipment = this.shipmentRepo.create({
       trackingNumber: this.generateTrackingNumber(),
@@ -197,7 +334,8 @@ export class ShipmentsService {
       cargoCategory: dto.cargoCategory ?? null,
       weightKg: dto.weightKg,
       volumeCbm: dto.volumeCbm ?? null,
-      price: dto.price,
+      price: effectivePrice,
+      isRFQ: dto.isRFQ ?? false,
       currency: dto.currency ?? 'USD',
       notes: dto.notes ?? null,
       status: ShipmentStatus.PENDING,
@@ -240,9 +378,16 @@ export class ShipmentsService {
 
     try {
       for (const shipmentDto of dto.shipments) {
-        const insurancePremium = shipmentDto.isInsured
-          ? Math.round(shipmentDto.price * 0.015 * 100) / 100
-          : null;
+        const effectivePrice =
+          shipmentDto.isRFQ && shipmentDto.price === undefined
+            ? null
+            : shipmentDto.price;
+        const insurancePremium =
+          shipmentDto.isInsured &&
+          effectivePrice !== null &&
+          effectivePrice !== undefined
+            ? Math.round(effectivePrice * 0.015 * 100) / 100
+            : null;
 
         const shipment = this.shipmentRepo.create({
           trackingNumber: this.generateTrackingNumber(),
@@ -254,7 +399,8 @@ export class ShipmentsService {
           cargoCategory: shipmentDto.cargoCategory ?? null,
           weightKg: shipmentDto.weightKg,
           volumeCbm: shipmentDto.volumeCbm ?? null,
-          price: shipmentDto.price,
+          price: effectivePrice,
+          isRFQ: shipmentDto.isRFQ ?? false,
           currency: shipmentDto.currency ?? 'USD',
           notes: shipmentDto.notes ?? null,
           status: ShipmentStatus.PENDING,
@@ -340,6 +486,132 @@ export class ShipmentsService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
+  async getMarketRate(query: {
+    origin: string;
+    destination: string;
+    weightKg?: number;
+    cargoCategory?: CargoCategory;
+  }): Promise<MarketRateResponse> {
+    const origin = query.origin?.trim();
+    const destination = query.destination?.trim();
+    const cargoCategory = query.cargoCategory;
+
+    if (!origin || !destination) {
+      throw new BadRequestException('origin and destination are required');
+    }
+
+    const cacheKey = `market-rate:${this.sanitizeKeyValue(origin)}:${this.sanitizeKeyValue(destination)}:${this.sanitizeKeyValue(cargoCategory ?? 'general')}`;
+    const cachedValue = await this.getCachedMarketRate(cacheKey);
+    if (cachedValue) {
+      return cachedValue;
+    }
+
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+    const shipments = await this.shipmentRepo.find({
+      where: {
+        status: ShipmentStatus.COMPLETED,
+        updatedAt: MoreThanOrEqual(ninetyDaysAgo),
+        cargoCategory: cargoCategory ?? undefined,
+      },
+      select: ['price', 'origin', 'destination', 'currency'],
+    });
+
+    const sameLane = shipments.filter((shipment) =>
+      this.matchesLane(
+        shipment.origin,
+        shipment.destination,
+        origin,
+        destination,
+      ),
+    );
+
+    const laneToUse =
+      sameLane.length >= 5
+        ? sameLane
+        : shipments.filter((shipment) => {
+            return (
+              this.getCountry(shipment.origin) === this.getCountry(origin) &&
+              this.getCountry(shipment.destination) ===
+                this.getCountry(destination)
+            );
+          });
+
+    if (laneToUse.length < 5) {
+      return {
+        insufficient_data: true,
+        message:
+          'Not enough completed shipments on this lane to estimate a rate',
+      };
+    }
+
+    const stats = this.buildRateStats(
+      laneToUse.map((shipment) => shipment.price),
+      laneToUse[0]?.currency ?? 'USD',
+    );
+
+    if ('insufficient_data' in stats) {
+      return stats;
+    }
+
+    const response = {
+      ...stats,
+      ...(sameLane.length < 5 ? { broadened: true } : {}),
+    };
+
+    await this.setCachedMarketRate(cacheKey, response);
+    return response;
+  }
+
+  estimatePrice(dto: {
+    origin: string;
+    destination: string;
+    weightKg: number;
+    volumeCbm?: number;
+    cargoCategory?: CargoCategory;
+  }) {
+    if (!dto.origin || !dto.destination || dto.weightKg <= 0) {
+      throw new BadRequestException(
+        'origin, destination, and weightKg are required',
+      );
+    }
+
+    const originZone = resolveZone(dto.origin);
+    const destinationZone = resolveZone(dto.destination);
+    const zoneKey = `${originZone}-${destinationZone}`;
+    const reverseKey = `${destinationZone}-${originZone}`;
+    const baseRate =
+      ZONE_BASE_RATES[zoneKey] ??
+      ZONE_BASE_RATES[reverseKey] ??
+      DEFAULT_ZONE_BASE_RATE;
+    const weightCharge = dto.weightKg * RATE_PER_KG;
+    const categoryMultiplier =
+      CATEGORY_MULTIPLIERS[dto.cargoCategory ?? CargoCategory.GENERAL_CARGO] ??
+      1;
+    const estimatedMin = Number(
+      (baseRate * categoryMultiplier + weightCharge).toFixed(2),
+    );
+    const estimatedMax = Number((estimatedMin * 1.15).toFixed(2));
+    const eta = this.etaService.estimate({
+      origin: dto.origin,
+      destination: dto.destination,
+      weightKg: dto.weightKg,
+    });
+
+    return {
+      estimatedMin,
+      estimatedMax,
+      currency: 'USD',
+      estimatedDeliveryDays: eta.estimatedTransitDays,
+      breakdown: {
+        baseRate,
+        weightCharge,
+        categoryMultiplier,
+      },
+    };
+  }
+
   async findMarketplace(query: QueryShipmentDto): Promise<PaginatedShipments> {
     const { page = 1, limit = 20, origin, destination, cargoCategory } = query;
     const skip = (page - 1) * limit;
@@ -391,9 +663,27 @@ export class ShipmentsService {
       );
     }
 
+    const timeLabel = new Date().toISOString().replace(/[.:]/g, '-');
+    const fileLabel = user.role === UserRole.ADMIN ? 'all' : user.id;
+
+    if (format === 'xlsx') {
+      const buffer = await this.createXlsxBuffer(user);
+      const stream = new Readable({
+        read() {
+          this.push(buffer);
+          this.push(null);
+        },
+      });
+      return {
+        stream,
+        contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        fileName: `shipments-${fileLabel}-${timeLabel}.xlsx`,
+      };
+    }
+
     const queryBuilder = this.buildExportQuery(user);
     const rowStream = (await queryBuilder.stream()) as Readable;
-    const timeLabel = new Date().toISOString().replace(/[.:]/g, '-');
 
     return {
       stream:
@@ -404,8 +694,246 @@ export class ShipmentsService {
         format === 'csv'
           ? 'text/csv; charset=utf-8'
           : 'application/json; charset=utf-8',
-      fileName: `shipments-${user.role === UserRole.ADMIN ? 'all' : user.id}-${timeLabel}.${format}`,
+      fileName: `shipments-${fileLabel}-${timeLabel}.${format}`,
     };
+  }
+
+  async generateBol(
+    shipmentId: string,
+    user: User,
+  ): Promise<{ buffer: Buffer; trackingNumber: string }> {
+    const shipment = await this.findOne(shipmentId);
+
+    const isShipper = shipment.shipperId === user.id;
+    const isCarrier = shipment.carrierId === user.id;
+    const isAdmin = user.role === UserRole.ADMIN;
+    if (!isShipper && !isCarrier && !isAdmin) {
+      throw new ForbiddenException(
+        'Only parties to this shipment or an admin can download the Bill of Lading',
+      );
+    }
+
+    const unavailableStatuses = [ShipmentStatus.PENDING];
+    if (unavailableStatuses.includes(shipment.status)) {
+      throw new BadRequestException(
+        'Bill of Lading is not available for shipments in pending status',
+      );
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://freightflow.app';
+    const trackingUrl = `${frontendUrl}/track/${shipment.trackingNumber}`;
+    const qrBuffer = await QRCode.toBuffer(trackingUrl, {
+      type: 'png',
+      width: 120,
+    });
+
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk as Buffer));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const shipperName = shipment.shipper
+        ? `${shipment.shipper.firstName} ${shipment.shipper.lastName}`
+        : 'Unknown';
+      const carrierName = shipment.carrier
+        ? `${shipment.carrier.firstName} ${shipment.carrier.lastName}`
+        : 'Unassigned';
+
+      doc
+        .fontSize(22)
+        .font('Helvetica-Bold')
+        .text('BILL OF LADING', { align: 'center' });
+      doc.moveDown(0.4);
+      doc
+        .fontSize(11)
+        .font('Helvetica')
+        .text(`BoL Number: ${shipment.trackingNumber}`, { align: 'center' });
+      doc.text(`Issue Date: ${new Date().toLocaleDateString('en-US')}`, {
+        align: 'center',
+      });
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Parties');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(
+        `Shipper: ${shipperName}${shipment.shipper?.email ? ` | ${shipment.shipper.email}` : ''}`,
+      );
+      doc.text(
+        `Carrier: ${carrierName}${shipment.carrier?.email ? ` | ${shipment.carrier.email}` : ''}`,
+      );
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Route');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(
+        `Origin → Destination: ${shipment.origin} → ${shipment.destination}`,
+      );
+      if (shipment.pickupDate) {
+        doc.text(
+          `Pickup Date: ${new Date(shipment.pickupDate).toLocaleDateString('en-US')}`,
+        );
+      }
+      if (shipment.estimatedDeliveryDate) {
+        doc.text(
+          `Estimated Delivery: ${new Date(shipment.estimatedDeliveryDate).toLocaleDateString('en-US')}`,
+        );
+      }
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Cargo');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(`Description: ${shipment.cargoDescription}`);
+      if (shipment.cargoCategory) {
+        doc.text(`Category: ${shipment.cargoCategory}`);
+      }
+      doc.text(`Weight: ${String(shipment.weightKg)} kg`);
+      if (shipment.volumeCbm != null) {
+        doc.text(`Volume: ${String(shipment.volumeCbm)} cbm`);
+      }
+      doc.text(
+        shipment.isInsured
+          ? `Insurance: Yes — Premium: ${String(shipment.insurancePremium ?? 0)} ${shipment.currency}`
+          : 'Insurance: No',
+      );
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Financial');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(`Agreed Price: ${String(shipment.price)} ${shipment.currency}`);
+      doc.moveDown(1);
+
+      doc.image(qrBuffer, { width: 120 });
+      doc.moveDown(0.4);
+      doc.fontSize(9).text(`Scan to track: ${trackingUrl}`);
+      doc.moveDown(2);
+
+      doc.fontSize(10).font('Helvetica');
+      doc.text(
+        '_________________________________          _________________________________',
+      );
+      doc.text(
+        'Shipper Signature & Date                    Carrier Signature & Date',
+      );
+      doc.moveDown(2);
+
+      doc
+        .fontSize(9)
+        .fillColor('#666666')
+        .text(
+          'Generated by FreightFlow | Blockchain Tx: Pending verification',
+          { align: 'center' },
+        );
+
+      doc.end();
+    });
+
+    return { buffer, trackingNumber: shipment.trackingNumber };
+  }
+
+  async generateInvoice(
+    shipmentId: string,
+    user: User,
+  ): Promise<{ buffer: Buffer; trackingNumber: string }> {
+    const shipment = await this.findOne(shipmentId);
+
+    const isShipper = shipment.shipperId === user.id;
+    const isAdmin = user.role === UserRole.ADMIN;
+    if (!isShipper && !isAdmin) {
+      throw new ForbiddenException(
+        'Only the shipper or an admin can download the invoice',
+      );
+    }
+
+    if (shipment.status !== ShipmentStatus.COMPLETED) {
+      throw new BadRequestException(
+        'Invoice is only available for completed shipments',
+      );
+    }
+
+    const platformFeePercent = parseFloat(
+      process.env.PLATFORM_FEE_PERCENT ?? '2.5',
+    );
+    const freightCharge = Number(shipment.price);
+    const insurancePremium =
+      shipment.isInsured && shipment.insurancePremium != null
+        ? Number(shipment.insurancePremium)
+        : 0;
+    const platformFee = Math.round(freightCharge * platformFeePercent) / 100;
+    const total = freightCharge + insurancePremium + platformFee;
+
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk as Buffer));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const shipperName = shipment.shipper
+        ? `${shipment.shipper.firstName} ${shipment.shipper.lastName}`
+        : 'Unknown';
+
+      doc
+        .fontSize(22)
+        .font('Helvetica-Bold')
+        .text('FREIGHT INVOICE', { align: 'center' });
+      doc.moveDown(0.4);
+      doc
+        .fontSize(11)
+        .font('Helvetica')
+        .text(`Invoice No.: INV-${shipment.trackingNumber}`, {
+          align: 'center',
+        });
+      doc.text(`Issue Date: ${new Date().toLocaleDateString('en-US')}`, {
+        align: 'center',
+      });
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Bill To');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(shipperName);
+      if (shipment.shipper?.email) {
+        doc.text(shipment.shipper.email);
+      }
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Line Items');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(
+        `Freight Charge: ${freightCharge.toFixed(2)} ${shipment.currency}`,
+      );
+      if (insurancePremium > 0) {
+        doc.text(
+          `Insurance Premium: ${insurancePremium.toFixed(2)} ${shipment.currency}`,
+        );
+      }
+      doc.text(
+        `Platform Fee (${platformFeePercent.toFixed(1)}%): ${platformFee.toFixed(2)} ${shipment.currency}`,
+      );
+      doc.moveDown(0.5);
+      doc
+        .font('Helvetica-Bold')
+        .text(`Total: ${total.toFixed(2)} ${shipment.currency}`);
+      doc.moveDown(1);
+
+      doc.fontSize(13).font('Helvetica-Bold').text('Payment');
+      doc.fontSize(10).font('Helvetica');
+      doc.font('Helvetica-Bold').fillColor('#1a7a1a').text('Status: Paid');
+      doc.fillColor('black');
+      doc.moveDown(2);
+
+      doc
+        .fontSize(9)
+        .fillColor('#666666')
+        .text(`Generated ${new Date().toISOString()} | FreightFlow`, {
+          align: 'center',
+        });
+
+      doc.end();
+    });
+
+    return { buffer, trackingNumber: shipment.trackingNumber };
   }
 
   async update(
@@ -725,6 +1253,63 @@ export class ShipmentsService {
       relations: ['changedBy'],
       order: { changedAt: 'ASC' },
     });
+  }
+
+  private async createXlsxBuffer(user: User): Promise<Buffer> {
+    const where: FindOptionsWhere<Shipment> = {};
+    if (user.role === UserRole.SHIPPER) {
+      where.shipperId = user.id;
+    }
+
+    const shipments = await this.shipmentRepo.find({
+      where,
+      relations: ['shipper', 'carrier'],
+      order: { createdAt: 'DESC' },
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Shipments');
+
+    sheet.columns = [
+      { header: 'Tracking Number', key: 'trackingNumber', width: 25 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Origin', key: 'origin', width: 20 },
+      { header: 'Destination', key: 'destination', width: 20 },
+      { header: 'Cargo Category', key: 'cargoCategory', width: 18 },
+      { header: 'Weight (kg)', key: 'weightKg', width: 12 },
+      { header: 'Price', key: 'price', width: 12 },
+      { header: 'Currency', key: 'currency', width: 10 },
+      { header: 'Shipper Name', key: 'shipperName', width: 20 },
+      { header: 'Carrier Name', key: 'carrierName', width: 20 },
+      { header: 'Created At', key: 'createdAt', width: 22 },
+      { header: 'Completed At', key: 'completedAt', width: 22 },
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+
+    for (const s of shipments) {
+      sheet.addRow({
+        trackingNumber: s.trackingNumber,
+        status: s.status,
+        origin: s.origin,
+        destination: s.destination,
+        cargoCategory: s.cargoCategory ?? '',
+        weightKg: s.weightKg,
+        price: s.price,
+        currency: s.currency,
+        shipperName: s.shipper
+          ? `${s.shipper.firstName} ${s.shipper.lastName}`
+          : '',
+        carrierName: s.carrier
+          ? `${s.carrier.firstName} ${s.carrier.lastName}`
+          : '',
+        createdAt: s.createdAt?.toISOString() ?? '',
+        completedAt: s.actualDeliveryDate?.toISOString() ?? '',
+      });
+    }
+
+    const arrayBuffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(arrayBuffer);
   }
 
   private buildExportQuery(user: User): SelectQueryBuilder<Shipment> {
