@@ -11,6 +11,15 @@ interface Escrow {
   fee: number;
   status: EscrowStatus;
 }
+// interface Escrow {
+//   id: string;
+//   shipper: string;
+//   carrier: string;
+//   admin: string;
+//   amount: number;
+//   fee: number;
+//   status: EscrowStatus;
+// }
 
 function raiseDispute(escrow: Escrow, caller: string): void {
   if (escrow.status !== "ACTIVE") throw new Error("Can only dispute an active escrow");
