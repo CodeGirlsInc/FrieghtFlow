@@ -64,9 +64,13 @@ describe('HealthController', () => {
       },
     };
 
-    dbHealthIndicator.isHealthy.mockResolvedValue({ database: { status: 'up' } });
+    dbHealthIndicator.isHealthy.mockResolvedValue({
+      database: { status: 'up' },
+    });
     smtpHealthIndicator.isHealthy.mockResolvedValue({ smtp: { status: 'up' } });
-    cloudinaryHealthIndicator.isHealthy.mockResolvedValue({ cloudinary: { status: 'up' } });
+    cloudinaryHealthIndicator.isHealthy.mockResolvedValue({
+      cloudinary: { status: 'up' },
+    });
     healthCheckService.check.mockResolvedValue(mockHealthResult);
 
     const result = await controller.check();
@@ -85,9 +89,15 @@ describe('HealthController', () => {
       },
     };
 
-    dbHealthIndicator.isHealthy.mockResolvedValue({ database: { status: 'up' } });
-    smtpHealthIndicator.isHealthy.mockResolvedValue({ smtp: { status: 'down', message: 'SMTP connection failed' } });
-    cloudinaryHealthIndicator.isHealthy.mockResolvedValue({ cloudinary: { status: 'up' } });
+    dbHealthIndicator.isHealthy.mockResolvedValue({
+      database: { status: 'up' },
+    });
+    smtpHealthIndicator.isHealthy.mockResolvedValue({
+      smtp: { status: 'down', message: 'SMTP connection failed' },
+    });
+    cloudinaryHealthIndicator.isHealthy.mockResolvedValue({
+      cloudinary: { status: 'up' },
+    });
     healthCheckService.check.mockResolvedValue(mockHealthResult);
 
     const result = await controller.check();

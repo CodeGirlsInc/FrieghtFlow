@@ -6,9 +6,15 @@ import {
   ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { ReviewResponseDto } from './dto/review-response.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 
@@ -20,6 +26,7 @@ export class ReviewsController {
 
   @Post(':id/review')
   @ApiOperation({ summary: 'Leave a review for a completed shipment' })
+  @ApiResponse({ status: 201, type: ReviewResponseDto })
   create(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,

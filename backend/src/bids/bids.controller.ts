@@ -20,6 +20,7 @@ import {
 import { BidsService } from './bids.service';
 import { CreateBidDto } from './dto/create-bid.dto';
 import { CounterBidDto } from './dto/counter-bid.dto';
+import { BidResponseDto } from './dto/bid-response.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -51,6 +52,7 @@ export class BidsController {
   @Roles(UserRole.SHIPPER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Shipper views all bids on their shipment' })
   @ApiParam({ name: 'id', description: 'Shipment ID' })
+  @ApiResponse({ status: 200, type: [BidResponseDto] })
   getBids(
     @Param('id', ParseUUIDPipe) shipmentId: string,
     @CurrentUser() user: User,
