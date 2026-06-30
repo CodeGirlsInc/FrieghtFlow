@@ -8,6 +8,11 @@ import { Message } from '../lib/api/messaging.api';
 interface MessageNewPayload extends Message {
   conversationId: string;
 }
+{
+// //   const { currency, setCurrency, convert, format } = useCurrencyStore();
+// //   return { currency, setCurrency, convert, format };
+// // }
+
 
 interface UseMessagingSocketOptions {
   /** Currently open conversation — incoming messages for it go to onMessage, not the badge */
