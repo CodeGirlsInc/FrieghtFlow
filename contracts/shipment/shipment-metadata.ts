@@ -14,6 +14,16 @@ function validate(key: string, value: string): void {
     throw new Error("Key/value exceeds 64 character limit");
 }
 
+// interface Escrow {
+//   id: string;
+//   shipper: string;
+//   carrier: string;
+//   admin: string;
+//   amount: number;
+//   fee: number;
+//   status: EscrowStatus;
+// }
+
 export function createShipment(
   shipmentId: string,
   parties: string[],
