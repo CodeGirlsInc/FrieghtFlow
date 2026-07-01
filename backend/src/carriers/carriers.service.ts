@@ -1,49 +1,27 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
 import { Shipment } from '../shipments/entities/shipment.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
-
-const METRICS_TTL_MS = 60 * 1000; // 1 minute
 
 @Injectable()
 export class CarriersService {
   constructor(
     @InjectRepository(Shipment)
     private readonly shipmentRepo: Repository<Shipment>,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   async getMyMetrics(carrierId: string) {
-    const cacheKey = `carrier:${carrierId}:metrics`;
-    const cached = await this.cacheManager.get(cacheKey);
-    if (cached) return cached;
-
     const shipments = await this.shipmentRepo.find({
       where: { carrierId },
-      select: [
-        'id',
-        'status',
-        'price',
-        'currency',
-        'estimatedDeliveryDate',
-        'actualDeliveryDate',
-      ],
+      select: ['id', 'status', 'price', 'currency', 'estimatedDeliveryDate', 'actualDeliveryDate'],
     });
 
-    const completed = shipments.filter(
-      (s) => s.status === ShipmentStatus.COMPLETED,
-    );
+    const completed = shipments.filter((s) => s.status === ShipmentStatus.COMPLETED);
     const delivered = shipments.filter(
-      (s) =>
-        s.status === ShipmentStatus.DELIVERED ||
-        s.status === ShipmentStatus.COMPLETED,
+      (s) => s.status === ShipmentStatus.DELIVERED || s.status === ShipmentStatus.COMPLETED,
     );
-    const cancelled = shipments.filter(
-      (s) => s.status === ShipmentStatus.CANCELLED,
-    );
+    const cancelled = shipments.filter((s) => s.status === ShipmentStatus.CANCELLED);
 
     const totalAccepted = shipments.filter(
       (s) => s.status !== ShipmentStatus.PENDING,
@@ -56,18 +34,13 @@ export class CarriersService {
         new Date(s.actualDeliveryDate) <= new Date(s.estimatedDeliveryDate),
     ).length;
 
-    const onTimeRate =
-      delivered.length > 0 ? onTimeDeliveries / delivered.length : 0;
+    const onTimeRate = delivered.length > 0 ? onTimeDeliveries / delivered.length : 0;
 
-    const totalEarnings = completed.reduce(
-      (sum, s) => sum + Number(s.price),
-      0,
-    );
+    const totalEarnings = completed.reduce((sum, s) => sum + Number(s.price), 0);
 
-    const cancellationRate =
-      totalAccepted > 0 ? cancelled.length / totalAccepted : 0;
+    const cancellationRate = totalAccepted > 0 ? cancelled.length / totalAccepted : 0;
 
-    const result = {
+    return {
       totalAccepted,
       totalCompleted: completed.length,
       totalCancelled: cancelled.length,
@@ -75,8 +48,5 @@ export class CarriersService {
       cancellationRate: Math.round(cancellationRate * 100) / 100,
       totalEarnings,
     };
-
-    await this.cacheManager.set(cacheKey, result, METRICS_TTL_MS);
-    return result;
   }
 }

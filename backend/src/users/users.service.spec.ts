@@ -19,9 +19,6 @@ function makeUser(overrides: Partial<User> = {}): User {
     role: UserRole.SHIPPER,
     isEmailVerified: false,
     isActive: true,
-    isTwoFactorEnabled: false,
-    twoFactorSecret: null,
-    recoveryCodes: [],
     walletAddress: null,
     refreshToken: null,
     verificationToken: null,
@@ -30,9 +27,6 @@ function makeUser(overrides: Partial<User> = {}): User {
     resetPasswordExpiry: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    isTwoFactorEnabled: false,
-    twoFactorSecret: undefined as any,
-    recoveryCodes: [],
     ...overrides,
   };
 }

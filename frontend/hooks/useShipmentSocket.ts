@@ -17,10 +17,6 @@ const EVENT_LABELS: Record<string, string> = {
   'shipment:disputed': 'Dispute raised on shipment',
   'shipment:dispute_resolved': 'Shipment dispute resolved',
 };
-{
-// //   const { currency, setCurrency, convert, format } = useCurrencyStore();
-// //   return { currency, setCurrency, convert, format };
-// // }
 
 interface ShipmentUpdatedPayload {
   event: string;

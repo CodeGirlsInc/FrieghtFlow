@@ -1,31 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { shipmentApi } from '../../../lib/api/shipment.api';
 import { StatusTimeline } from '../../../components/shipment/status-timeline';
 import { StatusBadge } from '../../../components/shipment/status-badge';
 import type { Shipment, ShipmentStatusHistory } from '../../../types/shipment.types';
-
-type ApiErrorLike = { statusCode?: number; response?: { status?: number } };
-
-/** Best-effort extraction of an HTTP status code from an unknown thrown
- * value. Different clients (fetch wrappers, axios, custom API layers)
- * shape errors differently, so we check a couple of common shapes rather
- * than trusting a single cast. */
-function getStatusCode(err: unknown): number | undefined {
-  if (typeof err !== 'object' || err === null) return undefined;
-  const e = err as ApiErrorLike;
-  return e.statusCode ?? e.response?.status;
-}
-
-/** Formats a numeric field that may arrive as null/undefined/non-numeric
- * from the API, falling back to a placeholder instead of rendering "NaN". */
-function formatNumberOrFallback(value: unknown, formatter?: (n: number) => string): string {
-  const n = Number(value);
-  if (value === null || value === undefined || Number.isNaN(n)) return '—';
-  return formatter ? formatter(n) : n.toLocaleString();
-}
 
 export default function TrackingPage() {
   const { trackingNumber } = useParams<{ trackingNumber: string }>();
@@ -34,50 +14,27 @@ export default function TrackingPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState(false);
-  // Bump this to manually trigger a re-fetch without changing trackingNumber
-  // (used by the "Try again" button on the error state).
-  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     if (!trackingNumber) return;
-
-    let cancelled = false;
-
     setLoading(true);
-    setNotFound(false);
-    setError(false);
-    setShipment(null);
-    setHistory([]);
-
     shipmentApi
       .track(trackingNumber)
       .then(async (s) => {
-        if (cancelled) return;
         setShipment(s);
         try {
           const hist = await shipmentApi.getHistory(s.id);
-          if (!cancelled) setHistory(hist);
+          setHistory(hist);
         } catch {
-          // history is best-effort; shipment details still render without it
+          // history is best-effort
         }
       })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        if (getStatusCode(err) === 404) setNotFound(true);
+      .catch((err: { statusCode?: number }) => {
+        if (err?.statusCode === 404) setNotFound(true);
         else setError(true);
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    // Guards against a slower, stale request (from a previous tracking
-    // number or a previous retry) overwriting state set by a newer one.
-    return () => {
-      cancelled = true;
-    };
-  }, [trackingNumber, retryToken]);
-
-  const handleRetry = useCallback(() => setRetryToken((t) => t + 1), []);
+      .finally(() => setLoading(false));
+  }, [trackingNumber]);
 
   if (loading) {
     return (
@@ -107,18 +64,11 @@ export default function TrackingPage() {
   if (error || !shipment) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-3">
+        <div className="text-center space-y-2">
           <p className="text-lg font-semibold">Something went wrong</p>
           <p className="text-sm text-muted-foreground">
             Unable to retrieve tracking information. Please try again later.
           </p>
-          <button
-            type="button"
-            onClick={handleRetry}
-            className="text-sm font-medium text-primary underline underline-offset-4 hover:opacity-80"
-          >
-            Try again
-          </button>
         </div>
       </div>
     );
@@ -147,19 +97,15 @@ export default function TrackingPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 text-sm">
           <div>
             <p className="text-muted-foreground text-xs">Cargo</p>
-            <p className="font-medium">{shipment.cargoDescription || '—'}</p>
+            <p className="font-medium">{shipment.cargoDescription}</p>
           </div>
           <div>
             <p className="text-muted-foreground text-xs">Weight</p>
-            <p className="font-medium">
-              {formatNumberOrFallback(shipment.weightKg, (n) => `${n.toLocaleString()} kg`)}
-            </p>
+            <p className="font-medium">{Number(shipment.weightKg).toLocaleString()} kg</p>
           </div>
           <div>
             <p className="text-muted-foreground text-xs">Price</p>
-            <p className="font-medium">
-              {formatNumberOrFallback(shipment.price, (n) => fmt.format(n))}
-            </p>
+            <p className="font-medium">{fmt.format(Number(shipment.price))}</p>
           </div>
           {shipment.shipper && (
             <div>

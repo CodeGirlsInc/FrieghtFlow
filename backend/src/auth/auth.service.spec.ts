@@ -2,10 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { MailerService } from '@nestjs-modules/mailer';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
-import { MailService } from '../mailer/mail.service';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../common/enums/role.enum';
 
@@ -21,9 +21,6 @@ function makeUser(overrides: Partial<User> = {}): User {
     role: UserRole.SHIPPER,
     isEmailVerified: true,
     isActive: true,
-    isTwoFactorEnabled: false,
-    twoFactorSecret: null,
-    recoveryCodes: [],
     walletAddress: null,
     refreshToken: null,
     verificationToken: null,
@@ -32,9 +29,6 @@ function makeUser(overrides: Partial<User> = {}): User {
     resetPasswordExpiry: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    isTwoFactorEnabled: false,
-    twoFactorSecret: undefined as any,
-    recoveryCodes: [],
     ...overrides,
   };
 }
@@ -45,7 +39,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let usersService: jest.Mocked<UsersService>;
   let jwtService: jest.Mocked<JwtService>;
-  let mailService: jest.Mocked<MailService>;
+  let mailerService: jest.Mocked<MailerService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -91,8 +85,8 @@ describe('AuthService', () => {
           },
         },
         {
-          provide: MailService,
-          useValue: { send: jest.fn() },
+          provide: MailerService,
+          useValue: { sendMail: jest.fn() },
         },
       ],
     }).compile();
@@ -100,7 +94,7 @@ describe('AuthService', () => {
     service = module.get<AuthService>(AuthService);
     usersService = module.get(UsersService);
     jwtService = module.get(JwtService);
-    mailService = module.get(MailService);
+    mailerService = module.get(MailerService);
   });
 
   // ── register ───────────────────────────────────────────────────────────────
@@ -111,7 +105,7 @@ describe('AuthService', () => {
       usersService.create.mockResolvedValue(user);
       usersService.updateVerificationToken.mockResolvedValue(undefined);
       usersService.updateRefreshToken.mockResolvedValue(undefined);
-      mailService.send.mockResolvedValue(undefined as never);
+      mailerService.sendMail.mockResolvedValue(undefined as never);
       jwtService.signAsync
         .mockResolvedValueOnce('access-token')
         .mockResolvedValueOnce('refresh-token');
@@ -126,7 +120,7 @@ describe('AuthService', () => {
 
       expect(usersService.create).toHaveBeenCalled();
       expect(usersService.updateVerificationToken).toHaveBeenCalled();
-      expect(mailService.send).toHaveBeenCalled();
+      expect(mailerService.sendMail).toHaveBeenCalled();
       expect(result.accessToken).toBe('access-token');
       expect(result.refreshToken).toBe('refresh-token');
       expect(result.user).not.toHaveProperty('passwordHash');
@@ -138,7 +132,7 @@ describe('AuthService', () => {
       usersService.create.mockResolvedValue(user);
       usersService.updateVerificationToken.mockResolvedValue(undefined);
       usersService.updateRefreshToken.mockResolvedValue(undefined);
-      mailService.send.mockRejectedValue(new Error('SMTP error'));
+      mailerService.sendMail.mockRejectedValue(new Error('SMTP error'));
       jwtService.signAsync
         .mockResolvedValueOnce('access-token')
         .mockResolvedValueOnce('refresh-token');
@@ -285,12 +279,12 @@ describe('AuthService', () => {
       const user = makeUser();
       usersService.findByEmail.mockResolvedValue(user);
       usersService.setResetToken.mockResolvedValue(undefined);
-      mailService.send.mockResolvedValue(undefined as never);
+      mailerService.sendMail.mockResolvedValue(undefined as never);
 
       const result = await service.forgotPassword('test@example.com');
 
       expect(usersService.setResetToken).toHaveBeenCalled();
-      expect(mailService.send).toHaveBeenCalled();
+      expect(mailerService.sendMail).toHaveBeenCalled();
       expect(result.message).toBeDefined();
     });
 
@@ -307,7 +301,7 @@ describe('AuthService', () => {
       const user = makeUser();
       usersService.findByEmail.mockResolvedValue(user);
       usersService.setResetToken.mockResolvedValue(undefined);
-      mailService.send.mockRejectedValue(new Error('SMTP error'));
+      mailerService.sendMail.mockRejectedValue(new Error('SMTP error'));
 
       const result = await service.forgotPassword('test@example.com');
 

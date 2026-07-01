@@ -21,7 +21,6 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     price: 5000,
     currency: 'USD',
     cargoCategory: null,
-    isRFQ: false,
     isInsured: false,
     insurancePremium: null,
     status: ShipmentStatus.COMPLETED,

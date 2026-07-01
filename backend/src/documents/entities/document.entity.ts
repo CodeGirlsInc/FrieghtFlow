@@ -5,7 +5,6 @@ import {
   ManyToOne,
   JoinColumn,
   CreateDateColumn,
-  DeleteDateColumn,
   Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
@@ -60,16 +59,9 @@ export class Document {
   @Column({ name: 'ipfs_cid', nullable: true, type: 'varchar' })
   ipfsCid: string | null;
 
-  /** Cloudinary secure_url */
-  @Column({ name: 'stored_url', nullable: true })
-  storedUrl: string | null;
-
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
-
-  @DeleteDateColumn({ name: 'deleted_at' })
-  deletedAt: Date | null;
 }

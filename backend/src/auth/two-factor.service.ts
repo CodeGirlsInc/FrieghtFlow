@@ -1,128 +1,51 @@
-import {
-  Injectable,
-  BadRequestException,
-  UnauthorizedException,
-  Inject,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
-import { generateSecret, generateURI } from 'otplib';
-import { authenticator } from '@otplib/preset-v11';
-import * as qrcode from 'qrcode';
-import * as bcrypt from 'bcrypt';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
-import { User } from '../users/entities/user.entity';
-import { TwoFactorRecovery } from '../users/entities/two-factor-recovery.entity';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 
-const SETUP_TTL_MS = 10 * 60 * 1000;
+interface OtpRecord {
+  code: string;
+  expiresAt: number;
+  used: boolean;
+}
 
 @Injectable()
 export class TwoFactorService {
-  constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    @InjectRepository(TwoFactorRecovery)
-    private readonly recoveryRepository: Repository<TwoFactorRecovery>,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-  ) {}
+  // In production, store in Redis or DB
+  private readonly store = new Map<string, OtpRecord>();
+  private readonly enabled2FA = new Set<string>();
 
-  async initiateSetup(userId: number, email: string) {
-    const secret = generateSecret();
-    const appName = 'YieldLadder platform';
-    const otpauthUrl = generateURI({ secret, issuer: appName, label: email });
-    const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
-
-    await this.cacheManager.set(`2fa:setup:${userId}`, secret, SETUP_TTL_MS);
-
-    return { otpauthUrl, qrCodeDataUrl, secret };
+  isEnabled(userId: string): boolean {
+    return this.enabled2FA.has(userId);
   }
 
-  async confirmEnable(userId: number, otp: string) {
-    const cacheKey = `2fa:setup:${userId}`;
-    const secret = await this.cacheManager.get<string>(cacheKey);
-
-    if (!secret) {
-      throw new BadRequestException(
-        '2FA setup session expired. Please regenerate the QR configuration.',
-      );
-    }
-
-    const isValid = authenticator.verify({ token: otp, secret });
-    if (!isValid) {
-      throw new BadRequestException(
-        'Invalid confirmation code. Verification rejected.',
-      );
-    }
-
-    await this.userRepository.update(userId, {
-      twoFactorSecret: secret,
-      isTwoFactorEnabled: true,
-    });
-
-    await this.cacheManager.del(cacheKey);
-
-    const plainRecoveryCodes: string[] = [];
-    const entityPool: Partial<TwoFactorRecovery>[] = [];
-
-    for (let i = 0; i < 8; i++) {
-      const plainCode = Math.random()
-        .toString(36)
-        .substring(2, 10)
-        .toUpperCase();
-      plainRecoveryCodes.push(plainCode);
-
-      const codeHash = await bcrypt.hash(plainCode, 10);
-      entityPool.push({ userId, codeHash, usedAt: null });
-    }
-
-    await this.recoveryRepository.save(entityPool);
-
-    return { recoveryCodes: plainRecoveryCodes };
+  enable(userId: string): void {
+    this.enabled2FA.add(userId);
   }
 
-  async verifyTokenOrRecovery(
-    userId: number,
-    inputToken: string,
-  ): Promise<boolean> {
-    const user = await this.userRepository
-      .createQueryBuilder('user')
-      .addSelect('user.twoFactorSecret')
-      .where('user.id = :userId', { userId })
-      .getOne();
-
-    if (!user || !user.twoFactorSecret) {
-      throw new UnauthorizedException(
-        'Multi-factor authorization is not configured for this account.',
-      );
-    }
-
-    const isTotpValid = authenticator.verify({
-      token: inputToken,
-      secret: user.twoFactorSecret,
-    });
-    if (isTotpValid) return true;
-
-    const records = await this.recoveryRepository.find({
-      where: { userId, usedAt: IsNull() },
-    });
-
-    for (const record of records) {
-      const match = await bcrypt.compare(inputToken, record.codeHash);
-      if (match) {
-        await this.recoveryRepository.update(record.id, { usedAt: new Date() });
-        return true;
-      }
-    }
-
-    return false;
+  disable(userId: string): void {
+    this.enabled2FA.delete(userId);
+    this.store.delete(userId);
   }
 
-  async deactivate(userId: number) {
-    await this.userRepository.update(userId, {
-      twoFactorSecret: '' as unknown as string,
-      isTwoFactorEnabled: false,
+  generateOtp(userId: string): string {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    this.store.set(userId, {
+      code,
+      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+      used: false,
     });
-    await this.recoveryRepository.delete({ userId });
+    return code;
+  }
+
+  verifyOtp(userId: string, code: string): void {
+    const record = this.store.get(userId);
+
+    if (!record) throw new UnauthorizedException('No OTP issued');
+    if (record.used) throw new UnauthorizedException('OTP already used');
+    if (Date.now() > record.expiresAt) {
+      this.store.delete(userId);
+      throw new UnauthorizedException('OTP expired');
+    }
+    if (record.code !== code) throw new BadRequestException('Invalid OTP');
+
+    record.used = true;
   }
 }

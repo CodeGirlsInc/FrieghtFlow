@@ -6,22 +6,17 @@ import * as authApi from '../lib/api/auth.api';
 
 interface AuthState {
   user: User | null;
-  token: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
-  setRefreshToken: (token: string | null) => void;
   fetchCurrentUser: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  token: null,
-  refreshToken: null,
   isAuthenticated: false,
   isLoading: false,
 
@@ -52,13 +47,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await authApi.logout();
     } finally {
-      set({ user: null, token: null, refreshToken: null, isAuthenticated: false, isLoading: false });
+      set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },
 
   setUser: (user) => set({ user, isAuthenticated: !!user }),
-
-  setRefreshToken: (token) => set({ refreshToken: token }),
 
   fetchCurrentUser: async () => {
     set({ isLoading: true });

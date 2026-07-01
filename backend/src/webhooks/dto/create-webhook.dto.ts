@@ -1,11 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsArray,
-  IsOptional,
-  IsString,
-  IsUrl,
-  MaxLength,
-} from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsUrl, MaxLength } from 'class-validator';
 
 export class CreateWebhookDto {
   @ApiProperty({ example: 'https://partner.example.com/webhooks/freightflow' })
@@ -19,10 +13,4 @@ export class CreateWebhookDto {
   @IsString()
   @MaxLength(255)
   secret: string;
-
-  @ApiPropertyOptional({ example: ['shipment.status_changed'], isArray: true })
-  @IsArray()
-  @IsString({ each: true })
-  @IsOptional()
-  events?: string[];
 }

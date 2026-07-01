@@ -4,17 +4,11 @@ import { ShipmentsService } from './shipments.service';
 import { ShipmentsController } from './shipments.controller';
 import { Shipment } from './entities/shipment.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
-import { QuotesController } from './quotes.controller';
-import { EtaService } from './eta.service';
-import { CacheModule } from '../cache/cache.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Shipment, ShipmentStatusHistory]),
-    CacheModule,
-  ],
-  controllers: [ShipmentsController, QuotesController],
-  providers: [ShipmentsService, EtaService],
+  imports: [TypeOrmModule.forFeature([Shipment, ShipmentStatusHistory])],
+  controllers: [ShipmentsController],
+  providers: [ShipmentsService],
   exports: [ShipmentsService],
 })
 export class ShipmentsModule {}

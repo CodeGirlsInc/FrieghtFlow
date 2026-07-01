@@ -1,50 +1,46 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useAuthStore } from "../../../stores/auth.store";
-import { shipmentApi } from "../../../lib/api/shipment.api";
-import {
-  ShipmentStatus,
-  PaginatedShipments,
-} from "../../../types/shipment.types";
-import { ShipmentCard } from "../../../components/shipment/shipment-card";
-import { ShipmentCardSkeleton } from "../../../components/skeletons";
-import { Button } from "../../../components/ui/button";
-import { EmptyShipments } from "../../../components/ui/empty-state";
-import { toast } from "sonner";
-import { apiClient } from "../../../lib/api/client";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useAuthStore } from '../../../stores/auth.store';
+import { shipmentApi } from '../../../lib/api/shipment.api';
+import { ShipmentStatus, PaginatedShipments } from '../../../types/shipment.types';
+import { ShipmentCard } from '../../../components/shipment/shipment-card';
+import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
+import { Button } from '../../../components/ui/button';
+import { toast } from 'sonner';
+import { apiClient } from '../../../lib/api/client';
 
-const STATUS_TABS: { label: string; value: ShipmentStatus | "all" }[] = [
-  { label: "All", value: "all" },
-  { label: "Pending", value: ShipmentStatus.PENDING },
-  { label: "Accepted", value: ShipmentStatus.ACCEPTED },
-  { label: "In Transit", value: ShipmentStatus.IN_TRANSIT },
-  { label: "Delivered", value: ShipmentStatus.DELIVERED },
-  { label: "Completed", value: ShipmentStatus.COMPLETED },
+const STATUS_TABS: { label: string; value: ShipmentStatus | 'all' }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Pending', value: ShipmentStatus.PENDING },
+  { label: 'Accepted', value: ShipmentStatus.ACCEPTED },
+  { label: 'In Transit', value: ShipmentStatus.IN_TRANSIT },
+  { label: 'Delivered', value: ShipmentStatus.DELIVERED },
+  { label: 'Completed', value: ShipmentStatus.COMPLETED },
 ];
 
 export default function ShipmentsPage() {
   const { user } = useAuthStore();
   const [result, setResult] = useState<PaginatedShipments | null>(null);
-  const [activeTab, setActiveTab] = useState<ShipmentStatus | "all">("all");
+  const [activeTab, setActiveTab] = useState<ShipmentStatus | 'all'>('all');
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
   const exportCsv = async () => {
     setExporting(true);
     try {
-      const blob = await apiClient<Blob>("/shipments/export?format=csv", {
-        headers: { Accept: "text/csv" },
+      const blob = await apiClient<Blob>('/shipments/export?format=csv', {
+        headers: { Accept: 'text/csv' },
       });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
-      a.download = "shipments.csv";
+      a.download = 'shipments.csv';
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast.error("Failed to export CSV. Please try again.");
+      toast.error('Failed to export CSV. Please try again.');
     } finally {
       setExporting(false);
     }
@@ -53,14 +49,14 @@ export default function ShipmentsPage() {
   useEffect(() => {
     setLoading(true);
     shipmentApi
-      .list({ status: activeTab === "all" ? undefined : activeTab })
+      .list({ status: activeTab === 'all' ? undefined : activeTab })
       .then(setResult)
-      .catch(() => toast.error("Failed to load shipments"))
+      .catch(() => toast.error('Failed to load shipments'))
       .finally(() => setLoading(false));
   }, [activeTab]);
 
-  const isShipper = user?.role === "shipper" || user?.role === "admin";
-  const pageTitle = user?.role === "carrier" ? "My Jobs" : "My Shipments";
+  const isShipper = user?.role === 'shipper' || user?.role === 'admin';
+  const pageTitle = user?.role === 'carrier' ? 'My Jobs' : 'My Shipments';
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -77,30 +73,14 @@ export default function ShipmentsPage() {
           >
             {exporting ? (
               <>
-                <svg
-                  className="animate-spin h-3.5 w-3.5 mr-1.5"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8H4z"
-                  />
+                <svg className="animate-spin h-3.5 w-3.5 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
                 Exporting…
               </>
             ) : (
-              "Export CSV"
+              'Export CSV'
             )}
           </Button>
           {isShipper && (
@@ -119,8 +99,8 @@ export default function ShipmentsPage() {
             onClick={() => setActiveTab(tab.value)}
             className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.value
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
             {tab.label}
@@ -136,13 +116,18 @@ export default function ShipmentsPage() {
           ))}
         </div>
       ) : !result || result.data.length === 0 ? (
-        <EmptyShipments
-          onCreate={
-            isShipper
-              ? () => (window.location.href = "/shipments/new")
-              : undefined
-          }
-        />
+        <div className="text-center py-16">
+          <p className="text-muted-foreground text-sm">
+            {activeTab === 'all'
+              ? 'No shipments yet.'
+              : `No shipments with status "${activeTab}".`}
+          </p>
+          {isShipper && activeTab === 'all' && (
+            <Button asChild className="mt-4" variant="outline">
+              <Link href="/shipments/new">Create your first shipment</Link>
+            </Button>
+          )}
+        </div>
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2">

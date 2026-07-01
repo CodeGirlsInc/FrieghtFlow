@@ -29,10 +29,7 @@ export class CarrierEarningsService {
       select: ['id', 'price', 'actualDeliveryDate'],
     });
 
-    const lifetimeEarnings = completed.reduce(
-      (sum, s) => sum + Number(s.price),
-      0,
-    );
+    const lifetimeEarnings = completed.reduce((sum, s) => sum + Number(s.price), 0);
 
     const now = new Date();
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -57,13 +54,9 @@ export class CarrierEarningsService {
       }
     }
 
-    const monthlyBreakdown: MonthlyBreakdown[] = Array.from(
-      buckets.entries(),
-    ).map(([month, { earnings, count }]) => ({
-      month,
-      earnings,
-      completedShipments: count,
-    }));
+    const monthlyBreakdown: MonthlyBreakdown[] = Array.from(buckets.entries()).map(
+      ([month, { earnings, count }]) => ({ month, earnings, completedShipments: count }),
+    );
 
     const currentMonthEarnings = buckets.get(currentMonthKey)?.earnings ?? 0;
 

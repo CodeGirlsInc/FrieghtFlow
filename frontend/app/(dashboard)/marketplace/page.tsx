@@ -1,79 +1,71 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { shipmentApi } from "../../../lib/api/shipment.api";
-import { ShipmentCard } from "../../../components/shipment/shipment-card";
-import { ShipmentCardSkeleton } from "../../../components/skeletons";
-import { Input } from "../../../components/ui/input";
-import { Button } from "../../../components/ui/button";
-import { EmptyMarketplace } from "../../../components/ui/empty-state";
-import { toast } from "sonner";
-import type { QueryShipmentParams } from "../../../types/shipment.types";
+import { useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { shipmentApi } from '../../../lib/api/shipment.api';
+import { ShipmentCard } from '../../../components/shipment/shipment-card';
+import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
+import { Input } from '../../../components/ui/input';
+import { Button } from '../../../components/ui/button';
+import { toast } from 'sonner';
+import type { QueryShipmentParams } from '../../../types/shipment.types';
 
 const CARGO_CATEGORIES = [
-  "All",
-  "Electronics",
-  "Furniture",
-  "Food & Beverage",
-  "Clothing",
-  "Machinery",
-  "Chemicals",
-  "Automotive",
-  "Medical",
-  "Other",
+  'All',
+  'Electronics',
+  'Furniture',
+  'Food & Beverage',
+  'Clothing',
+  'Machinery',
+  'Chemicals',
+  'Automotive',
+  'Medical',
+  'Other',
 ];
 
-type SortOption = "price_asc" | "price_desc" | "date_asc" | "date_desc";
+type SortOption = 'price_asc' | 'price_desc' | 'date_asc' | 'date_desc';
 
 const SORT_OPTIONS: { label: string; value: SortOption }[] = [
-  { label: "Price: Low → High", value: "price_asc" },
-  { label: "Price: High → Low", value: "price_desc" },
-  { label: "Newest First", value: "date_desc" },
-  { label: "Oldest First", value: "date_asc" },
+  { label: 'Price: Low → High', value: 'price_asc' },
+  { label: 'Price: High → Low', value: 'price_desc' },
+  { label: 'Newest First', value: 'date_desc' },
+  { label: 'Oldest First', value: 'date_asc' },
 ];
 
 export default function MarketplacePage() {
-  const [origin, setOrigin] = useState("");
-  const [destination, setDestination] = useState("");
-  const [cargoCategory, setCargoCategory] = useState("All");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [sort, setSort] = useState<SortOption>("date_desc");
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
+  const [cargoCategory, setCargoCategory] = useState('All');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [sort, setSort] = useState<SortOption>('date_desc');
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<QueryShipmentParams>({
     page: 1,
     limit: 12,
   });
 
-  const {
-    data: result,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: ["marketplace", filters],
+  const { data: result, isLoading, error } = useQuery({
+    queryKey: ['marketplace', filters],
     queryFn: () => shipmentApi.marketplace({ ...filters, page: filters.page }),
   });
 
   useEffect(() => {
-    if (error) toast.error("Failed to load marketplace");
+    if (error) toast.error('Failed to load marketplace');
   }, [error]);
 
-  const applyFilters = useCallback(
-    (pg = 1) => {
-      setPage(pg);
-      setFilters({
-        origin: origin || undefined,
-        destination: destination || undefined,
-        page: pg,
-        limit: 12,
-        cargoCategory: cargoCategory !== "All" ? cargoCategory : undefined,
-        minPrice: minPrice ? Number(minPrice) : undefined,
-        maxPrice: maxPrice ? Number(maxPrice) : undefined,
-      });
-    },
-    [origin, destination, cargoCategory, minPrice, maxPrice],
-  );
+  const applyFilters = useCallback((pg = 1) => {
+    setPage(pg);
+    setFilters({
+      origin: origin || undefined,
+      destination: destination || undefined,
+      page: pg,
+      limit: 12,
+      cargoCategory: cargoCategory !== 'All' ? cargoCategory : undefined,
+      minPrice: minPrice ? Number(minPrice) : undefined,
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+    });
+  }, [origin, destination, cargoCategory, minPrice, maxPrice]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,33 +73,25 @@ export default function MarketplacePage() {
   };
 
   const handleClear = () => {
-    setOrigin("");
-    setDestination("");
-    setCargoCategory("All");
-    setMinPrice("");
-    setMaxPrice("");
-    setSort("date_desc");
+    setOrigin('');
+    setDestination('');
+    setCargoCategory('All');
+    setMinPrice('');
+    setMaxPrice('');
+    setSort('date_desc');
     setPage(1);
     setFilters({ page: 1, limit: 12 });
   };
 
   // Client-side sort (API may not support all sort params)
-  const sorted = result?.data
-    ? [...result.data].sort((a, b) => {
-        if (sort === "price_asc") return Number(a.price) - Number(b.price);
-        if (sort === "price_desc") return Number(b.price) - Number(a.price);
-        if (sort === "date_asc")
-          return (
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
-        return (
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-      })
-    : [];
+  const sorted = result?.data ? [...result.data].sort((a, b) => {
+    if (sort === 'price_asc') return Number(a.price) - Number(b.price);
+    if (sort === 'price_desc') return Number(b.price) - Number(a.price);
+    if (sort === 'date_asc') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  }) : [];
 
-  const hasFilters =
-    origin || destination || cargoCategory !== "All" || minPrice || maxPrice;
+  const hasFilters = origin || destination || cargoCategory !== 'All' || minPrice || maxPrice;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -139,9 +123,7 @@ export default function MarketplacePage() {
             className="text-sm bg-background border border-border rounded-md px-3 py-2 text-foreground"
           >
             {CARGO_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
           <Input
@@ -166,21 +148,14 @@ export default function MarketplacePage() {
             className="text-sm bg-background border border-border rounded-md px-3 py-2 text-foreground"
           >
             {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
           <Button type="submit" variant="outline" size="sm">
             Search
           </Button>
           {hasFilters && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleClear}
-            >
+            <Button type="button" variant="ghost" size="sm" onClick={handleClear}>
               Clear
             </Button>
           )}
@@ -195,7 +170,11 @@ export default function MarketplacePage() {
           ))}
         </div>
       ) : !result || sorted.length === 0 ? (
-        <EmptyMarketplace />
+        <div className="text-center py-16">
+          <p className="text-muted-foreground text-sm">
+            No available shipments right now. Check back soon!
+          </p>
+        </div>
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -229,7 +208,7 @@ export default function MarketplacePage() {
           )}
 
           <p className="text-xs text-muted-foreground text-center mt-3">
-            {result.total} shipment{result.total !== 1 ? "s" : ""} available
+            {result.total} shipment{result.total !== 1 ? 's' : ''} available
           </p>
         </>
       )}

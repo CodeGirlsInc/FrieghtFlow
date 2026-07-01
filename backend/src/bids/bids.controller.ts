@@ -19,8 +19,6 @@ import {
 } from '@nestjs/swagger';
 import { BidsService } from './bids.service';
 import { CreateBidDto } from './dto/create-bid.dto';
-import { CounterBidDto } from './dto/counter-bid.dto';
-import { BidResponseDto } from './dto/bid-response.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -52,7 +50,6 @@ export class BidsController {
   @Roles(UserRole.SHIPPER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Shipper views all bids on their shipment' })
   @ApiParam({ name: 'id', description: 'Shipment ID' })
-  @ApiResponse({ status: 200, type: [BidResponseDto] })
   getBids(
     @Param('id', ParseUUIDPipe) shipmentId: string,
     @CurrentUser() user: User,
@@ -64,9 +61,7 @@ export class BidsController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER)
-  @ApiOperation({
-    summary: 'Shipper accepts a bid — assigns carrier, rejects others',
-  })
+  @ApiOperation({ summary: 'Shipper accepts a bid — assigns carrier, rejects others' })
   @ApiParam({ name: 'id', description: 'Shipment ID' })
   @ApiParam({ name: 'bidId', description: 'Bid ID' })
   acceptBid(
@@ -75,54 +70,5 @@ export class BidsController {
     @CurrentUser() user: User,
   ) {
     return this.bidsService.acceptBid(shipmentId, bidId, user.id);
-  }
-
-  @Post(':bidId/counter')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.SHIPPER)
-  @ApiOperation({ summary: 'Shipper makes a counteroffer on a bid' })
-  @ApiParam({ name: 'id', description: 'Shipment ID' })
-  @ApiParam({ name: 'bidId', description: 'Bid ID' })
-  @ApiResponse({ status: 200, description: 'Counteroffer submitted' })
-  counterBid(
-    @Param('id', ParseUUIDPipe) shipmentId: string,
-    @Param('bidId', ParseUUIDPipe) bidId: string,
-    @CurrentUser() user: User,
-    @Body() dto: CounterBidDto,
-  ) {
-    return this.bidsService.counterBid(shipmentId, bidId, user.id, dto);
-  }
-
-  @Patch(':bidId/accept-counter')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.CARRIER)
-  @ApiOperation({ summary: 'Carrier accepts the counteroffer' })
-  @ApiParam({ name: 'id', description: 'Shipment ID' })
-  @ApiParam({ name: 'bidId', description: 'Bid ID' })
-  @ApiResponse({ status: 200, description: 'Counter accepted' })
-  acceptCounter(
-    @Param('id', ParseUUIDPipe) shipmentId: string,
-    @Param('bidId', ParseUUIDPipe) bidId: string,
-    @CurrentUser() user: User,
-  ) {
-    return this.bidsService.acceptCounter(shipmentId, bidId, user.id);
-  }
-
-  @Patch(':bidId/decline-counter')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.CARRIER)
-  @ApiOperation({ summary: 'Carrier declines the counteroffer' })
-  @ApiParam({ name: 'id', description: 'Shipment ID' })
-  @ApiParam({ name: 'bidId', description: 'Bid ID' })
-  @ApiResponse({ status: 200, description: 'Counter declined' })
-  declineCounter(
-    @Param('id', ParseUUIDPipe) shipmentId: string,
-    @Param('bidId', ParseUUIDPipe) bidId: string,
-    @CurrentUser() user: User,
-  ) {
-    return this.bidsService.declineCounter(shipmentId, bidId, user.id);
   }
 }

@@ -5,10 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
-  OneToMany,
 } from 'typeorm';
 import { UserRole } from '../../common/enums/role.enum';
-import { TwoFactorRecovery } from './two-factor-recovery.entity';
 
 @Entity('users')
 export class User {
@@ -82,16 +80,4 @@ export class User {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
-
-  @Column({ nullable: true })
-  avatarUrl: string;
-
-  @Column({ default: false })
-  isTwoFactorEnabled: boolean;
-
-  @Column({ nullable: true, select: false })
-  twoFactorSecret: string | null;
-
-  @OneToMany(() => TwoFactorRecovery, (recovery) => recovery.user)
-  recoveryCodes: TwoFactorRecovery[];
 }

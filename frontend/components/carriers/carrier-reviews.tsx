@@ -13,10 +13,7 @@ interface Review {
   rating: number; // 1-5
   comment: string;
   createdAt: string;
-}{
-// //   const { currency, setCurrency, convert, format } = useCurrencyStore();
-// //   return { currency, setCurrency, convert, format };
-// // }
+}
 
 interface ReviewsResponse {
   data: Review[];
