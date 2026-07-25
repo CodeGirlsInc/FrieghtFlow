@@ -147,6 +147,12 @@ impl ShipmentContract {
         shipment.status = ShipmentStatus::Completed;
         shipment.updated_at = env.ledger().timestamp();
         Self::save(&env, &shipment);
+
+        // TODO: Call escrow contract's release_payment via cross-contract call
+        // let escrow_addr = env.storage().instance().get(&DataKey::EscrowContract).ok_or(ShipmentError::NotInitialized)?;
+        // let escrow = escrow::Client::new(&env, &escrow_addr);
+        // escrow.release_payment(&shipment_id);
+
         Ok(())
     }
 
