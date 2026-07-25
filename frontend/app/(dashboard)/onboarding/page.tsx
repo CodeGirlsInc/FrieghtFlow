@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
+import { addressesApi } from '../../../lib/api/addresses.api';
 
 const ONBOARDING_KEY = 'ff_onboarding_done';
 
@@ -23,7 +24,21 @@ export default function OnboardingPage() {
   const [address, setAddress] = useState('');
   const [routePrefs, setRoutePrefs] = useState('');
 
-  const finish = () => {
+  const finish = async () => {
+    if (role === 'shipper' && address.trim()) {
+      const [line, city, country] = address.split(',').map((p) => p.trim());
+      try {
+        await addressesApi.create({
+          label: 'Default Pickup',
+          address: line || address,
+          city: city || 'Unknown',
+          country: country || 'Unknown',
+          isDefault: true,
+        });
+      } catch (err) {
+        console.error('Failed to save onboarding address', err);
+      }
+    }
     localStorage.setItem(ONBOARDING_KEY, 'true');
     router.replace('/dashboard');
   };
