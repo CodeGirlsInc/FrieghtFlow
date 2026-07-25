@@ -183,12 +183,36 @@ export class ShipmentsService {
     await this.historyRepo.save(entry);
   }
 
+  // ── Insurance premium calculation ────────────────────────────────────────────
+
+  private calculatePremium(
+    declaredValue: number,
+    cargoCategory: string | null,
+  ): number {
+    const riskRates: Record<string, number> = {
+      HAZARDOUS: 0.04,
+      PHARMACEUTICALS: 0.03,
+      ELECTRONICS: 0.025,
+      PERISHABLES: 0.025,
+      AUTOMOTIVE: 0.02,
+      MACHINERY: 0.02,
+      FURNITURE: 0.015,
+      TEXTILES: 0.015,
+      FOOD_AND_BEVERAGE: 0.015,
+      CONSTRUCTION_MATERIALS: 0.015,
+      GENERAL_CARGO: 0.01,
+    };
+    const rate = riskRates[cargoCategory ?? ''] ?? 0.015;
+    return Math.round(declaredValue * rate * 100) / 100;
+  }
+
   // ── CRUD ─────────────────────────────────────────────────────────────────────
 
   async create(shipperId: string, dto: CreateShipmentDto): Promise<Shipment> {
-    const insurancePremium = dto.isInsured
-      ? Math.round(dto.price * 0.015 * 100) / 100
-      : null;
+    const insurancePremium =
+      dto.isInsured && dto.declaredValue
+        ? this.calculatePremium(dto.declaredValue, dto.cargoCategory ?? null)
+        : null;
 
     const shipment = this.shipmentRepo.create({
       trackingNumber: this.generateTrackingNumber(),
@@ -205,6 +229,8 @@ export class ShipmentsService {
       notes: dto.notes ?? null,
       status: ShipmentStatus.PENDING,
       isInsured: dto.isInsured ?? false,
+      declaredValue: dto.declaredValue ?? null,
+      coverageAmount: dto.coverageAmount ?? null,
       insurancePremium,
       pickupDate: dto.pickupDate ? new Date(dto.pickupDate) : null,
       estimatedDeliveryDate: dto.estimatedDeliveryDate
@@ -236,15 +262,20 @@ export class ShipmentsService {
     const createdIds: string[] = [];
 
     // Use TypeORM transaction
-    const queryRunner = this.shipmentRepo.manager.connection.createQueryRunner();
+    const queryRunner =
+      this.shipmentRepo.manager.connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
       for (const shipmentDto of dto.shipments) {
-        const insurancePremium = shipmentDto.isInsured
-          ? Math.round(shipmentDto.price * 0.015 * 100) / 100
-          : null;
+        const insurancePremium =
+          shipmentDto.isInsured && shipmentDto.declaredValue
+            ? this.calculatePremium(
+                shipmentDto.declaredValue,
+                shipmentDto.cargoCategory ?? null,
+              )
+            : null;
 
         const shipment = this.shipmentRepo.create({
           trackingNumber: this.generateTrackingNumber(),
@@ -261,6 +292,8 @@ export class ShipmentsService {
           notes: shipmentDto.notes ?? null,
           status: ShipmentStatus.PENDING,
           isInsured: shipmentDto.isInsured ?? false,
+          declaredValue: shipmentDto.declaredValue ?? null,
+          coverageAmount: shipmentDto.coverageAmount ?? null,
           insurancePremium,
           pickupDate: shipmentDto.pickupDate
             ? new Date(shipmentDto.pickupDate)
@@ -306,7 +339,14 @@ export class ShipmentsService {
     user: User,
     query: QueryShipmentDto,
   ): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, status, origin, destination, cargoCategory } = query;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      origin,
+      destination,
+      cargoCategory,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {};

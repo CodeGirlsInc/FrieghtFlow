@@ -47,6 +47,8 @@ function makeShipment(): Shipment {
     currency: 'USD',
     cargoCategory: null,
     isInsured: false,
+    declaredValue: null,
+    coverageAmount: null,
     insurancePremium: null,
     status: ShipmentStatus.IN_TRANSIT,
     notes: null,
