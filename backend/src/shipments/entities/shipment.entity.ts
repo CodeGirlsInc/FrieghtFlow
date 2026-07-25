@@ -82,6 +82,24 @@ export class Shipment {
   isInsured: boolean;
 
   @Column({
+    name: 'declared_value',
+    type: 'decimal',
+    precision: 14,
+    scale: 2,
+    nullable: true,
+  })
+  declaredValue: number | null;
+
+  @Column({
+    name: 'coverage_amount',
+    type: 'decimal',
+    precision: 14,
+    scale: 2,
+    nullable: true,
+  })
+  coverageAmount: number | null;
+
+  @Column({
     name: 'insurance_premium',
     type: 'decimal',
     precision: 14,
