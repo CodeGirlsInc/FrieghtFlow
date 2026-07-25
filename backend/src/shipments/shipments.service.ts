@@ -11,6 +11,9 @@ import {
   Repository,
   FindOptionsWhere,
   ILike,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
   SelectQueryBuilder,
 } from 'typeorm';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
@@ -333,7 +336,7 @@ export class ShipmentsService {
   }
 
   async findMarketplace(query: QueryShipmentDto): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, origin, destination, cargoCategory } = query;
+    const { page = 1, limit = 20, origin, destination, cargoCategory, minPrice, maxPrice } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {
@@ -342,6 +345,9 @@ export class ShipmentsService {
     if (origin) where.origin = ILike(`%${origin}%`);
     if (destination) where.destination = ILike(`%${destination}%`);
     if (cargoCategory) where.cargoCategory = cargoCategory;
+    if (minPrice != null && maxPrice != null) where.price = Between(minPrice, maxPrice);
+    else if (minPrice != null) where.price = MoreThanOrEqual(minPrice);
+    else if (maxPrice != null) where.price = LessThanOrEqual(maxPrice);
 
     const [data, total] = await this.shipmentRepo.findAndCount({
       where,

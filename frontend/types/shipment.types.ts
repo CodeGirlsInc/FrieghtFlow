@@ -20,6 +20,7 @@ export interface Shipment {
   origin: string;
   destination: string;
   cargoDescription: string;
+  cargoCategory: string | null;
   weightKg: number;
   volumeCbm: number | null;
   price: number;
@@ -48,6 +49,7 @@ export interface CreateShipmentPayload {
   origin: string;
   destination: string;
   cargoDescription: string;
+  cargoCategory: string;
   weightKg: number;
   volumeCbm?: number;
   price: number;
