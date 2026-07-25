@@ -304,14 +304,14 @@ impl EscrowContract {
         Self::load(&env, shipment_id)
     }
 
-    pub fn get_balance(env: Env) -> i128 {
+    pub fn get_balance(env: Env) -> Result<i128, EscrowError> {
         let token_addr: Address = env
             .storage()
             .instance()
             .get(&DataKey::TokenContract)
-            .unwrap_or_else(|| panic!());
+            .ok_or(EscrowError::NotInitialized)?;
         let token = token::Client::new(&env, &token_addr);
-        token.balance(&env.current_contract_address())
+        Ok(token.balance(&env.current_contract_address()))
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
