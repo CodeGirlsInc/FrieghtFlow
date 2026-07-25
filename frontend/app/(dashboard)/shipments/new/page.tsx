@@ -14,6 +14,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../../components
 
 // ── Schemas per step ──────────────────────────────────────────────────────────
 
+// Mirrors backend/src/common/enums/cargo-category.enum.ts
+const CARGO_CATEGORIES = [
+  'Electronics',
+  'Perishables',
+  'Hazardous',
+  'Furniture',
+  'Machinery',
+  'Textiles',
+  'Food & Beverage',
+  'Automotive',
+  'Pharmaceuticals',
+  'Construction Materials',
+  'General Cargo',
+] as const;
+
 const step1Schema = z.object({
   origin: z.string().min(2, 'Origin is required'),
   destination: z.string().min(2, 'Destination is required'),
@@ -21,6 +36,7 @@ const step1Schema = z.object({
 
 const step2Schema = z.object({
   cargoDescription: z.string().min(10, 'Describe the cargo (min 10 chars)'),
+  cargoCategory: z.enum(CARGO_CATEGORIES, 'Select a cargo category'),
   weightKg: z.coerce.number().positive('Weight must be positive'),
   volumeCbm: z.coerce.number().positive().optional().or(z.literal('')),
 });
@@ -65,7 +81,7 @@ export default function NewShipmentPage() {
   // Validate only the fields belonging to the current step before advancing
   const stepFields: (keyof FormValues)[][] = [
     ['origin', 'destination'],
-    ['cargoDescription', 'weightKg', 'volumeCbm'],
+    ['cargoDescription', 'cargoCategory', 'weightKg', 'volumeCbm'],
     ['price', 'currency', 'pickupDate', 'estimatedDeliveryDate'],
     ['notes'],
   ];
@@ -165,6 +181,21 @@ export default function NewShipmentPage() {
                 />
                 {errors.cargoDescription && <p className="text-xs text-destructive">{errors.cargoDescription.message}</p>}
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cargoCategory">Cargo Category *</Label>
+                <select
+                  id="cargoCategory"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  defaultValue=""
+                  {...register('cargoCategory')}
+                >
+                  <option value="" disabled>Select a category</option>
+                  {CARGO_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                {errors.cargoCategory && <p className="text-xs text-destructive">{errors.cargoCategory.message}</p>}
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="weightKg">Weight (kg) *</Label>
@@ -228,6 +259,8 @@ export default function NewShipmentPage() {
                   <span className="font-medium">{values.destination}</span>
                   <span className="text-muted-foreground">Cargo</span>
                   <span className="font-medium">{values.cargoDescription}</span>
+                  <span className="text-muted-foreground">Category</span>
+                  <span className="font-medium">{values.cargoCategory}</span>
                   <span className="text-muted-foreground">Weight</span>
                   <span className="font-medium">{values.weightKg} kg</span>
                   {values.volumeCbm && (

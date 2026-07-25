@@ -13,6 +13,9 @@ function buildQuery(params: QueryShipmentParams): string {
   if (params.status) q.set('status', params.status);
   if (params.origin) q.set('origin', params.origin);
   if (params.destination) q.set('destination', params.destination);
+  if (params.cargoCategory) q.set('cargoCategory', params.cargoCategory);
+  if (params.minPrice != null) q.set('minPrice', String(params.minPrice));
+  if (params.maxPrice != null) q.set('maxPrice', String(params.maxPrice));
   if (params.page) q.set('page', String(params.page));
   if (params.limit) q.set('limit', String(params.limit));
   const str = q.toString();
