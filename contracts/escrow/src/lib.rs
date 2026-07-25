@@ -116,7 +116,7 @@ impl EscrowContract {
                 .persistent()
                 .get(&DataKey::Escrow(shipment_id))
                 .unwrap();
-            if existing.status == EscrowStatus::Funded {
+            if existing.status == EscrowStatus::Funded || existing.status == EscrowStatus::Disputed {
                 return Err(EscrowError::AlreadyFunded);
             }
         }
