@@ -31,6 +31,7 @@ impl IdentityContract {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(IdentityError::AlreadyRegistered);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         Ok(())
     }
