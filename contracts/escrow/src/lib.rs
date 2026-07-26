@@ -356,6 +356,30 @@ mod tests {
         token_address
     }
 
+     #[test]
+    fn test_fund_and_release() {
+        let (env, _admin, shipper, carrier, token_addr, client) = setup(AMOUNT);
+
+        fund(&env, &token_addr, &client, &shipper, &carrier);
+
+        let record = client.get_escrow(&SHIPMENT_ID);
+        assert_eq!(record.status, EscrowStatus::Funded);
+        assert_eq!(record.amount, AMOUNT);
+
+        // Check contract holds the tokens
+        let token = TokenClient::new(&env, &token_addr);
+        assert_eq!(token.balance(&client.address), AMOUNT);
+
+        // Release to carrier
+        client.release_payment(&SHIPMENT_ID);
+
+        let record = client.get_escrow(&SHIPMENT_ID);
+        assert_eq!(record.status, EscrowStatus::Released);
+        assert_eq!(token.balance(&carrier), AMOUNT);
+        assert_eq!(token.balance(&client.address), 0);
+    }
+
+
     fn setup(
         shipper_balance: i128,
     ) -> (
