@@ -28,6 +28,15 @@ pub fn is_paused(env: &Env) -> bool {
     env.storage().instance().get(&paused_key(env)).unwrap_or(false)
 }
 
+
+
+/// Generic page result.
+#[contracttype]
+pub struct Page<T> {
+    pub items: soroban_sdk::Vec<T>,
+    pub total: u32,
+}
+
 /// Aborts with PauseError::ContractPaused if paused.
 /// Call this at the top of every state-mutating function.
 pub fn assert_not_paused(env: &Env) -> Result<(), PauseError> {
