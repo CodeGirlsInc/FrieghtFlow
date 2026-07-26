@@ -16,6 +16,11 @@ soroban-sdk = { version = "22.0.0", features = ["alloc"] }
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils", "alloc"] }
 
+[lib]
+crate-type = ["cdylib"]
+
+//crate type
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true
