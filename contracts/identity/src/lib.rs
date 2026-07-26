@@ -42,7 +42,7 @@ impl IdentityContract {
         user_id_hash: BytesN<32>,
         wallet: Address,
     ) -> Result<(), IdentityError> {
-        wallet.require_auth();
+        wallet.require_auth_for_args(&[&user_id_hash]);
 
         if env
             .storage()
@@ -111,6 +111,39 @@ mod tests {
         testutils::{Address as _, BytesN as _},
         Env,
     };
+
+    #[test]
+    fn test_initialize_requires_auth() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let contract_id = env.register(IdentityContract {}, ());
+        let client = IdentityContractClient::new(&env, &contract_id);
+
+        let result = client.try_initialize(&admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_register_identity_requires_auth() {
+        let env = Env::default();
+        let wallet = Address::generate(&env);
+        let contract_id = env.register(IdentityContract {}, ());
+        let client = IdentityContractClient::new(&env, &contract_id);
+
+        let result = client.try_register_identity(&BytesN::random(&env), &wallet);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_revoke_identity_requires_auth() {
+        let env = Env::default();
+        let wallet = Address::generate(&env);
+        let contract_id = env.register(IdentityContract {}, ());
+        let client = IdentityContractClient::new(&env, &contract_id);
+
+        let result = client.try_revoke_identity(&wallet);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_register_and_verify() {

@@ -110,6 +110,7 @@ impl ReputationContract {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(ReputationError::AlreadyInitialized);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
@@ -128,7 +129,7 @@ impl ReputationContract {
         user: Address,
         user_type: UserType,
     ) -> Result<(), ReputationError> {
-        user.require_auth();
+        user.require_auth_for_args(&[&user_type]);
 
         if env
             .storage()
@@ -178,7 +179,7 @@ impl ReputationContract {
         rated: Address,
         score: u32,
     ) -> Result<u64, ReputationError> {
-        rater.require_auth();
+        rater.require_auth_for_args(&[&shipment_id, &rated, &score]);
 
         if !(1..=5).contains(&score) {
             return Err(ReputationError::InvalidScore);
@@ -274,7 +275,7 @@ impl ReputationContract {
         was_on_time: bool,
         was_successful: bool,
     ) -> Result<(), ReputationError> {
-        caller.require_auth();
+        caller.require_auth_for_args(&[&user, &was_on_time, &was_successful]);
 
         // Only the authorised contract or the admin may call this.
         let auth_contract: Address = env
@@ -445,6 +446,53 @@ mod tests {
         client.initialize(&admin, &auth_contract);
 
         (env, admin, auth_contract, client)
+    }
+
+    #[test]
+    fn test_initialize_requires_auth() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let auth_contract = Address::generate(&env);
+        let contract_id = env.register(ReputationContract {}, ());
+        let client = ReputationContractClient::new(&env, &contract_id);
+
+        let result = client.try_initialize(&admin, &auth_contract);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_register_user_requires_auth() {
+        let env = Env::default();
+        let user = Address::generate(&env);
+        let contract_id = env.register(ReputationContract {}, ());
+        let client = ReputationContractClient::new(&env, &contract_id);
+
+        let result = client.try_register_user(&user, &UserType::Carrier);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_submit_rating_requires_auth() {
+        let env = Env::default();
+        let rater = Address::generate(&env);
+        let rated = Address::generate(&env);
+        let contract_id = env.register(ReputationContract {}, ());
+        let client = ReputationContractClient::new(&env, &contract_id);
+
+        let result = client.try_submit_rating(&rater, &1u64, &rated, &5u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_stats_requires_auth() {
+        let env = Env::default();
+        let caller = Address::generate(&env);
+        let user = Address::generate(&env);
+        let contract_id = env.register(ReputationContract {}, ());
+        let client = ReputationContractClient::new(&env, &contract_id);
+
+        let result = client.try_update_stats(&caller, &user, &true, &false);
+        assert!(result.is_err());
     }
 
     #[test]

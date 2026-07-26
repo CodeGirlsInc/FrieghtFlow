@@ -81,6 +81,7 @@ impl DocumentContract {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(DocumentError::AlreadyInitialized);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().persistent().set(&DataKey::Counter, &0u64);
         Ok(())
@@ -100,7 +101,7 @@ impl DocumentContract {
         content_hash: BytesN<32>,
         ipfs_cid: Bytes,
     ) -> Result<u64, DocumentError> {
-        uploader.require_auth();
+        uploader.require_auth_for_args(&[&shipment_id, &doc_type, &content_hash, &ipfs_cid]);
 
         let id = Self::next_id(&env);
         let now = env.ledger().timestamp();
@@ -152,7 +153,7 @@ impl DocumentContract {
         if verifier != admin {
             return Err(DocumentError::Unauthorized);
         }
-        verifier.require_auth();
+        verifier.require_auth_for_args(&[&doc_id]);
 
         let mut doc = Self::load(&env, doc_id)?;
 
@@ -279,6 +280,45 @@ mod tests {
             &fake_cid(env),
         );
         (id, hash)
+    }
+
+    #[test]
+    fn test_initialize_requires_auth() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let contract_id = env.register(DocumentContract {}, ());
+        let client = DocumentContractClient::new(&env, &contract_id);
+
+        let result = client.try_initialize(&admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_register_document_requires_auth() {
+        let env = Env::default();
+        let uploader = Address::generate(&env);
+        let contract_id = env.register(DocumentContract {}, ());
+        let client = DocumentContractClient::new(&env, &contract_id);
+
+        let result = client.try_register_document(
+            &uploader,
+            &1u64,
+            &DocumentType::BillOfLading,
+            &fake_hash(&env),
+            &fake_cid(&env),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_document_requires_auth() {
+        let env = Env::default();
+        let verifier = Address::generate(&env);
+        let contract_id = env.register(DocumentContract {}, ());
+        let client = DocumentContractClient::new(&env, &contract_id);
+
+        let result = client.try_verify_document(&verifier, &1u64);
+        assert!(result.is_err());
     }
 
     #[test]

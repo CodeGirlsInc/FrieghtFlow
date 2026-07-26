@@ -77,6 +77,7 @@ impl EscrowContract {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(EscrowError::AlreadyInitialized);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
@@ -99,7 +100,7 @@ impl EscrowContract {
         shipment_id: u64,
         amount: i128,
     ) -> Result<(), EscrowError> {
-        shipper.require_auth();
+        shipper.require_auth_for_args(&[&carrier, &shipment_id, &amount]);
 
         if amount <= 0 {
             return Err(EscrowError::InvalidAmount);
@@ -235,7 +236,7 @@ impl EscrowContract {
     /// Raise a dispute for the escrow (mirrors the shipment dispute).
     /// Either party can call this; admin then resolves via release or refund.
     pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), EscrowError> {
-        caller.require_auth();
+        caller.require_auth_for_args(&[&shipment_id]);
 
         let mut record = Self::load(&env, shipment_id)?;
 
@@ -401,6 +402,70 @@ mod tests {
             &(env.ledger().sequence() + 1000),
         );
         client.fund_escrow(shipper, carrier, &SHIPMENT_ID, &AMOUNT);
+    }
+
+    #[test]
+    fn test_initialize_requires_auth() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let contract_id = env.register(EscrowContract {}, ());
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let result = client.try_initialize(&admin, &Address::generate(&env));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_fund_escrow_requires_auth() {
+        let env = Env::default();
+        let shipper = Address::generate(&env);
+        let carrier = Address::generate(&env);
+        let contract_id = env.register(EscrowContract {}, ());
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let result = client.try_fund_escrow(&shipper, &carrier, &SHIPMENT_ID, &AMOUNT);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_release_payment_requires_auth() {
+        let env = Env::default();
+        let contract_id = env.register(EscrowContract {}, ());
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let result = client.try_release_payment(&SHIPMENT_ID);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_refund_payment_requires_auth() {
+        let env = Env::default();
+        let contract_id = env.register(EscrowContract {}, ());
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let result = client.try_refund_payment(&SHIPMENT_ID);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_raise_dispute_requires_auth() {
+        let env = Env::default();
+        let caller = Address::generate(&env);
+        let contract_id = env.register(EscrowContract {}, ());
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let result = client.try_raise_dispute(&caller, &SHIPMENT_ID);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_dispute_requires_auth() {
+        let env = Env::default();
+        let contract_id = env.register(EscrowContract {}, ());
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let result = client.try_resolve_dispute(&SHIPMENT_ID, &true);
+        assert!(result.is_err());
     }
 
     #[test]
