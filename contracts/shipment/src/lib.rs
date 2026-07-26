@@ -81,6 +81,7 @@ impl ShipmentContract {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(ShipmentError::AlreadyInitialized);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().persistent().set(&DataKey::Counter, &0u64);
         Ok(())
@@ -98,7 +99,7 @@ impl ShipmentContract {
         weight_kg: u32,
         price: i128,
     ) -> Result<u64, ShipmentError> {
-        shipper.require_auth();
+        shipper.require_auth_for_args(&[&origin, &destination, &cargo_description, &weight_kg, &price]);
 
         if weight_kg == 0 || price <= 0 {
             return Err(ShipmentError::InvalidInput);
@@ -264,7 +265,7 @@ impl ShipmentContract {
 
     /// Either party can raise a dispute when the shipment is InTransit or Delivered.
     pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), ShipmentError> {
-        caller.require_auth();
+        caller.require_auth_for_args(&[&shipment_id]);
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -297,7 +298,7 @@ impl ShipmentContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(ShipmentError::NotInitialized)?;
-        admin.require_auth();
+        admin.require_auth_for_args(&[&shipment_id, &resolve_as_completed]);
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -481,6 +482,111 @@ mod tests {
             &120,
             &5_000_000_000i128, // 500 XLM
         )
+    }
+
+    #[test]
+    fn test_initialize_requires_auth() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_initialize(&admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_shipment_requires_auth() {
+        let env = Env::default();
+        let shipper = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_create_shipment(
+            &shipper,
+            &str(&env, "Lagos"),
+            &str(&env, "Nairobi"),
+            &str(&env, "Electronics"),
+            &120u32,
+            &5_000_000_000i128,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_confirm_delivery_requires_auth() {
+        let env = Env::default();
+        let shipper = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_confirm_delivery(&shipper, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cancel_shipment_requires_auth() {
+        let env = Env::default();
+        let shipper = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_cancel_shipment(&shipper, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_accept_shipment_requires_auth() {
+        let env = Env::default();
+        let carrier = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_accept_shipment(&carrier, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mark_in_transit_requires_auth() {
+        let env = Env::default();
+        let carrier = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_mark_in_transit(&carrier, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mark_delivered_requires_auth() {
+        let env = Env::default();
+        let carrier = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_mark_delivered(&carrier, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_raise_dispute_requires_auth() {
+        let env = Env::default();
+        let caller = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_raise_dispute(&caller, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_dispute_requires_auth() {
+        let env = Env::default();
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_resolve_dispute(&1u64, &true);
+        assert!(result.is_err());
     }
 
     #[test]
