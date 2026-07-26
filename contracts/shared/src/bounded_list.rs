@@ -14,6 +14,14 @@ pub struct Page<T> {
     pub total: u32,
 }
 
+
+    pub fn get_total_ratings(env: Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RatingCounter)
+            .unwrap_or(0)
+    }
+
 /// Maximum entries allowed per address per list (configurable default).
 pub const DEFAULT_MAX_PER_ADDRESS: u32 = 500;
 

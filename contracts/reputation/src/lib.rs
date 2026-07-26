@@ -489,6 +489,25 @@ impl ReputationContract {
             .unwrap_or(false)
     }
 
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Vec};
+
+// ── Errors ────────────────────────────────────────────────────────────────────
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum ReputationError {
+    NotInitialized = 1,
+    AlreadyInitialized = 2,
+    UserNotFound = 3,
+    UserAlreadyRegistered = 4,
+    InvalidScore = 5,
+    AlreadyRatedShipment = 6,
+    CannotRateSelf = 7,
+    Unauthorized = 8,
+    UserTypeMismatch = 9,
+    RatingNotFound = 10,
+}
     /// Whether `update_stats` has already been recorded for `user` on
     /// `shipment_id` (mirrors `has_rated_shipment` for the stats side).
     pub fn has_recorded_stats(env: Env, shipment_id: u64, user: Address) -> bool {
