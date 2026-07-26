@@ -1,6 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Vec};
+use shared::bounded_list;
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -54,8 +55,14 @@ pub enum DataKey {
     Admin,
     Counter,
     Shipment(u64),
+    // Legacy single-key list keys (kept for migration detection).
     ShipperList(Address),
     CarrierList(Address),
+    // Paginated storage keys: count and per-item entries.
+    ShipperListCount(Address),
+    ShipperListItem(Address, u32),
+    CarrierListCount(Address),
+    CarrierListItem(Address, u32),
 }
 
 const TTL_LEDGERS: u32 = 6_307_200; // ~1 year at ~5 s/ledger
@@ -74,6 +81,7 @@ impl ShipmentContract {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(ShipmentError::AlreadyInitialized);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().persistent().set(&DataKey::Counter, &0u64);
         Ok(())
@@ -91,7 +99,7 @@ impl ShipmentContract {
         weight_kg: u32,
         price: i128,
     ) -> Result<u64, ShipmentError> {
-        shipper.require_auth();
+        shipper.require_auth_for_args(&[&origin, &destination, &cargo_description, &weight_kg, &price]);
 
         if weight_kg == 0 || price <= 0 {
             return Err(ShipmentError::InvalidInput);
@@ -257,7 +265,7 @@ impl ShipmentContract {
 
     /// Either party can raise a dispute when the shipment is InTransit or Delivered.
     pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), ShipmentError> {
-        caller.require_auth();
+        caller.require_auth_for_args(&[&shipment_id]);
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -290,7 +298,7 @@ impl ShipmentContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(ShipmentError::NotInitialized)?;
-        admin.require_auth();
+        admin.require_auth_for_args(&[&shipment_id, &resolve_as_completed]);
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -315,17 +323,19 @@ impl ShipmentContract {
     }
 
     pub fn get_shipments_by_shipper(env: Env, shipper: Address) -> Vec<u64> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::ShipperList(shipper))
-            .unwrap_or_else(|| Vec::new(&env))
+        // Return first page up to DEFAULT_MAX_PER_ADDRESS to avoid loading
+        // an entire list from a single key.
+        let page = bounded_list::read_page(&env, &DataKey::ShipperListCount(shipper.clone()), |i| {
+            DataKey::ShipperListItem(shipper.clone(), i)
+        }, 0, bounded_list::DEFAULT_MAX_PER_ADDRESS);
+        page.items
     }
 
     pub fn get_shipments_by_carrier(env: Env, carrier: Address) -> Vec<u64> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::CarrierList(carrier))
-            .unwrap_or_else(|| Vec::new(&env))
+        let page = bounded_list::read_page(&env, &DataKey::CarrierListCount(carrier.clone()), |i| {
+            DataKey::CarrierListItem(carrier.clone(), i)
+        }, 0, bounded_list::DEFAULT_MAX_PER_ADDRESS);
+        page.items
     }
 
     pub fn get_total_shipments(env: Env) -> u64 {
@@ -370,15 +380,75 @@ impl ShipmentContract {
     }
 
     fn append_to_list(env: &Env, key: DataKey, id: u64) {
-        let mut list: Vec<u64> = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env));
-        list.push_back(id);
-        env.storage().persistent().set(&key, &list);
-        // Note: extend_ttl on Vec keys requires the key to be cloneable;
-        // we skip it here for simplicity (lists extend with each write).
+        match key {
+            DataKey::ShipperList(owner) => {
+                // If legacy single-key Vec exists, migrate it into paginated storage.
+                if let Some(old): Option<Vec<u64>> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::ShipperList(owner.clone()))
+                {
+                    for i in 0..old.len() {
+                        // unwrap is safe on indices we iterate.
+                        let item = old.get(i).unwrap();
+                        let _ = bounded_list::bounded_push(
+                            env,
+                            &DataKey::ShipperListCount(owner.clone()),
+                            |idx| DataKey::ShipperListItem(owner.clone(), idx),
+                            item,
+                            bounded_list::DEFAULT_MAX_PER_ADDRESS,
+                        );
+                    }
+                    // Leave legacy key present for compatibility reads, but future
+                    // operations use paginated storage.
+                }
+                let _ = bounded_list::bounded_push(
+                    env,
+                    &DataKey::ShipperListCount(owner.clone()),
+                    |idx| DataKey::ShipperListItem(owner.clone(), idx),
+                    id,
+                    bounded_list::DEFAULT_MAX_PER_ADDRESS,
+                );
+            }
+            DataKey::CarrierList(owner) => {
+                if let Some(old): Option<Vec<u64>> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::CarrierList(owner.clone()))
+                {
+                    for i in 0..old.len() {
+                        let item = old.get(i).unwrap();
+                        let _ = bounded_list::bounded_push(
+                            env,
+                            &DataKey::CarrierListCount(owner.clone()),
+                            |idx| DataKey::CarrierListItem(owner.clone(), idx),
+                            item,
+                            bounded_list::DEFAULT_MAX_PER_ADDRESS,
+                        );
+                    }
+                }
+                let _ = bounded_list::bounded_push(
+                    env,
+                    &DataKey::CarrierListCount(owner.clone()),
+                    |idx| DataKey::CarrierListItem(owner.clone(), idx),
+                    id,
+                    bounded_list::DEFAULT_MAX_PER_ADDRESS,
+                );
+            }
+            _ => {
+                // Other keys are not lists; no-op.
+            }
+        }
+    }
+
+    /// Paginated queries: callers should page through results instead of
+    /// requesting everything at once.
+    pub fn get_shipments_by_shipper_page(env: Env, shipper: Address, offset: u32, limit: u32) -> bounded_list::Page<u64> {
+        bounded_list::read_page(&env, &DataKey::ShipperListCount(shipper.clone()), |i| DataKey::ShipperListItem(shipper.clone(), i), offset, limit)
+    }
+
+    pub fn get_shipments_by_carrier_page(env: Env, carrier: Address, offset: u32, limit: u32) -> bounded_list::Page<u64> {
+        bounded_list::read_page(&env, &DataKey::CarrierListCount(carrier.clone()), |i| DataKey::CarrierListItem(carrier.clone(), i), offset, limit)
     }
 }
 
@@ -412,6 +482,111 @@ mod tests {
             &120,
             &5_000_000_000i128, // 500 XLM
         )
+    }
+
+    #[test]
+    fn test_initialize_requires_auth() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_initialize(&admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_shipment_requires_auth() {
+        let env = Env::default();
+        let shipper = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_create_shipment(
+            &shipper,
+            &str(&env, "Lagos"),
+            &str(&env, "Nairobi"),
+            &str(&env, "Electronics"),
+            &120u32,
+            &5_000_000_000i128,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_confirm_delivery_requires_auth() {
+        let env = Env::default();
+        let shipper = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_confirm_delivery(&shipper, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cancel_shipment_requires_auth() {
+        let env = Env::default();
+        let shipper = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_cancel_shipment(&shipper, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_accept_shipment_requires_auth() {
+        let env = Env::default();
+        let carrier = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_accept_shipment(&carrier, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mark_in_transit_requires_auth() {
+        let env = Env::default();
+        let carrier = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_mark_in_transit(&carrier, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mark_delivered_requires_auth() {
+        let env = Env::default();
+        let carrier = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_mark_delivered(&carrier, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_raise_dispute_requires_auth() {
+        let env = Env::default();
+        let caller = Address::generate(&env);
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_raise_dispute(&caller, &1u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_dispute_requires_auth() {
+        let env = Env::default();
+        let contract_id = env.register(ShipmentContract {}, ());
+        let client = ShipmentContractClient::new(&env, &contract_id);
+
+        let result = client.try_resolve_dispute(&1u64, &true);
+        assert!(result.is_err());
     }
 
     #[test]
