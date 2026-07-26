@@ -1,6 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Vec};
+use shared::bounded_list;
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -54,8 +55,14 @@ pub enum DataKey {
     Admin,
     Counter,
     Shipment(u64),
+    // Legacy single-key list keys (kept for migration detection).
     ShipperList(Address),
     CarrierList(Address),
+    // Paginated storage keys: count and per-item entries.
+    ShipperListCount(Address),
+    ShipperListItem(Address, u32),
+    CarrierListCount(Address),
+    CarrierListItem(Address, u32),
 }
 
 const TTL_LEDGERS: u32 = 6_307_200; // ~1 year at ~5 s/ledger
@@ -315,17 +322,19 @@ impl ShipmentContract {
     }
 
     pub fn get_shipments_by_shipper(env: Env, shipper: Address) -> Vec<u64> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::ShipperList(shipper))
-            .unwrap_or_else(|| Vec::new(&env))
+        // Return first page up to DEFAULT_MAX_PER_ADDRESS to avoid loading
+        // an entire list from a single key.
+        let page = bounded_list::read_page(&env, &DataKey::ShipperListCount(shipper.clone()), |i| {
+            DataKey::ShipperListItem(shipper.clone(), i)
+        }, 0, bounded_list::DEFAULT_MAX_PER_ADDRESS);
+        page.items
     }
 
     pub fn get_shipments_by_carrier(env: Env, carrier: Address) -> Vec<u64> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::CarrierList(carrier))
-            .unwrap_or_else(|| Vec::new(&env))
+        let page = bounded_list::read_page(&env, &DataKey::CarrierListCount(carrier.clone()), |i| {
+            DataKey::CarrierListItem(carrier.clone(), i)
+        }, 0, bounded_list::DEFAULT_MAX_PER_ADDRESS);
+        page.items
     }
 
     pub fn get_total_shipments(env: Env) -> u64 {
@@ -370,15 +379,75 @@ impl ShipmentContract {
     }
 
     fn append_to_list(env: &Env, key: DataKey, id: u64) {
-        let mut list: Vec<u64> = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env));
-        list.push_back(id);
-        env.storage().persistent().set(&key, &list);
-        // Note: extend_ttl on Vec keys requires the key to be cloneable;
-        // we skip it here for simplicity (lists extend with each write).
+        match key {
+            DataKey::ShipperList(owner) => {
+                // If legacy single-key Vec exists, migrate it into paginated storage.
+                if let Some(old): Option<Vec<u64>> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::ShipperList(owner.clone()))
+                {
+                    for i in 0..old.len() {
+                        // unwrap is safe on indices we iterate.
+                        let item = old.get(i).unwrap();
+                        let _ = bounded_list::bounded_push(
+                            env,
+                            &DataKey::ShipperListCount(owner.clone()),
+                            |idx| DataKey::ShipperListItem(owner.clone(), idx),
+                            item,
+                            bounded_list::DEFAULT_MAX_PER_ADDRESS,
+                        );
+                    }
+                    // Leave legacy key present for compatibility reads, but future
+                    // operations use paginated storage.
+                }
+                let _ = bounded_list::bounded_push(
+                    env,
+                    &DataKey::ShipperListCount(owner.clone()),
+                    |idx| DataKey::ShipperListItem(owner.clone(), idx),
+                    id,
+                    bounded_list::DEFAULT_MAX_PER_ADDRESS,
+                );
+            }
+            DataKey::CarrierList(owner) => {
+                if let Some(old): Option<Vec<u64>> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::CarrierList(owner.clone()))
+                {
+                    for i in 0..old.len() {
+                        let item = old.get(i).unwrap();
+                        let _ = bounded_list::bounded_push(
+                            env,
+                            &DataKey::CarrierListCount(owner.clone()),
+                            |idx| DataKey::CarrierListItem(owner.clone(), idx),
+                            item,
+                            bounded_list::DEFAULT_MAX_PER_ADDRESS,
+                        );
+                    }
+                }
+                let _ = bounded_list::bounded_push(
+                    env,
+                    &DataKey::CarrierListCount(owner.clone()),
+                    |idx| DataKey::CarrierListItem(owner.clone(), idx),
+                    id,
+                    bounded_list::DEFAULT_MAX_PER_ADDRESS,
+                );
+            }
+            _ => {
+                // Other keys are not lists; no-op.
+            }
+        }
+    }
+
+    /// Paginated queries: callers should page through results instead of
+    /// requesting everything at once.
+    pub fn get_shipments_by_shipper_page(env: Env, shipper: Address, offset: u32, limit: u32) -> bounded_list::Page<u64> {
+        bounded_list::read_page(&env, &DataKey::ShipperListCount(shipper.clone()), |i| DataKey::ShipperListItem(shipper.clone(), i), offset, limit)
+    }
+
+    pub fn get_shipments_by_carrier_page(env: Env, carrier: Address, offset: u32, limit: u32) -> bounded_list::Page<u64> {
+        bounded_list::read_page(&env, &DataKey::CarrierListCount(carrier.clone()), |i| DataKey::CarrierListItem(carrier.clone(), i), offset, limit)
     }
 }
 

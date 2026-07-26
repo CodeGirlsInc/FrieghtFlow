@@ -22,6 +22,7 @@ testutils = ["soroban-sdk/testutils"]
 # the #![no_std] contract — required since this contract stores Vec<u64>
 # and Bytes in DocumentRecord.
 soroban-sdk = { version = "22.0.0", features = ["alloc"] }
+shared = { path = "../shared" }
 
 [dev-dependencies]
 # Same crate, but with "testutils" added so the #[cfg(test)] module can use
