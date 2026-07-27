@@ -94,7 +94,7 @@ export default function MarketplacePage() {
   const hasFilters = origin || destination || cargoCategory !== 'All' || minPrice || maxPrice;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 pt-18 md:pt-4 sm:p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Marketplace</h1>
         <p className="text-muted-foreground text-sm mt-1">

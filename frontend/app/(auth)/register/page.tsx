@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -21,16 +20,7 @@ import {
 import { useAuthStore } from '../../../stores/auth.store';
 import { cn } from '../../../lib/utils';
 import PasswordStrengthBar from '../../../components/auth/PasswordStrengthBar';
-
-const registerSchema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  role: z.enum(['shipper', 'carrier']),
-});
-
-type RegisterFormData = z.infer<typeof registerSchema>;
+import { registerSchema, type RegisterFormData } from '../../../lib/schemas';
 
 export default function RegisterPage() {
   const router = useRouter();
