@@ -9,23 +9,27 @@ import { useShipmentSocket } from '../../hooks/useShipmentSocket';
 import { NotificationBell } from '../../components/notifications/notification-bell';
 import { ThemeToggle } from '../../components/ui/ThemeToggle';
 import { MobileNav } from '../../components/layout/mobile-nav';
+import { ConnectionStatus } from '../../components/connection-status';
 
 const SHIPPER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'My Shipments' },
   { href: '/shipments/new', label: 'Create Shipment' },
+  { href: '/notifications', label: 'Notifications' },
 ];
 
 const CARRIER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'My Jobs' },
   { href: '/marketplace', label: 'Marketplace' },
+  { href: '/notifications', label: 'Notifications' },
 ];
 
 const ADMIN_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'All Shipments' },
   { href: '/marketplace', label: 'Marketplace' },
+  { href: '/notifications', label: 'Notifications' },
   { href: '/admin', label: 'Admin Panel' },
   { href: '/admin/users', label: 'Manage Users' },
   { href: '/admin/shipments', label: 'Shipment Oversight' },
@@ -167,6 +171,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main content */}
       <main className="flex-1 overflow-auto pt-14 md:pt-0">{children}</main>
+
+      <ConnectionStatus />
     </div>
   );
 }

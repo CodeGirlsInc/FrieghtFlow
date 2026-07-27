@@ -18,6 +18,7 @@ interface NotificationState {
   notifications: ShipmentNotification[];
   unreadCount: number;
   addNotification: (n: Omit<ShipmentNotification, 'id' | 'read'>) => void;
+  markRead: (id: string) => void;
   markAllRead: () => void;
   clearAll: () => void;
 }
@@ -33,9 +34,17 @@ export const useNotificationStore = create<NotificationState>((set) => ({
         id: `${n.shipmentId}-${Date.now()}`,
         read: false,
       };
-      // Keep only the most recent 20 notifications
-      const notifications = [notification, ...state.notifications].slice(0, 20);
+      const notifications = [notification, ...state.notifications].slice(0, 50);
       return { notifications, unreadCount: state.unreadCount + 1 };
+    }),
+
+  markRead: (id) =>
+    set((state) => {
+      const notifications = state.notifications.map((n) =>
+        n.id === id ? { ...n, read: true } : n,
+      );
+      const unreadCount = notifications.filter((n) => !n.read).length;
+      return { notifications, unreadCount };
     }),
 
   markAllRead: () =>
