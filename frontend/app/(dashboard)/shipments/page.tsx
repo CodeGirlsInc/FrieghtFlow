@@ -8,6 +8,7 @@ import { ShipmentStatus, PaginatedShipments } from '../../../types/shipment.type
 import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
 import { Button } from '../../../components/ui/button';
+import { EmptyShipments, EmptyState } from '../../../components/ui/empty-state';
 import { toast } from 'sonner';
 import { apiClient } from '../../../lib/api/client';
 
@@ -116,18 +117,22 @@ export default function ShipmentsPage() {
           ))}
         </div>
       ) : !result || result.data.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-muted-foreground text-sm">
-            {activeTab === 'all'
-              ? 'No shipments yet.'
-              : `No shipments with status "${activeTab}".`}
-          </p>
-          {isShipper && activeTab === 'all' && (
-            <Button asChild className="mt-4" variant="outline">
-              <Link href="/shipments/new">Create your first shipment</Link>
-            </Button>
-          )}
-        </div>
+        activeTab === 'all' ? (
+          <EmptyShipments />
+        ) : (
+          <EmptyState
+            illustration={
+              <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="10" y="30" width="60" height="36" rx="4" stroke="currentColor" strokeWidth="2.5" fill="none"/>
+                <path d="M10 42h60" stroke="currentColor" strokeWidth="2.5"/>
+                <circle cx="24" cy="70" r="5" stroke="currentColor" strokeWidth="2.5" fill="none"/>
+                <circle cx="56" cy="70" r="5" stroke="currentColor" strokeWidth="2.5" fill="none"/>
+              </svg>
+            }
+            title={`No shipments with status "${activeTab}"`}
+            description="Try selecting a different filter or check back later."
+          />
+        )
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2">

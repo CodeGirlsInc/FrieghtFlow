@@ -7,6 +7,7 @@ import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
 import { Input } from '../../../components/ui/input';
 import { Button } from '../../../components/ui/button';
+import { EmptyMarketplace } from '../../../components/ui/empty-state';
 import { toast } from 'sonner';
 import type { QueryShipmentParams } from '../../../types/shipment.types';
 
@@ -170,11 +171,7 @@ export default function MarketplacePage() {
           ))}
         </div>
       ) : !result || sorted.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-muted-foreground text-sm">
-            No available shipments right now. Check back soon!
-          </p>
-        </div>
+        <EmptyMarketplace />
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
