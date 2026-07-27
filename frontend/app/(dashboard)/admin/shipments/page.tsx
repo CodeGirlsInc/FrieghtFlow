@@ -73,7 +73,7 @@ export default function AdminShipmentsPage() {
   if (!user || user.role !== 'admin') return null;
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">All Shipments</h1>
         <p className="text-muted-foreground text-sm mt-1">
@@ -120,7 +120,7 @@ export default function AdminShipmentsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
