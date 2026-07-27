@@ -672,4 +672,6 @@ mod tests {
         let result = client.try_get_document(&404u64);
         assert_eq!(result, Err(Ok(DocumentError::NotFound)));
     }
+
+    
 }
