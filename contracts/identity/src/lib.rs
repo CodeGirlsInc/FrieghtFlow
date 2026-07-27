@@ -12,6 +12,10 @@ pub enum IdentityError {
     NotInitialized = 4,
 }
 
+
+
+
+
 #[contracttype]
 pub enum DataKey {
     Identity(Address),
