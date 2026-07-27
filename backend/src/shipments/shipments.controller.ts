@@ -23,7 +23,9 @@ import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
 import { QueryShipmentDto } from './dto/query-shipment.dto';
 import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
+import { CalculateCostDto } from './dto/calculate-cost.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/enums/role.enum';
@@ -64,6 +66,15 @@ class CancelBody {
 export class ShipmentsController {
   constructor(private readonly shipmentsService: ShipmentsService) {}
 
+  @Public()
+  @Post('calculate-cost')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Estimate shipment cost (public)' })
+  @ApiResponse({ status: 201, description: 'Cost estimate returned' })
+  calculateCost(@Body() dto: CalculateCostDto) {
+    return this.shipmentsService.calculateCost(dto);
+  }
+
   // ── Shipper actions ──────────────────────────────────────────────────────────
 
   @Post()
@@ -99,10 +110,7 @@ export class ShipmentsController {
     description: 'Batch shipments created successfully',
   })
   @ApiResponse({ status: 400, description: 'Validation error in batch data' })
-  batchCreate(
-    @CurrentUser() user: User,
-    @Body() dto: BatchCreateShipmentsDto,
-  ) {
+  batchCreate(@CurrentUser() user: User, @Body() dto: BatchCreateShipmentsDto) {
     return this.shipmentsService.batchCreate(user.id, dto);
   }
 
@@ -160,7 +168,9 @@ export class ShipmentsController {
   @Get('analytics')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SHIPPER)
-  @ApiOperation({ summary: 'Shipment analytics — admin sees all, shipper sees own' })
+  @ApiOperation({
+    summary: 'Shipment analytics — admin sees all, shipper sees own',
+  })
   getAnalytics(@CurrentUser() user: User, @Query() query: AnalyticsQueryDto) {
     return this.shipmentsService.getAnalytics(user, query);
   }

@@ -24,6 +24,7 @@ import { AdminAuditInterceptor } from './audit-log/admin-audit.interceptor';
 import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { MessagingModule } from './messaging/messaging.module';
+import { PaymentsModule } from './payments/payments.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -75,6 +76,8 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         MAIL_PASS: Joi.string().required(),
         MAIL_FROM: Joi.string().default('noreply@freightflow.io'),
         UPLOAD_DIR: Joi.string().default('./uploads'),
+        STRIPE_SECRET_KEY: Joi.string().optional(),
+        STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
       }),
       validationOptions: {
         allowUnknown: true,
@@ -131,6 +134,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     CarriersModule,
     ReviewsModule,
     MessagingModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [

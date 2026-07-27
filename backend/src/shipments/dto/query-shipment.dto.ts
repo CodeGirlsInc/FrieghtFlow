@@ -1,4 +1,12 @@
-import { IsOptional, IsEnum, IsString, IsInt, IsNumber, Min, Max } from 'class-validator';
+import {
+  IsOptional,
+  IsEnum,
+  IsString,
+  IsInt,
+  IsNumber,
+  Min,
+  Max,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { ShipmentStatus } from '../../common/enums/shipment-status.enum';
