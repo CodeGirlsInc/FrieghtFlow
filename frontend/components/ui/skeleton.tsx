@@ -1,15 +1,20 @@
+import * as React from 'react';
 import { cn } from '../../lib/utils';
 
-export function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
+const Skeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
-      className={cn('animate-pulse rounded-md bg-muted', className)}
+      ref={ref}
+      className={cn(
+        'animate-pulse rounded-md bg-muted',
+        className,
+      )}
       {...props}
     />
-  );
-}
+  ),
+);
+Skeleton.displayName = 'Skeleton';
 
-/** Skeleton for a shipment card */
 export function ShipmentCardSkeleton() {
   return (
     <div className="rounded-xl border bg-card shadow p-6 space-y-3">
@@ -30,7 +35,6 @@ export function ShipmentCardSkeleton() {
   );
 }
 
-/** Skeleton for a shipment table row */
 export function ShipmentTableRowSkeleton() {
   return (
     <div className="flex items-center gap-4 px-4 py-3 border-b">
@@ -43,7 +47,6 @@ export function ShipmentTableRowSkeleton() {
   );
 }
 
-/** Skeleton for a user table row */
 export function UserTableRowSkeleton() {
   return (
     <div className="flex items-center gap-4 px-4 py-3 border-b">
@@ -58,7 +61,6 @@ export function UserTableRowSkeleton() {
   );
 }
 
-/** Skeleton for a stats card */
 export function StatsCardSkeleton() {
   return (
     <div className="rounded-xl border bg-card shadow p-6 space-y-2">
@@ -68,3 +70,5 @@ export function StatsCardSkeleton() {
     </div>
   );
 }
+
+export { Skeleton };

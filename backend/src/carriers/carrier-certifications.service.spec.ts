@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { CarrierCertificationsService } from './carrier-certifications.service';
-import { CarrierCertification, CertificationType } from './entities/carrier-certification.entity';
+import {
+  CarrierCertification,
+  CertificationType,
+} from './entities/carrier-certification.entity';
 import {
   CreateCarrierCertificationDto,
   UpdateCertificationVerificationDto,

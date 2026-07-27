@@ -22,7 +22,11 @@ export class Bid {
   id: string;
 
   @Index()
-  @ManyToOne(() => Shipment, { eager: false, nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => Shipment, {
+    eager: false,
+    nullable: false,
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'shipment_id' })
   shipment: Shipment;
 

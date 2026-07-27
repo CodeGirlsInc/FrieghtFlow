@@ -16,6 +16,7 @@ import {
   LessThanOrEqual,
   SelectQueryBuilder,
 } from 'typeorm';
+import { CalculateCostDto } from './dto/calculate-cost.dto';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { v4 as uuidv4 } from 'uuid';
@@ -27,6 +28,7 @@ import { QueryShipmentDto } from './dto/query-shipment.dto';
 import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
 import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
+import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import {
@@ -109,6 +111,54 @@ export class ShipmentsService {
     private readonly historyRepo: Repository<ShipmentStatusHistory>,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  calculateCost(dto: CalculateCostDto) {
+    const BASE_RATE = 50;
+    const WEIGHT_RATE = 0.5;
+
+    const categoryMultipliers: Record<string, number> = {
+      [CargoCategory.HAZARDOUS]: 1.5,
+      [CargoCategory.PHARMACEUTICALS]: 1.4,
+      [CargoCategory.ELECTRONICS]: 1.3,
+      [CargoCategory.PERISHABLES]: 1.3,
+      [CargoCategory.AUTOMOTIVE]: 1.2,
+      [CargoCategory.MACHINERY]: 1.2,
+      [CargoCategory.FURNITURE]: 1.1,
+      [CargoCategory.TEXTILES]: 1.0,
+      [CargoCategory.FOOD_AND_BEVERAGE]: 1.1,
+      [CargoCategory.CONSTRUCTION_MATERIALS]: 1.1,
+      [CargoCategory.GENERAL_CARGO]: 1.0,
+    };
+
+    const multiplier = dto.cargoCategory
+      ? (categoryMultipliers[dto.cargoCategory] ?? 1.0)
+      : 1.0;
+
+    const originLower = dto.origin.toLowerCase();
+    const destinationLower = dto.destination.toLowerCase();
+    const sameCity = originLower === destinationLower;
+    const distance = sameCity
+      ? 1
+      : Math.max(originLower.length, destinationLower.length) * 0.5;
+
+    const weightCost = dto.weight * WEIGHT_RATE;
+    const categoryCost = BASE_RATE * (multiplier - 1);
+
+    const estimatedCost =
+      Math.round((BASE_RATE + distance + weightCost + categoryCost) * 100) /
+      100;
+
+    return {
+      estimatedCost,
+      currency: 'USD',
+      breakdown: {
+        base: BASE_RATE,
+        distance: Math.round(distance * 100) / 100,
+        weight: Math.round(weightCost * 100) / 100,
+        category: Math.round(categoryCost * 100) / 100,
+      },
+    };
+  }
 
   // ── Tracking number ──────────────────────────────────────────────────────────
 
@@ -376,7 +426,15 @@ export class ShipmentsService {
   }
 
   async findMarketplace(query: QueryShipmentDto): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, origin, destination, cargoCategory, minPrice, maxPrice } = query;
+    const {
+      page = 1,
+      limit = 20,
+      origin,
+      destination,
+      cargoCategory,
+      minPrice,
+      maxPrice,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {
@@ -385,7 +443,8 @@ export class ShipmentsService {
     if (origin) where.origin = ILike(`%${origin}%`);
     if (destination) where.destination = ILike(`%${destination}%`);
     if (cargoCategory) where.cargoCategory = cargoCategory;
-    if (minPrice != null && maxPrice != null) where.price = Between(minPrice, maxPrice);
+    if (minPrice != null && maxPrice != null)
+      where.price = Between(minPrice, maxPrice);
     else if (minPrice != null) where.price = MoreThanOrEqual(minPrice);
     else if (maxPrice != null) where.price = LessThanOrEqual(maxPrice);
 

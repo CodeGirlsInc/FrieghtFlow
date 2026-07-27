@@ -32,7 +32,9 @@ export class CarriersController {
   @Get('me/metrics')
   @UseGuards(RolesGuard)
   @Roles(UserRole.CARRIER)
-  @ApiOperation({ summary: 'Get performance metrics for the authenticated carrier' })
+  @ApiOperation({
+    summary: 'Get performance metrics for the authenticated carrier',
+  })
   getMyMetrics(@CurrentUser() user: User) {
     return this.carriersService.getMyMetrics(user.id);
   }
@@ -66,7 +68,10 @@ export class CarriersController {
 
   @Get(':id/certifications')
   @UseGuards(RolesGuard)
-  @ApiOperation({ summary: 'Get certifications for a carrier (visible to all authenticated users)' })
+  @ApiOperation({
+    summary:
+      'Get certifications for a carrier (visible to all authenticated users)',
+  })
   getCarrierCertifications(@Param('id', ParseUUIDPipe) id: string) {
     return this.certificationsService.findByCarrierId(id);
   }

@@ -7,13 +7,12 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   try {
-    // Start NestJS application
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create(AppModule, {
+      rawBody: true,
+    });
 
-    // GLOBAL PREFIX (optional, keeps API versioned/clean)
     app.setGlobalPrefix('api/v1');
 
-    // GLOBAL VALIDATION PIPES
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -22,13 +21,11 @@ async function bootstrap() {
       }),
     );
 
-    // ENABLE CORS
     app.enableCors({
       origin: process.env.FRONTEND_URL?.split(',') || ['http://localhost:3000'],
       credentials: true,
     });
 
-    // SWAGGER DOCUMENTATION
     const config = new DocumentBuilder()
       .setTitle('FreightFlow')
       .setDescription('API Documentation for FreightFlow Project')
@@ -36,7 +33,7 @@ async function bootstrap() {
       .setTermsOfService('terms-of-service')
       .setLicense('MIT License', 'mit')
       .addServer('http://localhost:6006')
-      .addBearerAuth() // 🚀 for future auth-secured endpoints
+      .addBearerAuth()
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
