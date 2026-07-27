@@ -5,7 +5,7 @@ import { Shipment } from '../shipments/entities/shipment.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 
 interface MonthlyBreakdown {
-  month: string; // e.g. "2025-03"
+  month: string;
   earnings: number;
   completedShipments: number;
 }
@@ -36,7 +36,6 @@ export class CarrierEarningsService {
 
     const buckets = new Map<string, { earnings: number; count: number }>();
 
-    // Pre-fill last 12 months
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
