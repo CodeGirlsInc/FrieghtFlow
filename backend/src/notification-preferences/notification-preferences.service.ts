@@ -39,4 +39,9 @@ export class NotificationPreferencesService {
     const prefs = await this.getOrCreate(userId);
     return prefs[key];
   }
+
+  async areSmsEnabled(userId: string): Promise<boolean> {
+    const prefs = await this.getOrCreate(userId);
+    return prefs.smsEnabled;
+  }
 }

@@ -1,0 +1,25 @@
+import MessagingBase from "../MessagingBase";
+import Version from "../../base/Version";
+import { ChannelsSenderListInstance } from "./v2/channelsSender";
+import { DomainCertsListInstance } from "./v2/domainCerts";
+import { TypingIndicatorListInstance } from "./v2/typingIndicator";
+export default class V2 extends Version {
+    /**
+     * Initialize the V2 version of Messaging
+     *
+     * @param domain - The Twilio (Twilio.Messaging) domain
+     */
+    constructor(domain: MessagingBase);
+    /** channelsSenders - { Twilio.Messaging.V2.ChannelsSenderListInstance } resource */
+    protected _channelsSenders?: ChannelsSenderListInstance;
+    /** domainCerts - { Twilio.Messaging.V2.DomainCertsListInstance } resource */
+    protected _domainCerts?: DomainCertsListInstance;
+    /** typingIndicator - { Twilio.Messaging.V2.TypingIndicatorListInstance } resource */
+    protected _typingIndicator?: TypingIndicatorListInstance;
+    /** Getter for channelsSenders resource */
+    get channelsSenders(): ChannelsSenderListInstance;
+    /** Getter for domainCerts resource */
+    get domainCerts(): DomainCertsListInstance;
+    /** Getter for typingIndicator resource */
+    get typingIndicator(): TypingIndicatorListInstance;
+}

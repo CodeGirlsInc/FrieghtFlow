@@ -78,6 +78,14 @@ export class User {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
+  @Column({ 
+    name: 'phone_number', 
+    nullable: true, 
+    type: 'varchar',
+    length: 20,
+  })
+  phoneNumber: string | null;
+
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
