@@ -25,7 +25,7 @@ import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { PaymentsModule } from './payments/payments.module';
-
+// This function is used to track the user or IP address for shipment creation requests. It retrieves the user ID from the request if available, otherwise it falls back to the IP address, and if neither is available, it defaults to 'anonymous'.
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
     ip?: string;

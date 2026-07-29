@@ -22,13 +22,13 @@ import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
 import { WebhooksService } from './webhooks.service';
-
+// http://localhost:3000/webhooks
 @ApiTags('webhooks')
 @ApiBearerAuth()
 @Controller('webhooks')
 export class WebhooksController {
   constructor(private readonly webhooksService: WebhooksService) {}
-
+// http://localhost:3000/webhooks
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER, UserRole.ADMIN)
