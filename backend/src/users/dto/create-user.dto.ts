@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '../../common/enums/role.enum';
@@ -33,4 +34,10 @@ export class CreateUserDto {
   @IsEnum(UserRole)
   @IsOptional()
   role?: UserRole;
+
+  @ApiPropertyOptional({ example: '+1234567890', description: 'Phone number in E.164 format' })
+  @IsString()
+  @IsOptional()
+  @Matches(/^\+[1-9]\d{1,14}$/, { message: 'Phone number must be in E.164 format (e.g., +1234567890)' })
+  phoneNumber?: string;
 }

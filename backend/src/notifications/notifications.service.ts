@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { MailerService } from '@nestjs-modules/mailer';
+import { ConfigService } from '@nestjs/config';
+import twilio from 'twilio';
 import {
   SHIPMENT_ACCEPTED,
   SHIPMENT_IN_TRANSIT,
@@ -12,12 +14,30 @@ import {
   ShipmentEvent,
 } from '../shipments/events/shipment.events';
 import { Shipment } from '../shipments/entities/shipment.entity';
+import { NotificationPreferencesService } from '../notification-preferences/notification-preferences.service';
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
+  private readonly twilioClient: twilio.Twilio | null = null;
+  private readonly twilioPhoneNumber: string | null = null;
 
-  constructor(private readonly mailerService: MailerService) {}
+  constructor(
+    private readonly mailerService: MailerService,
+    private readonly configService: ConfigService,
+    private readonly notificationPreferencesService: NotificationPreferencesService,
+  ) {
+    const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID');
+    const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
+    this.twilioPhoneNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER');
+    
+    if (accountSid && authToken && this.twilioPhoneNumber) {
+      this.twilioClient = twilio(accountSid, authToken);
+      this.logger.log('Twilio SMS client initialized');
+    } else {
+      this.logger.warn('Twilio credentials not fully configured, SMS notifications disabled');
+    }
+  }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +52,47 @@ export class NotificationsService {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Failed to send email to ${to}: ${msg}`);
     }
+  }
+
+  private async sendSmsSafe(
+    to: string,
+    body: string,
+  ): Promise<void> {
+    if (!this.twilioClient || !this.twilioPhoneNumber) {
+      this.logger.debug('Twilio not configured, SMS not sent');
+      return;
+    }
+
+    try {
+      await this.twilioClient.messages.create({
+        body,
+        from: this.twilioPhoneNumber,
+        to,
+      });
+      this.logger.log(`SMS sent successfully to ${to}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Failed to send SMS to ${to}: ${msg}`);
+    }
+  }
+
+  private async shouldSendSms(
+    userId: string,
+    smsEventKey: keyof Pick<
+      NotificationPreferences,
+      | 'smsShipmentAccepted'
+      | 'smsShipmentInTransit'
+      | 'smsShipmentDelivered'
+      | 'smsShipmentCompleted'
+      | 'smsShipmentCancelled'
+      | 'smsShipmentDisputed'
+      | 'smsDisputeResolved'
+    >,
+  ): Promise<boolean> {
+    const smsEnabled = await this.notificationPreferencesService.areSmsEnabled(userId);
+    if (!smsEnabled) return false;
+    
+    return this.notificationPreferencesService.isEnabled(userId, smsEventKey);
   }
 
   private shipmentSummary(s: Shipment): string {
@@ -79,6 +140,14 @@ export class NotificationsService {
       ),
     );
 
+    // Send SMS to shipper if enabled
+    if (shipper.phoneNumber && await this.shouldSendSms(shipper.id, 'smsShipmentAccepted')) {
+      await this.sendSmsSafe(
+        shipper.phoneNumber,
+        `FreightFlow: Your shipment #${shipment.trackingNumber} has been accepted by ${carrier.firstName} ${carrier.lastName}. You'll be notified when your cargo is picked up.`,
+      );
+    }
+
     // Notify carrier: confirm they accepted
     await this.sendSafe(
       carrier.email,
@@ -93,6 +162,14 @@ export class NotificationsService {
         `,
       ),
     );
+
+    // Send SMS to carrier if enabled
+    if (carrier.phoneNumber && await this.shouldSendSms(carrier.id, 'smsShipmentAccepted')) {
+      await this.sendSmsSafe(
+        carrier.phoneNumber,
+        `FreightFlow: You've accepted shipment #${shipment.trackingNumber}. Please proceed to pickup at ${shipment.origin}.`,
+      );
+    }
   }
 
   @OnEvent(SHIPMENT_IN_TRANSIT)
@@ -113,6 +190,17 @@ export class NotificationsService {
         `,
       ),
     );
+
+    // Send SMS to shipper if enabled
+    if (shipper.phoneNumber && await this.shouldSendSms(shipper.id, 'smsShipmentInTransit')) {
+      const estimatedDelivery = shipment.estimatedDeliveryDate 
+        ? ` Estimated delivery: ${new Date(shipment.estimatedDeliveryDate).toDateString()}.` 
+        : '';
+      await this.sendSmsSafe(
+        shipper.phoneNumber,
+        `FreightFlow: Your shipment #${shipment.trackingNumber} is now in transit!${estimatedDelivery}`,
+      );
+    }
   }
 
   @OnEvent(SHIPMENT_DELIVERED)
@@ -135,6 +223,14 @@ export class NotificationsService {
       ),
     );
 
+    // Send SMS to shipper if enabled
+    if (shipper.phoneNumber && await this.shouldSendSms(shipper.id, 'smsShipmentDelivered')) {
+      await this.sendSmsSafe(
+        shipper.phoneNumber,
+        `FreightFlow: Your shipment #${shipment.trackingNumber} has been marked as delivered. Please log in to confirm receipt or report an issue.`,
+      );
+    }
+
     // Notify carrier: delivery marked, waiting for shipper confirmation
     await this.sendSafe(
       carrier.email,
@@ -148,6 +244,14 @@ export class NotificationsService {
         `,
       ),
     );
+
+    // Send SMS to carrier if enabled
+    if (carrier.phoneNumber && await this.shouldSendSms(carrier.id, 'smsShipmentDelivered')) {
+      await this.sendSmsSafe(
+        carrier.phoneNumber,
+        `FreightFlow: You've marked shipment #${shipment.trackingNumber} as delivered. Awaiting shipper confirmation.`,
+      );
+    }
   }
 
   @OnEvent(SHIPMENT_COMPLETED)
@@ -170,6 +274,14 @@ export class NotificationsService {
       ),
     );
 
+    // Send SMS to carrier if enabled
+    if (carrier.phoneNumber && await this.shouldSendSms(carrier.id, 'smsShipmentCompleted')) {
+      await this.sendSmsSafe(
+        carrier.phoneNumber,
+        `FreightFlow: Shipment #${shipment.trackingNumber} is complete! Delivery confirmed by shipper. Thank you for your service.`,
+      );
+    }
+
     // Notify shipper: transaction complete
     await this.sendSafe(
       shipper.email,
@@ -183,6 +295,14 @@ export class NotificationsService {
         `,
       ),
     );
+
+    // Send SMS to shipper if enabled
+    if (shipper.phoneNumber && await this.shouldSendSms(shipper.id, 'smsShipmentCompleted')) {
+      await this.sendSmsSafe(
+        shipper.phoneNumber,
+        `FreightFlow: Shipment #${shipment.trackingNumber} has been completed successfully! Thank you for using FreightFlow.`,
+      );
+    }
   }
 
   @OnEvent(SHIPMENT_CANCELLED)
@@ -192,7 +312,7 @@ export class NotificationsService {
   }: ShipmentEvent): Promise<void> {
     const { shipper, carrier } = shipment;
     const reasonNote = reason
-      ? `<p><strong>Reason:</strong> ${reason}</p>`
+      ? ` Reason: ${reason}`
       : '';
 
     if (shipper) {
@@ -204,11 +324,19 @@ export class NotificationsService {
           `
           <p>Hi ${shipper.firstName},</p>
           <p>Shipment <strong>${shipment.trackingNumber}</strong> has been cancelled.</p>
-          ${reasonNote}
+          ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
           ${this.shipmentSummary(shipment)}
           `,
         ),
       );
+
+      // Send SMS to shipper if enabled
+      if (shipper.phoneNumber && await this.shouldSendSms(shipper.id, 'smsShipmentCancelled')) {
+        await this.sendSmsSafe(
+          shipper.phoneNumber,
+          `FreightFlow: Shipment #${shipment.trackingNumber} has been cancelled.${reasonNote}`,
+        );
+      }
     }
 
     if (carrier) {
@@ -220,11 +348,19 @@ export class NotificationsService {
           `
           <p>Hi ${carrier.firstName},</p>
           <p>Shipment <strong>${shipment.trackingNumber}</strong> that you were assigned to has been cancelled.</p>
-          ${reasonNote}
+          ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
           ${this.shipmentSummary(shipment)}
           `,
         ),
       );
+
+      // Send SMS to carrier if enabled
+      if (carrier.phoneNumber && await this.shouldSendSms(carrier.id, 'smsShipmentCancelled')) {
+        await this.sendSmsSafe(
+          carrier.phoneNumber,
+          `FreightFlow: Shipment #${shipment.trackingNumber} that you were assigned to has been cancelled.${reasonNote}`,
+        );
+      }
     }
   }
 
@@ -232,7 +368,7 @@ export class NotificationsService {
   async onShipmentDisputed({ shipment, reason }: ShipmentEvent): Promise<void> {
     const { shipper, carrier } = shipment;
     const reasonNote = reason
-      ? `<p><strong>Reason for dispute:</strong> ${reason}</p>`
+      ? ` Reason: ${reason}`
       : '';
 
     if (shipper) {
@@ -244,11 +380,19 @@ export class NotificationsService {
           `
           <p>Hi ${shipper.firstName},</p>
           <p>A dispute has been raised on shipment <strong>${shipment.trackingNumber}</strong>. Our team will review and resolve it.</p>
-          ${reasonNote}
+          ${reason ? `<p><strong>Reason for dispute:</strong> ${reason}</p>` : ''}
           ${this.shipmentSummary(shipment)}
           `,
         ),
       );
+
+      // Send SMS to shipper if enabled
+      if (shipper.phoneNumber && await this.shouldSendSms(shipper.id, 'smsShipmentDisputed')) {
+        await this.sendSmsSafe(
+          shipper.phoneNumber,
+          `FreightFlow: A dispute has been raised on shipment #${shipment.trackingNumber}. Our team will review it.${reasonNote}`,
+        );
+      }
     }
 
     if (carrier) {
@@ -260,11 +404,19 @@ export class NotificationsService {
           `
           <p>Hi ${carrier.firstName},</p>
           <p>A dispute has been raised on shipment <strong>${shipment.trackingNumber}</strong>. Our team will review and resolve it.</p>
-          ${reasonNote}
+          ${reason ? `<p><strong>Reason for dispute:</strong> ${reason}</p>` : ''}
           ${this.shipmentSummary(shipment)}
           `,
         ),
       );
+
+      // Send SMS to carrier if enabled
+      if (carrier.phoneNumber && await this.shouldSendSms(carrier.id, 'smsShipmentDisputed')) {
+        await this.sendSmsSafe(
+          carrier.phoneNumber,
+          `FreightFlow: A dispute has been raised on shipment #${shipment.trackingNumber}. Our team will review it.${reasonNote}`,
+        );
+      }
     }
   }
 
@@ -273,7 +425,7 @@ export class NotificationsService {
     const { shipper, carrier } = shipment;
     const outcome = shipment.status.toUpperCase();
     const reasonNote = reason
-      ? `<p><strong>Resolution note:</strong> ${reason}</p>`
+      ? ` Resolution: ${reason}`
       : '';
 
     const body = (firstName: string) =>
@@ -283,7 +435,7 @@ export class NotificationsService {
       <p>Hi ${firstName},</p>
       <p>The dispute on shipment <strong>${shipment.trackingNumber}</strong> has been reviewed and resolved by our admin team.</p>
       <p><strong>Outcome:</strong> ${outcome}</p>
-      ${reasonNote}
+      ${reason ? `<p><strong>Resolution note:</strong> ${reason}</p>` : ''}
       ${this.shipmentSummary(shipment)}
       `,
       );
@@ -294,6 +446,14 @@ export class NotificationsService {
         `🔔 Dispute resolved for shipment ${shipment.trackingNumber}`,
         body(shipper.firstName),
       );
+
+      // Send SMS to shipper if enabled
+      if (shipper.phoneNumber && await this.shouldSendSms(shipper.id, 'smsDisputeResolved')) {
+        await this.sendSmsSafe(
+          shipper.phoneNumber,
+          `FreightFlow: The dispute on shipment #${shipment.trackingNumber} has been resolved. Outcome: ${outcome}.${reasonNote}`,
+        );
+      }
     }
     if (carrier) {
       await this.sendSafe(
@@ -301,6 +461,14 @@ export class NotificationsService {
         `🔔 Dispute resolved for shipment ${shipment.trackingNumber}`,
         body(carrier.firstName),
       );
+
+      // Send SMS to carrier if enabled
+      if (carrier.phoneNumber && await this.shouldSendSms(carrier.id, 'smsDisputeResolved')) {
+        await this.sendSmsSafe(
+          carrier.phoneNumber,
+          `FreightFlow: The dispute on shipment #${shipment.trackingNumber} has been resolved. Outcome: ${outcome}.${reasonNote}`,
+        );
+      }
     }
   }
 }
