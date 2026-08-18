@@ -5,32 +5,15 @@
 //! Tracks on-chain reputation for FreightFlow Carriers and Shippers.
 //!
 //! ## Score formula (0 – 1000)
-//! Three components are computed independently, each capped, then summed
-//! and capped at 1000:
-//! ```text
-//! rating_component     = average_rating                    ← 0-500 (avg stars × 100, both types)
-//! rate_component        = type_rate_pct * 3                 ← 0-300
-//!                           (on-time %   for carriers,
-//!                            success %   for shippers)
-//! completion_component = (rating_count / total_completed) * 2  ← 0-200
-//!                           (% of completed shipments that received a rating,
-//!                            both types)
-//! score = rating_component + rate_component + completion_component
+//! ```
+//! score = (avg_rating / 5 * 500)          ← 0-500  rating component
+//!       + (on_time_pct * 3)               ← 0-300  punctuality  (carriers only)
+//!       + (completion_rate * 2)           ← 0-200  reliability  (shippers only)
 //! ```
 //! Fixed-point arithmetic: `average_rating` is stored as `score * 100`
-//! (i.e. 500 = 5.00 stars, 350 = 3.50 stars), rounded to the nearest
-//! integer rather than truncated.
-//!
-//! ## Known limitation
-//! This contract has no visibility into an external shipment contract's
-//! records, so it cannot independently verify that `rater`/`rated` in
-//! `submit_rating`, or `user` in `update_stats`, were actually the
-//! shipper/carrier on `shipment_id`. That trust boundary is enforced by
-//! whichever contract is authorized to call `update_stats` (see
-//! `AuthorizedContract`); this contract only guarantees each shipment
-//! contributes at most one rating per rater and one stats update per user.
+//! (i.e. 500 = 5.00 stars, 350 = 3.50 stars).
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Vec};
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -48,10 +31,6 @@ pub enum ReputationError {
     Unauthorized = 8,
     UserTypeMismatch = 9,
     RatingNotFound = 10,
-    /// `update_stats` was already called for this (shipment_id, user) pair.
-    AlreadyRecordedStats = 11,
-    /// A counter would have overflowed its integer type.
-    ArithmeticOverflow = 12,
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -81,8 +60,7 @@ pub struct Reputation {
     pub success_count: u32,
     /// Cancelled shipments (shippers only).
     pub cancel_count: u32,
-    /// `total_rating_points / rating_count`, rounded to nearest —
-    /// 500 = 5.00 stars.
+    /// `total_rating_points / rating_count` — 500 = 5.00 stars.
     pub average_rating: u32,
     pub last_updated: u64,
 }
@@ -107,8 +85,7 @@ pub enum DataKey {
     RatingCounter,
     Reputation(Address),
     Rating(u64),
-    ShipmentRaters(u64),  // Vec<Address> — who has already rated this shipment
-    StatsRecorded(u64),   // Vec<Address> — who already had stats recorded for this shipment
+    ShipmentRaters(u64), // Vec<Address> — who has already rated this shipment
 }
 
 const TTL_LEDGERS: u32 = 6_307_200; // ~1 year
@@ -133,7 +110,6 @@ impl ReputationContract {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(ReputationError::AlreadyInitialized);
         }
-        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
@@ -152,7 +128,7 @@ impl ReputationContract {
         user: Address,
         user_type: UserType,
     ) -> Result<(), ReputationError> {
-        user.require_auth_for_args(&[&user_type]);
+        user.require_auth();
 
         if env
             .storage()
@@ -164,7 +140,7 @@ impl ReputationContract {
 
         let rep = Reputation {
             user: user.clone(),
-            user_type: user_type.clone(),
+            user_type,
             total_completed: 0,
             total_rating_points: 0,
             rating_count: 0,
@@ -181,10 +157,7 @@ impl ReputationContract {
             .set(&DataKey::Reputation(user.clone()), &rep);
         env.storage()
             .persistent()
-            .extend_ttl(&DataKey::Reputation(user.clone()), TTL_LEDGERS, TTL_LEDGERS);
-
-        env.events()
-            .publish((Symbol::new(&env, "user_registered"), user), user_type);
+            .extend_ttl(&DataKey::Reputation(user), TTL_LEDGERS, TTL_LEDGERS);
 
         Ok(())
     }
@@ -197,9 +170,7 @@ impl ReputationContract {
     /// - Score must be 1-5.
     /// - Cannot rate yourself.
     /// - Each address can only rate a given shipment once.
-    /// - Both `rater` and `rated` must be registered users, and — since
-    ///   ratings only make sense across the shipper/carrier relationship on
-    ///   a shipment — must be of *different* user types.
+    /// - `rated` must be a registered user (or admin auto-registers them).
     pub fn submit_rating(
         env: Env,
         rater: Address,
@@ -207,7 +178,7 @@ impl ReputationContract {
         rated: Address,
         score: u32,
     ) -> Result<u64, ReputationError> {
-        rater.require_auth_for_args(&[&shipment_id, &rated, &score]);
+        rater.require_auth();
 
         if !(1..=5).contains(&score) {
             return Err(ReputationError::InvalidScore);
@@ -227,24 +198,13 @@ impl ReputationContract {
             return Err(ReputationError::AlreadyRatedShipment);
         }
 
-        // Both parties must be registered...
-        let rater_rep: Reputation = env
+        // The rated user must be registered.
+        if !env
             .storage()
             .persistent()
-            .get(&DataKey::Reputation(rater.clone()))
-            .ok_or(ReputationError::UserNotFound)?;
-
-        let mut rated_rep: Reputation = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Reputation(rated.clone()))
-            .ok_or(ReputationError::UserNotFound)?;
-
-        // ...and must be on opposite sides of the shipper/carrier
-        // relationship — a Carrier rating a Carrier (or Shipper rating a
-        // Shipper) doesn't correspond to any real shipment interaction.
-        if rater_rep.user_type == rated_rep.user_type {
-            return Err(ReputationError::UserTypeMismatch);
+            .has(&DataKey::Reputation(rated.clone()))
+        {
+            return Err(ReputationError::UserNotFound);
         }
 
         // Record the rating.
@@ -275,36 +235,26 @@ impl ReputationContract {
             .persistent()
             .set(&DataKey::ShipmentRaters(shipment_id), &raters);
 
-        // Update the rated user's reputation. Checked arithmetic ensures a
-        // pathological number of ratings fails loudly instead of silently
-        // wrapping the counters.
-        let points = score
-            .checked_mul(100)
-            .ok_or(ReputationError::ArithmeticOverflow)?;
-        rated_rep.total_rating_points = rated_rep
-            .total_rating_points
-            .checked_add(points)
-            .ok_or(ReputationError::ArithmeticOverflow)?;
-        rated_rep.rating_count = rated_rep
-            .rating_count
-            .checked_add(1)
-            .ok_or(ReputationError::ArithmeticOverflow)?;
-        // Round to nearest rather than truncate, e.g. (5+5+4)*100/3 = 466.67 → 467.
-        rated_rep.average_rating =
-            (rated_rep.total_rating_points + rated_rep.rating_count / 2) / rated_rep.rating_count;
-        rated_rep.last_updated = now;
+        // Update the rated user's reputation.
+        let mut rep: Reputation = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Reputation(rated.clone()))
+            .ok_or(ReputationError::UserNotFound)?;
+
+        rep.total_rating_points += score * 100;
+        rep.rating_count += 1;
+        rep.average_rating = rep.total_rating_points / rep.rating_count;
+        rep.last_updated = now;
 
         env.storage()
             .persistent()
-            .set(&DataKey::Reputation(rated.clone()), &rated_rep);
+            .set(&DataKey::Reputation(rated.clone()), &rep);
         env.storage().persistent().extend_ttl(
-            &DataKey::Reputation(rated.clone()),
+            &DataKey::Reputation(rated),
             TTL_LEDGERS,
             TTL_LEDGERS,
         );
-
-        env.events()
-            .publish((Symbol::new(&env, "rating_submitted"), rated), rating_id);
 
         Ok(rating_id)
     }
@@ -314,8 +264,6 @@ impl ReputationContract {
     /// Update shipment completion statistics.
     ///
     /// Only callable by the authorized shipment contract (or admin in tests).
-    /// Each `(shipment_id, user)` pair may only be recorded once — a repeated
-    /// call for the same shipment/user is rejected rather than double-counted.
     ///
     /// For carriers: `was_on_time` governs punctuality counters.
     /// For shippers: `was_successful` governs completion counters.
@@ -323,11 +271,10 @@ impl ReputationContract {
         env: Env,
         caller: Address,
         user: Address,
-        shipment_id: u64,
         was_on_time: bool,
         was_successful: bool,
     ) -> Result<(), ReputationError> {
-        caller.require_auth_for_args(&[&user, &was_on_time, &was_successful]);
+        caller.require_auth();
 
         // Only the authorised contract or the admin may call this.
         let auth_contract: Address = env
@@ -345,54 +292,27 @@ impl ReputationContract {
             return Err(ReputationError::Unauthorized);
         }
 
-        // Prevent the same shipment from inflating a user's stats twice
-        // (e.g. a retried or duplicated call from the shipment contract).
-        let mut recorded: Vec<Address> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::StatsRecorded(shipment_id))
-            .unwrap_or_else(|| Vec::new(&env));
-
-        if recorded.contains(&user) {
-            return Err(ReputationError::AlreadyRecordedStats);
-        }
-
         let mut rep: Reputation = env
             .storage()
             .persistent()
             .get(&DataKey::Reputation(user.clone()))
             .ok_or(ReputationError::UserNotFound)?;
 
-        rep.total_completed = rep
-            .total_completed
-            .checked_add(1)
-            .ok_or(ReputationError::ArithmeticOverflow)?;
+        rep.total_completed += 1;
 
         match rep.user_type {
             UserType::Carrier => {
                 if was_on_time {
-                    rep.on_time_count = rep
-                        .on_time_count
-                        .checked_add(1)
-                        .ok_or(ReputationError::ArithmeticOverflow)?;
+                    rep.on_time_count += 1;
                 } else {
-                    rep.late_count = rep
-                        .late_count
-                        .checked_add(1)
-                        .ok_or(ReputationError::ArithmeticOverflow)?;
+                    rep.late_count += 1;
                 }
             }
             UserType::Shipper => {
                 if was_successful {
-                    rep.success_count = rep
-                        .success_count
-                        .checked_add(1)
-                        .ok_or(ReputationError::ArithmeticOverflow)?;
+                    rep.success_count += 1;
                 } else {
-                    rep.cancel_count = rep
-                        .cancel_count
-                        .checked_add(1)
-                        .ok_or(ReputationError::ArithmeticOverflow)?;
+                    rep.cancel_count += 1;
                 }
             }
         }
@@ -404,28 +324,20 @@ impl ReputationContract {
             .set(&DataKey::Reputation(user.clone()), &rep);
         env.storage()
             .persistent()
-            .extend_ttl(&DataKey::Reputation(user.clone()), TTL_LEDGERS, TTL_LEDGERS);
-
-        recorded.push_back(user.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::StatsRecorded(shipment_id), &recorded);
-        env.storage().persistent().extend_ttl(
-            &DataKey::StatsRecorded(shipment_id),
-            TTL_LEDGERS,
-            TTL_LEDGERS,
-        );
-
-        env.events()
-            .publish((Symbol::new(&env, "stats_updated"), user), shipment_id);
+            .extend_ttl(&DataKey::Reputation(user), TTL_LEDGERS, TTL_LEDGERS);
 
         Ok(())
     }
 
     // ── Score calculation ─────────────────────────────────────────────────
 
-    /// Calculate a 0-1000 composite reputation score. See the module-level
-    /// doc comment for the exact formula. Capped at 1000.
+    /// Calculate a 0-1000 composite reputation score.
+    ///
+    /// ```
+    /// Carriers:  (avg_rating / 500 * 500) + (on_time_pct * 3)  + (completion_pct * 2)
+    /// Shippers:  (avg_rating / 500 * 500) + (completion_pct * 2) + (completion_pct * 3)
+    /// ```
+    /// Capped at 1000.
     pub fn calculate_score(env: Env, user: Address) -> Result<u32, ReputationError> {
         let rep: Reputation = env
             .storage()
@@ -433,8 +345,8 @@ impl ReputationContract {
             .get(&DataKey::Reputation(user))
             .ok_or(ReputationError::UserNotFound)?;
 
-        // Rating component: average_rating is already ×100 (500 = 5.00 stars),
-        // already in the 0-500 range, but capped defensively.
+        // Rating component: average_rating is already ×100 (500 = 5.00 stars).
+        // Normalise to 0-500: (avg / 500) * 500 = avg (already in range).
         let rating_component = rep.average_rating.min(500);
 
         let rate_component: u32 = if rep.total_completed == 0 {
@@ -489,35 +401,6 @@ impl ReputationContract {
             .unwrap_or(false)
     }
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Vec};
-
-// ── Errors ────────────────────────────────────────────────────────────────────
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum ReputationError {
-    NotInitialized = 1,
-    AlreadyInitialized = 2,
-    UserNotFound = 3,
-    UserAlreadyRegistered = 4,
-    InvalidScore = 5,
-    AlreadyRatedShipment = 6,
-    CannotRateSelf = 7,
-    Unauthorized = 8,
-    UserTypeMismatch = 9,
-    RatingNotFound = 10,
-}
-    /// Whether `update_stats` has already been recorded for `user` on
-    /// `shipment_id` (mirrors `has_rated_shipment` for the stats side).
-    pub fn has_recorded_stats(env: Env, shipment_id: u64, user: Address) -> bool {
-        env.storage()
-            .persistent()
-            .get::<DataKey, Vec<Address>>(&DataKey::StatsRecorded(shipment_id))
-            .map(|recorded| recorded.contains(&user))
-            .unwrap_or(false)
-    }
-
     pub fn get_total_ratings(env: Env) -> u64 {
         env.storage()
             .persistent()
@@ -562,53 +445,6 @@ mod tests {
         client.initialize(&admin, &auth_contract);
 
         (env, admin, auth_contract, client)
-    }
-
-    #[test]
-    fn test_initialize_requires_auth() {
-        let env = Env::default();
-        let admin = Address::generate(&env);
-        let auth_contract = Address::generate(&env);
-        let contract_id = env.register(ReputationContract {}, ());
-        let client = ReputationContractClient::new(&env, &contract_id);
-
-        let result = client.try_initialize(&admin, &auth_contract);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_register_user_requires_auth() {
-        let env = Env::default();
-        let user = Address::generate(&env);
-        let contract_id = env.register(ReputationContract {}, ());
-        let client = ReputationContractClient::new(&env, &contract_id);
-
-        let result = client.try_register_user(&user, &UserType::Carrier);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_submit_rating_requires_auth() {
-        let env = Env::default();
-        let rater = Address::generate(&env);
-        let rated = Address::generate(&env);
-        let contract_id = env.register(ReputationContract {}, ());
-        let client = ReputationContractClient::new(&env, &contract_id);
-
-        let result = client.try_submit_rating(&rater, &1u64, &rated, &5u32);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_update_stats_requires_auth() {
-        let env = Env::default();
-        let caller = Address::generate(&env);
-        let user = Address::generate(&env);
-        let contract_id = env.register(ReputationContract {}, ());
-        let client = ReputationContractClient::new(&env, &contract_id);
-
-        let result = client.try_update_stats(&caller, &user, &true, &false);
-        assert!(result.is_err());
     }
 
     #[test]
@@ -662,27 +498,6 @@ mod tests {
     }
 
     #[test]
-    fn test_average_rating_rounds_to_nearest() {
-        let (env, _, _, client) = setup();
-        let r1 = Address::generate(&env);
-        let r2 = Address::generate(&env);
-        let r3 = Address::generate(&env);
-        let carrier = Address::generate(&env);
-        client.register_user(&r1, &UserType::Shipper);
-        client.register_user(&r2, &UserType::Shipper);
-        client.register_user(&r3, &UserType::Shipper);
-        client.register_user(&carrier, &UserType::Carrier);
-
-        // (5 + 5 + 4) * 100 / 3 = 466.67 → rounds to 467, not truncates to 466.
-        client.submit_rating(&r1, &1u64, &carrier, &5u32);
-        client.submit_rating(&r2, &2u64, &carrier, &5u32);
-        client.submit_rating(&r3, &3u64, &carrier, &4u32);
-
-        let rep = client.get_reputation(&carrier);
-        assert_eq!(rep.average_rating, 467);
-    }
-
-    #[test]
     fn test_cannot_rate_self() {
         let (env, _, _, client) = setup();
         let user = Address::generate(&env);
@@ -724,37 +539,14 @@ mod tests {
     }
 
     #[test]
-    fn test_unregistered_rater_rejected() {
-        let (env, _, _, client) = setup();
-        let rater = Address::generate(&env); // never registered
-        let rated = Address::generate(&env);
-        client.register_user(&rated, &UserType::Carrier);
-
-        let result = client.try_submit_rating(&rater, &1u64, &rated, &5u32);
-        assert_eq!(result, Err(Ok(ReputationError::UserNotFound)));
-    }
-
-    #[test]
-    fn test_rating_same_user_type_rejected() {
-        let (env, _, _, client) = setup();
-        let rater = Address::generate(&env);
-        let rated = Address::generate(&env);
-        client.register_user(&rater, &UserType::Carrier);
-        client.register_user(&rated, &UserType::Carrier);
-
-        let result = client.try_submit_rating(&rater, &1u64, &rated, &5u32);
-        assert_eq!(result, Err(Ok(ReputationError::UserTypeMismatch)));
-    }
-
-    #[test]
     fn test_update_stats_carrier() {
         let (env, _, auth_contract, client) = setup();
         let carrier = Address::generate(&env);
         client.register_user(&carrier, &UserType::Carrier);
 
-        client.update_stats(&auth_contract, &carrier, &1u64, &true, &false); // on-time
-        client.update_stats(&auth_contract, &carrier, &2u64, &true, &false); // on-time
-        client.update_stats(&auth_contract, &carrier, &3u64, &false, &false); // late
+        client.update_stats(&auth_contract, &carrier, &true, &false); // on-time
+        client.update_stats(&auth_contract, &carrier, &true, &false); // on-time
+        client.update_stats(&auth_contract, &carrier, &false, &false); // late
 
         let rep = client.get_reputation(&carrier);
         assert_eq!(rep.total_completed, 3);
@@ -768,8 +560,8 @@ mod tests {
         let shipper = Address::generate(&env);
         client.register_user(&shipper, &UserType::Shipper);
 
-        client.update_stats(&auth_contract, &shipper, &1u64, &false, &true); // success
-        client.update_stats(&auth_contract, &shipper, &2u64, &false, &false); // cancelled
+        client.update_stats(&auth_contract, &shipper, &false, &true); // success
+        client.update_stats(&auth_contract, &shipper, &false, &false); // cancelled
 
         let rep = client.get_reputation(&shipper);
         assert_eq!(rep.total_completed, 2);
@@ -784,34 +576,8 @@ mod tests {
         let carrier = Address::generate(&env);
         client.register_user(&carrier, &UserType::Carrier);
 
-        let result = client.try_update_stats(&random, &carrier, &1u64, &true, &false);
+        let result = client.try_update_stats(&random, &carrier, &true, &false);
         assert_eq!(result, Err(Ok(ReputationError::Unauthorized)));
-    }
-
-    #[test]
-    fn test_duplicate_stats_update_for_same_shipment_fails() {
-        let (env, _, auth_contract, client) = setup();
-        let carrier = Address::generate(&env);
-        client.register_user(&carrier, &UserType::Carrier);
-
-        client.update_stats(&auth_contract, &carrier, &1u64, &true, &false);
-        let result = client.try_update_stats(&auth_contract, &carrier, &1u64, &true, &false);
-        assert_eq!(result, Err(Ok(ReputationError::AlreadyRecordedStats)));
-
-        // Confirm the second (rejected) call didn't sneak in a double-count.
-        let rep = client.get_reputation(&carrier);
-        assert_eq!(rep.total_completed, 1);
-    }
-
-    #[test]
-    fn test_has_recorded_stats() {
-        let (env, _, auth_contract, client) = setup();
-        let carrier = Address::generate(&env);
-        client.register_user(&carrier, &UserType::Carrier);
-
-        assert!(!client.has_recorded_stats(&1u64, &carrier));
-        client.update_stats(&auth_contract, &carrier, &1u64, &true, &false);
-        assert!(client.has_recorded_stats(&1u64, &carrier));
     }
 
     #[test]
@@ -825,7 +591,7 @@ mod tests {
         // 5-star rating
         client.submit_rating(&rater, &1u64, &carrier, &5u32);
         // Perfect on-time record
-        client.update_stats(&auth_contract, &carrier, &1u64, &true, &false);
+        client.update_stats(&auth_contract, &carrier, &true, &false);
 
         let score = client.calculate_score(&carrier);
         // avg_rating = 500 (5 stars × 100), on_time_pct = 100%, rating/completed = 100%

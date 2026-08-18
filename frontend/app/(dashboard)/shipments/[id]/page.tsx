@@ -124,12 +124,6 @@ export default function ShipmentDetailPage() {
                   <span className="text-muted-foreground">Price</span>
                   <p className="font-semibold text-foreground">{formattedPrice}</p>
                 </div>
-                {shipment.cargoCategory && (
-                  <div>
-                    <span className="text-muted-foreground">Category</span>
-                    <p className="font-medium">{shipment.cargoCategory}</p>
-                  </div>
-                )}
               </div>
               {shipment.notes && (
                 <p className="text-muted-foreground italic text-sm border-t pt-2">

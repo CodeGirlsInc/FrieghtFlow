@@ -15,65 +15,51 @@ interface AuthState {
   fetchCurrentUser: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => {
-  if (typeof window !== 'undefined') {
-    window.addEventListener('storage', (event) => {
-      if (event.key === 'sessionStorage') {
-        const refreshToken = sessionStorage.getItem('refreshToken');
-        const userId = sessionStorage.getItem('userId');
-        if (!refreshToken || !userId) {
-          set({ user: null, isAuthenticated: false });
-        }
-      }
-    });
-  }
+export const useAuthStore = create<AuthState>((set) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
 
-  return {
-    user: null,
-    isAuthenticated: false,
-    isLoading: false,
+  login: async (payload) => {
+    set({ isLoading: true });
+    try {
+      const { user } = await authApi.login(payload);
+      set({ user, isAuthenticated: true, isLoading: false });
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
 
-    login: async (payload) => {
-      set({ isLoading: true });
-      try {
-        const { user } = await authApi.login(payload);
-        set({ user, isAuthenticated: true, isLoading: false });
-      } catch (error) {
-        set({ isLoading: false });
-        throw error;
-      }
-    },
+  register: async (payload) => {
+    set({ isLoading: true });
+    try {
+      const { user } = await authApi.register(payload);
+      set({ user, isAuthenticated: true, isLoading: false });
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
 
-    register: async (payload) => {
-      set({ isLoading: true });
-      try {
-        const { user } = await authApi.register(payload);
-        set({ user, isAuthenticated: true, isLoading: false });
-      } catch (error) {
-        set({ isLoading: false });
-        throw error;
-      }
-    },
+  logout: async () => {
+    set({ isLoading: true });
+    try {
+      await authApi.logout();
+    } finally {
+      set({ user: null, isAuthenticated: false, isLoading: false });
+    }
+  },
 
-    logout: async () => {
-      set({ isLoading: true });
-      try {
-        await authApi.logout();
-      } finally {
-        set({ user: null, isAuthenticated: false, isLoading: false });
-      }
-    },
+  setUser: (user) => set({ user, isAuthenticated: !!user }),
 
-    setUser: (user) => set({ user, isAuthenticated: !!user }),
-
-    fetchCurrentUser: async () => {
-      set({ isLoading: true });
-      try {
-        const user = await authApi.getCurrentUser();
-        set({ user, isAuthenticated: true, isLoading: false });
-      } catch {
-        set({ user: null, isAuthenticated: false, isLoading: false });
-      }
-    },
-  };
-});
+  fetchCurrentUser: async () => {
+    set({ isLoading: true });
+    try {
+      const user = await authApi.getCurrentUser();
+      set({ user, isAuthenticated: true, isLoading: false });
+    } catch {
+      set({ user: null, isAuthenticated: false, isLoading: false });
+    }
+  },
+}));

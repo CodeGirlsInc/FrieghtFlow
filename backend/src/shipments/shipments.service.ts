@@ -11,12 +11,8 @@ import {
   Repository,
   FindOptionsWhere,
   ILike,
-  Between,
-  MoreThanOrEqual,
-  LessThanOrEqual,
   SelectQueryBuilder,
 } from 'typeorm';
-import { CalculateCostDto } from './dto/calculate-cost.dto';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,7 +24,6 @@ import { QueryShipmentDto } from './dto/query-shipment.dto';
 import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
 import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
-import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import {
@@ -112,54 +107,6 @@ export class ShipmentsService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  calculateCost(dto: CalculateCostDto) {
-    const BASE_RATE = 50;
-    const WEIGHT_RATE = 0.5;
-
-    const categoryMultipliers: Record<string, number> = {
-      [CargoCategory.HAZARDOUS]: 1.5,
-      [CargoCategory.PHARMACEUTICALS]: 1.4,
-      [CargoCategory.ELECTRONICS]: 1.3,
-      [CargoCategory.PERISHABLES]: 1.3,
-      [CargoCategory.AUTOMOTIVE]: 1.2,
-      [CargoCategory.MACHINERY]: 1.2,
-      [CargoCategory.FURNITURE]: 1.1,
-      [CargoCategory.TEXTILES]: 1.0,
-      [CargoCategory.FOOD_AND_BEVERAGE]: 1.1,
-      [CargoCategory.CONSTRUCTION_MATERIALS]: 1.1,
-      [CargoCategory.GENERAL_CARGO]: 1.0,
-    };
-
-    const multiplier = dto.cargoCategory
-      ? (categoryMultipliers[dto.cargoCategory] ?? 1.0)
-      : 1.0;
-
-    const originLower = dto.origin.toLowerCase();
-    const destinationLower = dto.destination.toLowerCase();
-    const sameCity = originLower === destinationLower;
-    const distance = sameCity
-      ? 1
-      : Math.max(originLower.length, destinationLower.length) * 0.5;
-
-    const weightCost = dto.weight * WEIGHT_RATE;
-    const categoryCost = BASE_RATE * (multiplier - 1);
-
-    const estimatedCost =
-      Math.round((BASE_RATE + distance + weightCost + categoryCost) * 100) /
-      100;
-
-    return {
-      estimatedCost,
-      currency: 'USD',
-      breakdown: {
-        base: BASE_RATE,
-        distance: Math.round(distance * 100) / 100,
-        weight: Math.round(weightCost * 100) / 100,
-        category: Math.round(categoryCost * 100) / 100,
-      },
-    };
-  }
-
   // ── Tracking number ──────────────────────────────────────────────────────────
 
   private generateTrackingNumber(): string {
@@ -233,36 +180,12 @@ export class ShipmentsService {
     await this.historyRepo.save(entry);
   }
 
-  // ── Insurance premium calculation ────────────────────────────────────────────
-
-  private calculatePremium(
-    declaredValue: number,
-    cargoCategory: string | null,
-  ): number {
-    const riskRates: Record<string, number> = {
-      HAZARDOUS: 0.04,
-      PHARMACEUTICALS: 0.03,
-      ELECTRONICS: 0.025,
-      PERISHABLES: 0.025,
-      AUTOMOTIVE: 0.02,
-      MACHINERY: 0.02,
-      FURNITURE: 0.015,
-      TEXTILES: 0.015,
-      FOOD_AND_BEVERAGE: 0.015,
-      CONSTRUCTION_MATERIALS: 0.015,
-      GENERAL_CARGO: 0.01,
-    };
-    const rate = riskRates[cargoCategory ?? ''] ?? 0.015;
-    return Math.round(declaredValue * rate * 100) / 100;
-  }
-
   // ── CRUD ─────────────────────────────────────────────────────────────────────
 
   async create(shipperId: string, dto: CreateShipmentDto): Promise<Shipment> {
-    const insurancePremium =
-      dto.isInsured && dto.declaredValue
-        ? this.calculatePremium(dto.declaredValue, dto.cargoCategory ?? null)
-        : null;
+    const insurancePremium = dto.isInsured
+      ? Math.round(dto.price * 0.015 * 100) / 100
+      : null;
 
     const shipment = this.shipmentRepo.create({
       trackingNumber: this.generateTrackingNumber(),
@@ -279,8 +202,6 @@ export class ShipmentsService {
       notes: dto.notes ?? null,
       status: ShipmentStatus.PENDING,
       isInsured: dto.isInsured ?? false,
-      declaredValue: dto.declaredValue ?? null,
-      coverageAmount: dto.coverageAmount ?? null,
       insurancePremium,
       pickupDate: dto.pickupDate ? new Date(dto.pickupDate) : null,
       estimatedDeliveryDate: dto.estimatedDeliveryDate
@@ -312,20 +233,15 @@ export class ShipmentsService {
     const createdIds: string[] = [];
 
     // Use TypeORM transaction
-    const queryRunner =
-      this.shipmentRepo.manager.connection.createQueryRunner();
+    const queryRunner = this.shipmentRepo.manager.connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
       for (const shipmentDto of dto.shipments) {
-        const insurancePremium =
-          shipmentDto.isInsured && shipmentDto.declaredValue
-            ? this.calculatePremium(
-                shipmentDto.declaredValue,
-                shipmentDto.cargoCategory ?? null,
-              )
-            : null;
+        const insurancePremium = shipmentDto.isInsured
+          ? Math.round(shipmentDto.price * 0.015 * 100) / 100
+          : null;
 
         const shipment = this.shipmentRepo.create({
           trackingNumber: this.generateTrackingNumber(),
@@ -342,8 +258,6 @@ export class ShipmentsService {
           notes: shipmentDto.notes ?? null,
           status: ShipmentStatus.PENDING,
           isInsured: shipmentDto.isInsured ?? false,
-          declaredValue: shipmentDto.declaredValue ?? null,
-          coverageAmount: shipmentDto.coverageAmount ?? null,
           insurancePremium,
           pickupDate: shipmentDto.pickupDate
             ? new Date(shipmentDto.pickupDate)
@@ -389,14 +303,7 @@ export class ShipmentsService {
     user: User,
     query: QueryShipmentDto,
   ): Promise<PaginatedShipments> {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      origin,
-      destination,
-      cargoCategory,
-    } = query;
+    const { page = 1, limit = 20, status, origin, destination, cargoCategory } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {};
@@ -426,15 +333,7 @@ export class ShipmentsService {
   }
 
   async findMarketplace(query: QueryShipmentDto): Promise<PaginatedShipments> {
-    const {
-      page = 1,
-      limit = 20,
-      origin,
-      destination,
-      cargoCategory,
-      minPrice,
-      maxPrice,
-    } = query;
+    const { page = 1, limit = 20, origin, destination, cargoCategory } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {
@@ -443,10 +342,6 @@ export class ShipmentsService {
     if (origin) where.origin = ILike(`%${origin}%`);
     if (destination) where.destination = ILike(`%${destination}%`);
     if (cargoCategory) where.cargoCategory = cargoCategory;
-    if (minPrice != null && maxPrice != null)
-      where.price = Between(minPrice, maxPrice);
-    else if (minPrice != null) where.price = MoreThanOrEqual(minPrice);
-    else if (maxPrice != null) where.price = LessThanOrEqual(maxPrice);
 
     const [data, total] = await this.shipmentRepo.findAndCount({
       where,

@@ -5,7 +5,7 @@ import { Shipment } from '../shipments/entities/shipment.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 
 interface MonthlyBreakdown {
-  month: string;
+  month: string; // e.g. "2025-03"
   earnings: number;
   completedShipments: number;
 }
@@ -29,16 +29,14 @@ export class CarrierEarningsService {
       select: ['id', 'price', 'actualDeliveryDate'],
     });
 
-    const lifetimeEarnings = completed.reduce(
-      (sum, s) => sum + Number(s.price),
-      0,
-    );
+    const lifetimeEarnings = completed.reduce((sum, s) => sum + Number(s.price), 0);
 
     const now = new Date();
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     const buckets = new Map<string, { earnings: number; count: number }>();
 
+    // Pre-fill last 12 months
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -56,13 +54,9 @@ export class CarrierEarningsService {
       }
     }
 
-    const monthlyBreakdown: MonthlyBreakdown[] = Array.from(
-      buckets.entries(),
-    ).map(([month, { earnings, count }]) => ({
-      month,
-      earnings,
-      completedShipments: count,
-    }));
+    const monthlyBreakdown: MonthlyBreakdown[] = Array.from(buckets.entries()).map(
+      ([month, { earnings, count }]) => ({ month, earnings, completedShipments: count }),
+    );
 
     const currentMonthEarnings = buckets.get(currentMonthKey)?.earnings ?? 0;
 

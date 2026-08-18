@@ -17,13 +17,9 @@ const DOCUMENT_TYPES = [
   'Other',
 ];
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_TYPES = ['.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.webp'];
-
 interface SelectedFile {
   file: File;
   id: string;
-  error?: string;
 }
 
 interface DocumentUploadModalProps {
@@ -43,20 +39,10 @@ export function DocumentUploadModal({ open, onOpenChange, entityId, onSuccess }:
 
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return;
-    const next: SelectedFile[] = Array.from(incoming).map((file) => {
-      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-      let error: string | undefined;
-      if (file.size > MAX_FILE_SIZE) {
-        error = `File exceeds 10 MB limit (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
-      } else if (!ALLOWED_TYPES.includes(ext)) {
-        error = `File type "${ext}" is not supported`;
-      }
-      return {
-        file,
-        id: `${file.name}-${file.size}-${Date.now()}`,
-        error,
-      };
-    });
+    const next: SelectedFile[] = Array.from(incoming).map((file) => ({
+      file,
+      id: `${file.name}-${file.size}-${Date.now()}`,
+    }));
     setFiles((prev) => [...prev, ...next]);
   };
 
@@ -131,9 +117,6 @@ export function DocumentUploadModal({ open, onOpenChange, entityId, onSuccess }:
     onOpenChange(false);
   };
 
-  const hasErrors = files.some((f) => f.error);
-  const canUpload = files.length > 0 && !hasErrors && progress === null;
-
   return (
     <Dialog.Root open={open} onOpenChange={handleClose}>
       <Dialog.Portal>
@@ -205,12 +188,9 @@ export function DocumentUploadModal({ open, onOpenChange, entityId, onSuccess }:
           {files.length > 0 && (
             <ul className="mt-4 space-y-2 max-h-40 overflow-y-auto">
               {files.map(({ file, id }) => (
-                <li key={id} className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm ${file.error ? 'border-destructive/50 bg-destructive/5' : 'border-border'}`}>
-                  <FileText size={16} className={file.error ? 'text-destructive' : 'text-muted-foreground shrink-0'} />
-                  <div className="flex-1 min-w-0">
-                    <span className="block truncate">{file.name}</span>
-                    {file.error && <span className="text-xs text-destructive">{file.error}</span>}
-                  </div>
+                <li key={id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
+                  <FileText size={16} className="text-muted-foreground shrink-0" />
+                  <span className="flex-1 truncate">{file.name}</span>
                   <span className="text-xs text-muted-foreground shrink-0">
                     {(file.size / 1024).toFixed(1)} KB
                   </span>
@@ -248,7 +228,7 @@ export function DocumentUploadModal({ open, onOpenChange, entityId, onSuccess }:
             <Button type="button" variant="outline" onClick={handleClose} disabled={progress !== null}>
               Cancel
             </Button>
-            <Button type="button" onClick={handleUpload} disabled={!canUpload}>
+            <Button type="button" onClick={handleUpload} disabled={files.length === 0 || progress !== null}>
               {progress !== null ? `Uploading ${progress}%…` : 'Upload'}
             </Button>
           </div>

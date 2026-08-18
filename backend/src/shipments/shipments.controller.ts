@@ -19,12 +19,10 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { ShipmentsService } from './shipments.service';
-import { DisputeEvidenceService } from './dispute-evidence.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
 import { QueryShipmentDto } from './dto/query-shipment.dto';
 import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
-import { SubmitDisputeEvidenceDto } from './dto/submit-dispute-evidence.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -64,10 +62,7 @@ class CancelBody {
 @ApiBearerAuth()
 @Controller('shipments')
 export class ShipmentsController {
-  constructor(
-    private readonly shipmentsService: ShipmentsService,
-    private readonly disputeEvidenceService: DisputeEvidenceService,
-  ) {}
+  constructor(private readonly shipmentsService: ShipmentsService) {}
 
   // ── Shipper actions ──────────────────────────────────────────────────────────
 
@@ -278,28 +273,5 @@ export class ShipmentsController {
   @ApiOperation({ summary: 'Get status history for a shipment' })
   getHistory(@Param('id', ParseUUIDPipe) id: string) {
     return this.shipmentsService.getHistory(id);
-  }
-
-  @Post(':id/dispute-evidence')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Submit dispute evidence for a shipment' })
-  submitDisputeEvidence(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: User,
-    @Body() dto: SubmitDisputeEvidenceDto,
-  ) {
-    return this.disputeEvidenceService.submit(id, user.id, user.role, dto);
-  }
-
-  @Get(':id/dispute-evidence')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'List dispute evidence for a shipment' })
-  listDisputeEvidence(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: User,
-  ) {
-    return this.disputeEvidenceService.findAll(id, user.id, user.role);
   }
 }

@@ -28,9 +28,6 @@ export function ShipmentCard({ shipment }: ShipmentCardProps) {
               <p className="font-semibold text-foreground truncate mt-0.5">
                 {shipment.origin} → {shipment.destination}
               </p>
-              {shipment.cargoCategory && (
-                <p className="text-xs text-muted-foreground mt-0.5">{shipment.cargoCategory}</p>
-              )}
             </div>
             <StatusBadge status={shipment.status} className="shrink-0 mt-0.5" />
           </div>

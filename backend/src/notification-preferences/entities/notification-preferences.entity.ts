@@ -41,31 +41,6 @@ export class NotificationPreferences {
   @Column({ name: 'dispute_resolved', default: true })
   disputeResolved: boolean;
 
-  // SMS notification toggles
-  @Column({ name: 'sms_enabled', default: false })
-  smsEnabled: boolean;
-
-  @Column({ name: 'sms_shipment_accepted', default: true })
-  smsShipmentAccepted: boolean;
-
-  @Column({ name: 'sms_shipment_in_transit', default: true })
-  smsShipmentInTransit: boolean;
-
-  @Column({ name: 'sms_shipment_delivered', default: true })
-  smsShipmentDelivered: boolean;
-
-  @Column({ name: 'sms_shipment_completed', default: true })
-  smsShipmentCompleted: boolean;
-
-  @Column({ name: 'sms_shipment_cancelled', default: true })
-  smsShipmentCancelled: boolean;
-
-  @Column({ name: 'sms_shipment_disputed', default: true })
-  smsShipmentDisputed: boolean;
-
-  @Column({ name: 'sms_dispute_resolved', default: true })
-  smsDisputeResolved: boolean;
-
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

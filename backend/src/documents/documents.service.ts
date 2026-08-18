@@ -10,7 +10,6 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Document } from './entities/document.entity';
-import { DocumentType } from './enums/document-type.enum';
 import { Shipment } from '../shipments/entities/shipment.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../common/enums/role.enum';
@@ -129,31 +128,6 @@ export class DocumentsService {
     }
 
     return { filePath, originalName: doc.originalName };
-  }
-
-  // ── Compliance Status ──────────────────────────────────────────────────────
-
-  async getComplianceStatus(
-    shipmentId: string,
-    user: User,
-  ): Promise<Record<string, unknown>> {
-    const shipment = await this.getShipmentOrThrow(shipmentId);
-    this.assertIsParty(shipment, user);
-
-    const requiredTypes = [DocumentType.CUSTOMS_DECLARATION];
-    const docs = await this.documentRepo.find({ where: { shipmentId } });
-    const presentTypes = new Set(docs.map((d) => d.documentType));
-
-    return {
-      shipmentId,
-      isInternational: shipment.origin !== shipment.destination,
-      required: requiredTypes.map((t) => ({
-        type: t,
-        present: presentTypes.has(t),
-      })),
-      missing: requiredTypes.filter((t) => !presentTypes.has(t)),
-      allUploaded: requiredTypes.every((t) => presentTypes.has(t)),
-    };
   }
 
   // ── Delete ───────────────────────────────────────────────────────────────────

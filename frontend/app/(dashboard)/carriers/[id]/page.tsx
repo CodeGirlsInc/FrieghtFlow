@@ -1,134 +1,256 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { Button } from '../../../../components/ui/button';
 import { Skeleton } from '../../../../components/ui/skeleton';
-import { CarrierReviews } from '../../../../components/carriers/carrier-reviews';
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 interface CarrierProfile {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
+  createdAt: string;
   completedShipments: number;
   averageRating: number;
-  reviewCount: number;
+  certifications: string[];
   bio?: string;
-  isVerified: boolean;
-  serviceAreas: string[];
-  onTimeRate: number;
-  joinedAt: string;
 }
 
-function VerificationBadge({ verified }: { verified: boolean }) {
-  if (!verified) return null;
+interface Review {
+  id: string;
+  rating: number;
+  comment: string;
+  reviewerName: string;
+  createdAt: string;
+}
+
+function StarRating({ rating }: { rating: number }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 text-xs font-medium">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-        <polyline points="22 4 12 14.01 9 11.01" />
-      </svg>
-      Verified Carrier
-    </span>
+    <div className="flex items-center gap-0.5" aria-label={`Rating: ${rating} out of 5`}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <svg
+          key={i}
+          className={`w-4 h-4 ${i < Math.round(rating) ? 'text-yellow-400' : 'text-muted-foreground/30'}`}
+          fill="currentColor"
+          viewBox="0 0 20 20"
+          aria-hidden="true"
+        >
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      ))}
+      <span className="ml-1 text-sm text-muted-foreground">{rating.toFixed(1)}</span>
+    </div>
+  );
+}
+
+function CarrierReviews({ reviews, loading }: { reviews: Review[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="rounded-lg border p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-4 w-32" />
+            </div>
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (reviews.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-4">No reviews yet.</p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {reviews.map((review) => (
+        <div key={review.id} className="rounded-lg border p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                {review.reviewerName[0]}
+              </div>
+              <span className="text-sm font-medium">{review.reviewerName}</span>
+            </div>
+            <StarRating rating={review.rating} />
+          </div>
+          {review.comment && (
+            <p className="text-sm text-muted-foreground">{review.comment}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {new Date(review.createdAt).toLocaleDateString('en-US', {
+              month: 'short', day: 'numeric', year: 'numeric',
+            })}
+          </p>
+        </div>
+      ))}
+    </div>
   );
 }
 
 export default function CarrierProfilePage() {
   const { id } = useParams<{ id: string }>();
-  const [profile, setProfile] = useState<CarrierProfile | null>(null);
+  const router = useRouter();
+  const [carrier, setCarrier] = useState<CarrierProfile | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
-    fetch(`${BASE_URL}/carriers/${id}/profile`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.statusText)))
-      .then((p) => setProfile(p))
-      .catch(() => setError('Failed to load carrier profile.'))
+
+    // Fetch carrier profile
+    fetch(`/api/carriers/${id}/profile`)
+      .then((res) => {
+        if (res.status === 404) { setNotFound(true); return null; }
+        return res.json();
+      })
+      .then((data) => { if (data) setCarrier(data); })
+      .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
+
+    // Fetch reviews
+    fetch(`/api/carriers/${id}/reviews`)
+      .then((res) => res.json())
+      .then((data) => setReviews(Array.isArray(data) ? data : data?.data ?? []))
+      .catch(() => setReviews([]))
+      .finally(() => setReviewsLoading(false));
   }, [id]);
 
-  if (loading) {
+  if (notFound) {
     return (
-      <div className="p-4 sm:p-8 space-y-4">
-        <Skeleton className="h-8 w-1/3" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-48 w-full" />
+      <div className="p-8 text-center">
+        <h1 className="text-xl font-bold text-foreground mb-2">Carrier not found</h1>
+        <p className="text-muted-foreground text-sm mb-4">
+          This carrier profile doesn&apos;t exist or has no public data yet.
+        </p>
+        <Button variant="outline" onClick={() => router.back()}>Go back</Button>
       </div>
     );
   }
 
-  if (error || !profile) {
-    return <p className="p-4 sm:p-8 text-destructive">{error ?? 'Carrier not found.'}</p>;
-  }
-
   return (
-    <div className="p-4 sm:p-8 max-w-3xl mx-auto space-y-6">
+    <div className="p-6 max-w-3xl mx-auto space-y-6">
       {/* Profile header */}
       <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-xl">{profile.firstName} {profile.lastName}</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Member since {new Date(profile.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-            </div>
-            <VerificationBadge verified={profile.isVerified} />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {profile.bio && (
-            <p className="text-sm text-muted-foreground">{profile.bio}</p>
-          )}
-
-          {/* Stats grid */}
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xl font-bold text-foreground">{profile.completedShipments}</p>
-              <p className="text-xs text-muted-foreground">Shipments</p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xl font-bold text-foreground">
-                {profile.averageRating > 0 ? profile.averageRating.toFixed(1) : '—'}
-              </p>
-              <p className="text-xs text-muted-foreground">Rating</p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xl font-bold text-foreground">{profile.onTimeRate}%</p>
-              <p className="text-xs text-muted-foreground">On-Time</p>
-            </div>
-          </div>
-
-          {/* Service areas */}
-          {profile.serviceAreas && profile.serviceAreas.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-2">Service Areas</h3>
-              <div className="flex flex-wrap gap-2">
-                {profile.serviceAreas.map((area) => (
-                  <span key={area} className="px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-medium">
-                    {area}
-                  </span>
-                ))}
+        <CardContent className="pt-6">
+          {loading ? (
+            <div className="flex items-start gap-4">
+              <Skeleton className="h-16 w-16 rounded-full shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-64" />
               </div>
             </div>
-          )}
-
-          {/* Not verified notice */}
-          {!profile.isVerified && (
-            <div className="rounded-lg border border-dashed border-border p-4 text-center">
-              <p className="text-sm text-muted-foreground">
-                This carrier has not yet completed verification. Exercise additional caution when considering them.
-              </p>
+          ) : carrier ? (
+            <div className="flex flex-col sm:flex-row items-start gap-4">
+              <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center text-xl font-bold text-primary shrink-0">
+                {carrier.firstName[0]}{carrier.lastName[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-bold text-foreground">
+                  {carrier.firstName} {carrier.lastName}
+                </h1>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Member since{' '}
+                  {new Date(carrier.createdAt).toLocaleDateString('en-US', {
+                    month: 'long', year: 'numeric',
+                  })}
+                </p>
+                {carrier.bio && (
+                  <p className="text-sm text-muted-foreground mt-2">{carrier.bio}</p>
+                )}
+              </div>
+              <Button asChild className="shrink-0">
+                <Link href={`/shipments/new?carrierId=${carrier.id}&carrierName=${encodeURIComponent(`${carrier.firstName} ${carrier.lastName}`)}`}>
+                  Contact / Hire
+                </Link>
+              </Button>
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        {loading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border bg-card shadow p-4 space-y-2">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-7 w-16" />
+            </div>
+          ))
+        ) : carrier ? (
+          <>
+            <Card>
+              <CardHeader className="pb-1">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Completed Shipments</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{carrier.completedShipments}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-1">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Average Rating</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StarRating rating={carrier.averageRating} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-1">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Reviews</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{reviews.length}</p>
+              </CardContent>
+            </Card>
+          </>
+        ) : null}
+      </div>
+
+      {/* Certifications */}
+      {!loading && carrier && carrier.certifications.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Certifications</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-wrap gap-2">
+              {carrier.certifications.map((cert) => (
+                <li
+                  key={cert}
+                  className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium"
+                >
+                  {cert}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Reviews */}
-      <CarrierReviews carrierId={profile.id} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Reviews</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CarrierReviews reviews={reviews} loading={reviewsLoading} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

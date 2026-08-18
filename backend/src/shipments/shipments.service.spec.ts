@@ -55,8 +55,6 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     price: 5000,
     currency: 'USD',
     isInsured: false,
-    declaredValue: null,
-    coverageAmount: null,
     insurancePremium: null,
     status: ShipmentStatus.PENDING,
     notes: null,
@@ -528,7 +526,7 @@ describe('ShipmentsService', () => {
   });
 
   describe('insurance premium calculation', () => {
-    it('calculates insurance premium from declaredValue when isInsured is true', async () => {
+    it('calculates insurance premium as 1.5% of price when isInsured is true', async () => {
       const shipment = makeShipment();
       shipmentRepo.create.mockReturnValue(shipment);
       shipmentRepo.save.mockResolvedValue(shipment);
@@ -543,14 +541,12 @@ describe('ShipmentsService', () => {
         weightKg: 100,
         price: 10000,
         isInsured: true,
-        declaredValue: 10000,
       });
 
       expect(shipmentRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           isInsured: true,
-          declaredValue: 10000,
-          insurancePremium: 150, // 1.5% of 10000 (default risk rate)
+          insurancePremium: 150, // 1.5% of 10000
         }),
       );
     });

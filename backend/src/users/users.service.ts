@@ -9,18 +9,12 @@ import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { Address } from '../addresses/entities/address.entity';
-import { Shipment } from '../shipments/entities/shipment.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
-    @InjectRepository(Address)
-    private readonly addressRepository: Repository<Address>,
-    @InjectRepository(Shipment)
-    private readonly shipmentRepository: Repository<Shipment>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -141,19 +135,5 @@ export class UsersService {
   async remove(id: string): Promise<void> {
     const user = await this.findOne(id);
     await this.usersRepository.remove(user);
-  }
-
-  async hasAddress(userId: string): Promise<boolean> {
-    const count = await this.addressRepository.count({
-      where: { userId },
-    });
-    return count > 0;
-  }
-
-  async hasShipment(userId: string): Promise<boolean> {
-    const count = await this.shipmentRepository.count({
-      where: { shipperId: userId },
-    });
-    return count > 0;
   }
 }

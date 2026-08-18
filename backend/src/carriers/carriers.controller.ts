@@ -11,7 +11,6 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CarriersService } from './carriers.service';
 import { CarrierCertificationsService } from './carrier-certifications.service';
-import { CarrierEarningsService } from './carrier-earnings.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -26,26 +25,17 @@ export class CarriersController {
   constructor(
     private readonly carriersService: CarriersService,
     private readonly certificationsService: CarrierCertificationsService,
-    private readonly earningsService: CarrierEarningsService,
   ) {}
 
   @Get('me/metrics')
   @UseGuards(RolesGuard)
   @Roles(UserRole.CARRIER)
-  @ApiOperation({
-    summary: 'Get performance metrics for the authenticated carrier',
-  })
+  @ApiOperation({ summary: 'Get performance metrics for the authenticated carrier' })
   getMyMetrics(@CurrentUser() user: User) {
     return this.carriersService.getMyMetrics(user.id);
   }
 
-  @Get('me/earnings')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.CARRIER)
-  @ApiOperation({ summary: 'Get earnings summary for the authenticated carrier' })
-  getMyEarnings(@CurrentUser() user: User) {
-    return this.earningsService.getEarningsSummary(user.id);
-  }
+  // ── Certification endpoints ──────────────────────────────────────────────────
 
   @Post('me/certifications')
   @UseGuards(RolesGuard)
@@ -68,10 +58,7 @@ export class CarriersController {
 
   @Get(':id/certifications')
   @UseGuards(RolesGuard)
-  @ApiOperation({
-    summary:
-      'Get certifications for a carrier (visible to all authenticated users)',
-  })
+  @ApiOperation({ summary: 'Get certifications for a carrier (visible to all authenticated users)' })
   getCarrierCertifications(@Param('id', ParseUUIDPipe) id: string) {
     return this.certificationsService.findByCarrierId(id);
   }

@@ -36,10 +36,7 @@ export class CreateShipmentDto {
   @MaxLength(2000)
   cargoDescription: string;
 
-  @ApiPropertyOptional({
-    enum: CargoCategory,
-    example: CargoCategory.ELECTRONICS,
-  })
+  @ApiPropertyOptional({ enum: CargoCategory, example: CargoCategory.ELECTRONICS })
   @IsOptional()
   @IsEnum(CargoCategory)
   cargoCategory?: CargoCategory;
@@ -96,24 +93,4 @@ export class CreateShipmentDto {
   @IsOptional()
   @IsBoolean()
   isInsured?: boolean;
-
-  @ApiPropertyOptional({
-    example: 50000,
-    description: 'Declared value of the cargo for insurance purposes',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  declaredValue?: number;
-
-  @ApiPropertyOptional({
-    example: 50000,
-    description: 'Requested insurance coverage amount',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  coverageAmount?: number;
 }

@@ -32,28 +32,18 @@ export class CancellationFeeService {
 
   calculateFee(price: number, status: ShipmentStatus): number {
     const rate = FEE_TIERS[status] ?? null;
-    if (rate === null)
-      throw new BadRequestException(
-        `Shipment in status "${status}" cannot be cancelled`,
-      );
+    if (rate === null) throw new BadRequestException(`Shipment in status "${status}" cannot be cancelled`);
     return Math.round(price * rate * 100) / 100;
   }
 
   async cancelShipment(shipmentId: string): Promise<CancellationResult> {
-    const shipment = await this.shipmentRepo.findOneOrFail({
-      where: { id: shipmentId },
-    });
+    const shipment = await this.shipmentRepo.findOneOrFail({ where: { id: shipmentId } });
 
     if (!CANCELLABLE.has(shipment.status)) {
-      throw new BadRequestException(
-        `Cannot cancel a shipment with status "${shipment.status}"`,
-      );
+      throw new BadRequestException(`Cannot cancel a shipment with status "${shipment.status}"`);
     }
 
-    const cancellationFee = this.calculateFee(
-      Number(shipment.price),
-      shipment.status,
-    );
+    const cancellationFee = this.calculateFee(Number(shipment.price), shipment.status);
 
     await this.shipmentRepo.update(shipmentId, {
       status: ShipmentStatus.CANCELLED,

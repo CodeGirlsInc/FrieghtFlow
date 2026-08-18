@@ -1,72 +1,64 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { DisputeEvidence } from './entities/dispute-evidence.entity';
-import { Shipment } from './entities/shipment.entity';
-import { ShipmentStatus } from '../common/enums/shipment-status.enum';
-import { UserRole } from '../common/enums/role.enum';
-import { SubmitDisputeEvidenceDto } from './dto/submit-dispute-evidence.dto';
+
+export interface DisputeEvidence {
+  id: string;
+  shipmentId: string;
+  submittedBy: string;
+  fileUrl: string;
+  description: string;
+  createdAt: Date;
+}
+
+interface Shipment {
+  id: string;
+  status: string;
+  senderId: string;
+  carrierId: string;
+}
+
+type SubmitEvidenceDto = Pick<DisputeEvidence, 'fileUrl' | 'description'>;
 
 @Injectable()
 export class DisputeEvidenceService {
-  constructor(
-    @InjectRepository(DisputeEvidence)
-    private readonly evidenceRepo: Repository<DisputeEvidence>,
-    @InjectRepository(Shipment)
-    private readonly shipmentRepo: Repository<Shipment>,
-  ) {}
+  private readonly evidence = new Map<string, DisputeEvidence[]>();
+  private idSeq = 1;
 
-  private async getShipment(shipmentId: string): Promise<Shipment> {
-    const shipment = await this.shipmentRepo.findOne({ where: { id: shipmentId } });
-    if (!shipment) {
-      throw new NotFoundException(`Shipment ${shipmentId} not found`);
-    }
-    return shipment;
+  // Injected shipment repo in production; simplified here
+  private getShipment(shipmentId: string): Shipment {
+    // Placeholder — replace with actual repo lookup
+    throw new NotFoundException(`Shipment ${shipmentId} not found`);
   }
 
-  private assertParty(shipment: Shipment, userId: string): void {
-    if (shipment.shipperId !== userId && shipment.carrierId !== userId) {
+  private assertAccess(shipment: Shipment, userId: string): void {
+    if (shipment.senderId !== userId && shipment.carrierId !== userId) {
       throw new ForbiddenException('Not a party to this shipment');
     }
-    if (shipment.status !== ShipmentStatus.DISPUTED) {
+    if (shipment.status !== 'DISPUTED') {
       throw new ForbiddenException('Shipment is not in DISPUTED status');
     }
   }
 
-  async submit(
-    shipmentId: string,
-    userId: string,
-    userRole: UserRole,
-    dto: SubmitDisputeEvidenceDto,
-  ): Promise<DisputeEvidence> {
-    const shipment = await this.getShipment(shipmentId);
-    if (userRole !== UserRole.ADMIN) {
-      this.assertParty(shipment, userId);
-    }
+  submit(shipmentId: string, userId: string, dto: SubmitEvidenceDto): DisputeEvidence {
+    const shipment = this.getShipment(shipmentId);
+    this.assertAccess(shipment, userId);
 
-    const record = this.evidenceRepo.create({
+    const record: DisputeEvidence = {
+      id: String(this.idSeq++),
       shipmentId,
       submittedBy: userId,
-      description: dto.description,
-      fileUrl: dto.fileUrl,
-    });
+      ...dto,
+      createdAt: new Date(),
+    };
 
-    return this.evidenceRepo.save(record);
+    const list = this.evidence.get(shipmentId) ?? [];
+    list.push(record);
+    this.evidence.set(shipmentId, list);
+    return record;
   }
 
-  async findAll(
-    shipmentId: string,
-    userId: string,
-    userRole: UserRole,
-  ): Promise<DisputeEvidence[]> {
-    const shipment = await this.getShipment(shipmentId);
-    if (userRole !== UserRole.ADMIN) {
-      this.assertParty(shipment, userId);
-    }
-
-    return this.evidenceRepo.find({
-      where: { shipmentId },
-      order: { createdAt: 'DESC' },
-    });
+  findAll(shipmentId: string, userId: string, isAdmin: boolean): DisputeEvidence[] {
+    const shipment = this.getShipment(shipmentId);
+    if (!isAdmin) this.assertAccess(shipment, userId);
+    return this.evidence.get(shipmentId) ?? [];
   }
 }

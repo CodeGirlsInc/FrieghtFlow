@@ -92,16 +92,6 @@ export class DocumentsController {
     return this.documentsService.listByShipment(shipmentId, user);
   }
 
-  @Get('shipment/:shipmentId/compliance-status')
-  @ApiOperation({ summary: 'Get compliance status for a shipment' })
-  @ApiResponse({ status: 200, description: 'Compliance status' })
-  complianceStatus(
-    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
-    @CurrentUser() user: User,
-  ) {
-    return this.documentsService.getComplianceStatus(shipmentId, user);
-  }
-
   @Get(':id')
   @ApiOperation({ summary: 'Get document metadata by ID' })
   @ApiResponse({ status: 200, description: 'Document metadata' })

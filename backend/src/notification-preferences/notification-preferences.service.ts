@@ -31,17 +31,9 @@ export class NotificationPreferencesService {
 
   async isEnabled(
     userId: string,
-    key: keyof Omit<
-      NotificationPreferences,
-      'id' | 'userId' | 'user' | 'updatedAt'
-    >,
+    key: keyof Omit<NotificationPreferences, 'id' | 'userId' | 'user' | 'updatedAt'>,
   ): Promise<boolean> {
     const prefs = await this.getOrCreate(userId);
-    return prefs[key];
-  }
-
-  async areSmsEnabled(userId: string): Promise<boolean> {
-    const prefs = await this.getOrCreate(userId);
-    return prefs.smsEnabled;
+    return prefs[key] as boolean;
   }
 }

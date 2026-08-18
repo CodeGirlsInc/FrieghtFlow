@@ -1,12 +1,4 @@
-import {
-  IsOptional,
-  IsEnum,
-  IsString,
-  IsInt,
-  IsNumber,
-  Min,
-  Max,
-} from 'class-validator';
+import { IsOptional, IsEnum, IsString, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { ShipmentStatus } from '../../common/enums/shipment-status.enum';
@@ -32,20 +24,6 @@ export class QueryShipmentDto {
   @IsOptional()
   @IsEnum(CargoCategory)
   cargoCategory?: CargoCategory;
-
-  @ApiPropertyOptional({ example: 100, minimum: 0 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  minPrice?: number;
-
-  @ApiPropertyOptional({ example: 5000, minimum: 0 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  maxPrice?: number;
 
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()

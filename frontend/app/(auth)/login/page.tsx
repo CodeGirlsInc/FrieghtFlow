@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -18,7 +19,13 @@ import {
   CardTitle,
 } from '../../../components/ui/card';
 import { useAuthStore } from '../../../stores/auth.store';
-import { loginSchema, type LoginFormData } from '../../../lib/schemas';
+
+const loginSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
 
 function LoginForm() {
   const router = useRouter();

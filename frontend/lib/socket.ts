@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 
+// Strip /api/v1 from the API URL to get the socket server origin
 const SOCKET_URL =
   (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:6000/api/v1').replace('/api/v1', '');
 
@@ -12,6 +13,7 @@ export function getSocket(): Socket | null {
 export function connectSocket(token: string): Socket {
   if (socket?.connected) return socket;
 
+  // Tear down any stale socket before creating a new one
   if (socket) {
     socket.disconnect();
     socket = null;
@@ -21,10 +23,8 @@ export function connectSocket(token: string): Socket {
     auth: { token: `Bearer ${token}` },
     transports: ['websocket'],
     autoConnect: true,
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 30000,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 2000,
   });
 
   return socket;

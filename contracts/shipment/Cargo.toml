@@ -12,7 +12,6 @@ testutils = ["soroban-sdk/testutils"]
 
 [dependencies]
 soroban-sdk = { version = "22.0.0", features = ["alloc"] }
-shared = { path = "../shared" }
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils", "alloc"] }

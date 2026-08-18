@@ -4,17 +4,40 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { toast } from 'sonner';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
-import {
-  createShipmentSchema,
-  CARGO_CATEGORIES,
-  type CreateShipmentFormData,
-} from '../../../../lib/schemas';
+
+// ── Schemas per step ──────────────────────────────────────────────────────────
+
+const step1Schema = z.object({
+  origin: z.string().min(2, 'Origin is required'),
+  destination: z.string().min(2, 'Destination is required'),
+});
+
+const step2Schema = z.object({
+  cargoDescription: z.string().min(10, 'Describe the cargo (min 10 chars)'),
+  weightKg: z.coerce.number().positive('Weight must be positive'),
+  volumeCbm: z.coerce.number().positive().optional().or(z.literal('')),
+});
+
+const step3Schema = z.object({
+  price: z.coerce.number().min(0.01, 'Price must be greater than 0'),
+  currency: z.string().length(3, 'Must be 3 characters').default('USD'),
+  pickupDate: z.string().optional(),
+  estimatedDeliveryDate: z.string().optional(),
+});
+
+const step4Schema = z.object({
+  notes: z.string().max(2000).optional(),
+});
+
+const fullSchema = step1Schema.merge(step2Schema).merge(step3Schema).merge(step4Schema);
+type FormValues = z.infer<typeof fullSchema>;
 
 // ── Step metadata ─────────────────────────────────────────────────────────────
 
@@ -31,17 +54,18 @@ export default function NewShipmentPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
 
-  const form = useForm<CreateShipmentFormData>({
-    resolver: zodResolver(createShipmentSchema) as Resolver<CreateShipmentFormData>,
+  const form = useForm<FormValues>({
+    resolver: zodResolver(fullSchema) as Resolver<FormValues>,
     defaultValues: { currency: 'USD' },
     mode: 'onTouched',
   });
 
   const { register, handleSubmit, trigger, getValues, formState: { errors, isSubmitting } } = form;
 
-  const stepFields: (keyof CreateShipmentFormData)[][] = [
+  // Validate only the fields belonging to the current step before advancing
+  const stepFields: (keyof FormValues)[][] = [
     ['origin', 'destination'],
-    ['cargoDescription', 'cargoCategory', 'weightKg', 'volumeCbm'],
+    ['cargoDescription', 'weightKg', 'volumeCbm'],
     ['price', 'currency', 'pickupDate', 'estimatedDeliveryDate'],
     ['notes'],
   ];
@@ -51,7 +75,7 @@ export default function NewShipmentPage() {
     if (valid) setStep((s) => s + 1);
   };
 
-  const onSubmit = async (data: CreateShipmentFormData) => {
+  const onSubmit = async (data: FormValues) => {
     try {
       const payload = {
         ...data,
@@ -75,34 +99,31 @@ export default function NewShipmentPage() {
       </div>
 
       {/* Step progress indicator */}
-      <nav aria-label="Shipment creation progress" className="mb-8">
-        <ol className="flex items-center gap-0">
-          {STEPS.map((s, i) => (
-            <li key={i} className="flex items-center flex-1 last:flex-none">
-              <div className="flex flex-col items-center">
-                <div
-                  aria-current={i === step ? 'step' : undefined}
-                  className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-colors ${
-                    i < step
-                      ? 'bg-primary border-primary text-primary-foreground'
-                      : i === step
-                      ? 'border-primary text-primary bg-background'
-                      : 'border-muted text-muted-foreground bg-background'
-                  }`}
-                >
-                  {i < step ? '✓' : i + 1}
-                </div>
-                <span className={`text-xs mt-1 font-medium ${i === step ? 'text-primary' : 'text-muted-foreground'}`}>
-                  {s.label}
-                </span>
+      <div className="flex items-center gap-0 mb-8">
+        {STEPS.map((s, i) => (
+          <div key={i} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center">
+              <div
+                className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-colors ${
+                  i < step
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : i === step
+                    ? 'border-primary text-primary bg-background'
+                    : 'border-muted text-muted-foreground bg-background'
+                }`}
+              >
+                {i < step ? '✓' : i + 1}
               </div>
-              {i < STEPS.length - 1 && (
-                <div className={`flex-1 h-0.5 mx-2 mb-5 ${i < step ? 'bg-primary' : 'bg-muted'}`} />
-              )}
-            </li>
-          ))}
-        </ol>
-      </nav>
+              <span className={`text-xs mt-1 font-medium ${i === step ? 'text-primary' : 'text-muted-foreground'}`}>
+                {s.label}
+              </span>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div className={`flex-1 h-0.5 mx-2 mb-5 ${i < step ? 'bg-primary' : 'bg-muted'}`} />
+            )}
+          </div>
+        ))}
+      </div>
 
       <form onSubmit={handleSubmit(onSubmit)}>
         {/* Step 1 – Route */}
@@ -143,21 +164,6 @@ export default function NewShipmentPage() {
                   {...register('cargoDescription')}
                 />
                 {errors.cargoDescription && <p className="text-xs text-destructive">{errors.cargoDescription.message}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cargoCategory">Cargo Category *</Label>
-                <select
-                  id="cargoCategory"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                  defaultValue=""
-                  {...register('cargoCategory')}
-                >
-                  <option value="" disabled>Select a category</option>
-                  {CARGO_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-                {errors.cargoCategory && <p className="text-xs text-destructive">{errors.cargoCategory.message}</p>}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
@@ -222,8 +228,6 @@ export default function NewShipmentPage() {
                   <span className="font-medium">{values.destination}</span>
                   <span className="text-muted-foreground">Cargo</span>
                   <span className="font-medium">{values.cargoDescription}</span>
-                  <span className="text-muted-foreground">Category</span>
-                  <span className="font-medium">{values.cargoCategory}</span>
                   <span className="text-muted-foreground">Weight</span>
                   <span className="font-medium">{values.weightKg} kg</span>
                   {values.volumeCbm && (

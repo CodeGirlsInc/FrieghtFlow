@@ -7,7 +7,6 @@ import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
 import { Input } from '../../../components/ui/input';
 import { Button } from '../../../components/ui/button';
-import { EmptyMarketplace } from '../../../components/ui/empty-state';
 import { toast } from 'sonner';
 import type { QueryShipmentParams } from '../../../types/shipment.types';
 
@@ -95,7 +94,7 @@ export default function MarketplacePage() {
   const hasFilters = origin || destination || cargoCategory !== 'All' || minPrice || maxPrice;
 
   return (
-    <div className="p-4 pt-18 md:pt-4 sm:p-6 max-w-6xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Marketplace</h1>
         <p className="text-muted-foreground text-sm mt-1">
@@ -171,7 +170,11 @@ export default function MarketplacePage() {
           ))}
         </div>
       ) : !result || sorted.length === 0 ? (
-        <EmptyMarketplace />
+        <div className="text-center py-16">
+          <p className="text-muted-foreground text-sm">
+            No available shipments right now. Check back soon!
+          </p>
+        </div>
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

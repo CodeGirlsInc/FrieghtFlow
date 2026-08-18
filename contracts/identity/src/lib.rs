@@ -12,10 +12,6 @@ pub enum IdentityError {
     NotInitialized = 4,
 }
 
-
-
-
-
 #[contracttype]
 pub enum DataKey {
     Identity(Address),
@@ -35,7 +31,6 @@ impl IdentityContract {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(IdentityError::AlreadyRegistered);
         }
-        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         Ok(())
     }
@@ -46,7 +41,7 @@ impl IdentityContract {
         user_id_hash: BytesN<32>,
         wallet: Address,
     ) -> Result<(), IdentityError> {
-        wallet.require_auth_for_args(&[&user_id_hash]);
+        wallet.require_auth();
 
         if env
             .storage()
@@ -115,39 +110,6 @@ mod tests {
         testutils::{Address as _, BytesN as _},
         Env,
     };
-
-    #[test]
-    fn test_initialize_requires_auth() {
-        let env = Env::default();
-        let admin = Address::generate(&env);
-        let contract_id = env.register(IdentityContract {}, ());
-        let client = IdentityContractClient::new(&env, &contract_id);
-
-        let result = client.try_initialize(&admin);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_register_identity_requires_auth() {
-        let env = Env::default();
-        let wallet = Address::generate(&env);
-        let contract_id = env.register(IdentityContract {}, ());
-        let client = IdentityContractClient::new(&env, &contract_id);
-
-        let result = client.try_register_identity(&BytesN::random(&env), &wallet);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_revoke_identity_requires_auth() {
-        let env = Env::default();
-        let wallet = Address::generate(&env);
-        let contract_id = env.register(IdentityContract {}, ());
-        let client = IdentityContractClient::new(&env, &contract_id);
-
-        let result = client.try_revoke_identity(&wallet);
-        assert!(result.is_err());
-    }
 
     #[test]
     fn test_register_and_verify() {

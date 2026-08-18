@@ -2,54 +2,26 @@
 name = "document"
 version = "0.1.0"
 edition = "2021"
-# Don't publish this to crates.io — it's a contract binary, not a library
-# meant for other crates to depend on.
 publish = false
 
 [lib]
-# Soroban contracts compile to a WASM dynamic library, not a normal Rust
-# rlib. "cdylib" is what produces the .wasm the network actually deploys.
 crate-type = ["cdylib"]
 
 [features]
-# Pulls in soroban-sdk's test helpers (Address::generate, BytesN::random,
-# mock_all_auths, etc.) only when explicitly enabled — keeps them out of
-# the production WASM build.
 testutils = ["soroban-sdk/testutils"]
 
 [dependencies]
-# "alloc" gives access to heap-allocated types (Vec, Bytes, etc.) inside
-# the #![no_std] contract — required since this contract stores Vec<u64>
-# and Bytes in DocumentRecord.
 soroban-sdk = { version = "22.0.0", features = ["alloc"] }
-shared = { path = "../shared" }
 
 [dev-dependencies]
-# Same crate, but with "testutils" added so the #[cfg(test)] module can use
-# Address::generate, BytesN::random, and env.mock_all_auths(). Kept
-# separate from [dependencies] so none of this leaks into the release build.
 soroban-sdk = { version = "22.0.0", features = ["testutils", "alloc"] }
 
 [profile.release]
-# "z" optimizes for smallest binary size over speed — worth it here since
-# deployed WASM size directly affects storage/deploy fees on-chain.
 opt-level = "z"
-# Keep arithmetic overflow checks even in release. Silent integer overflow
-# in a contract that mutates on-chain balances/counters is exactly the kind
-# of bug you want to panic loudly on, not wrap around silently.
 overflow-checks = true
-# Strip debug info to shrink the WASM further; not useful once deployed.
 debug = 0
-# Remove symbol names from the binary — smaller size, and you don't get
-# meaningful stack traces from a deployed contract anyway.
 strip = "symbols"
-# Disable debug_assert!() checks in the release build.
 debug-assertions = false
-# WASM has no unwinding support, so a panic must abort rather than unwind.
 panic = "abort"
-# Compile as a single codegen unit for better optimization (slower to
-# build, smaller/faster output) — fine tradeoff for a release contract build.
 codegen-units = 1
-# Link-time optimization across the whole dependency graph, for maximum
-# size/speed optimization at the cost of longer build times.
 lto = true

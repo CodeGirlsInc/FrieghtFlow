@@ -33,13 +33,11 @@ function timeAgo(iso: string): string {
 }
 
 function NotificationItem({ n }: { n: ShipmentNotification }) {
-  const { markRead } = useNotificationStore();
   const label = EVENT_LABELS[n.event] ?? 'Updated';
   const color = EVENT_COLORS[n.event] ?? 'text-foreground';
   return (
     <Link
       href={`/shipments/${n.shipmentId}`}
-      onClick={() => !n.read && markRead(n.id)}
       className={`block px-4 py-3 hover:bg-accent transition-colors ${!n.read ? 'bg-primary/5' : ''}`}
     >
       <div className="flex items-start justify-between gap-2">

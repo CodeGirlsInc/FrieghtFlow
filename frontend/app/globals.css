@@ -125,12 +125,6 @@
     font-family: var(--font-geist-mono), "Courier New", monospace;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .animate-pulse {
-      animation: none;
-    }
-  }
-
   /* Hide all scrollbars but keep functionality */
   * {
     scrollbar-width: none; /* Firefox */
