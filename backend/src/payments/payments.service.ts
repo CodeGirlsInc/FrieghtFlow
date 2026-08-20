@@ -41,8 +41,9 @@ export class PaymentsService {
 
     try {
       return await this.paymentRepo.save(payment);
-    } catch (error: any) {
-      if (error?.code === '23505') {
+    } catch (error: unknown) {
+      const pgError = error as { code?: string } | undefined;
+      if (pgError?.code === '23505') {
         const retry = await this.paymentRepo.findOne({
           where: { shipmentId },
         });
