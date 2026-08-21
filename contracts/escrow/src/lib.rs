@@ -304,6 +304,19 @@ impl EscrowContract {
         Self::load(&env, shipment_id)
     }
 
+    /// Read the configured admin address.
+    ///
+    /// Lets external callers (e.g. the backend's Soroban integration layer)
+    /// verify their loaded signing keypair actually matches this contract's
+    /// admin at startup, instead of discovering a mismatch on first real
+    /// admin-gated call.
+    pub fn get_admin(env: Env) -> Result<Address, EscrowError> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)
+    }
+
     pub fn get_balance(env: Env) -> i128 {
         let token_addr: Address = env
             .storage()
@@ -491,6 +504,12 @@ mod tests {
 
         let result = client.try_fund_escrow(&shipper, &carrier, &SHIPMENT_ID, &0i128);
         assert_eq!(result, Err(Ok(EscrowError::InvalidAmount)));
+    }
+
+    #[test]
+    fn test_get_admin_returns_configured_admin() {
+        let (_env, admin, _shipper, _carrier, _token_addr, client) = setup(AMOUNT);
+        assert_eq!(client.get_admin(), admin);
     }
 
     #[test]
