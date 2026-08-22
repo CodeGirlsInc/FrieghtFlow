@@ -23,6 +23,7 @@ import { AdminAuditInterceptor } from './audit-log/admin-audit.interceptor';
 import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { PaymentsModule } from './payments/payments.module';
+import { StellarModule } from './stellar/stellar.module';
 
 const shipmentCreateTracker = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -74,6 +75,37 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         MAIL_PASS: Joi.string().required(),
         MAIL_FROM: Joi.string().default('noreply@freightflow.io'),
         UPLOAD_DIR: Joi.string().default('./uploads'),
+        // Soroban / escrow contract bridge — disabled by default so CI and
+        // local dev work with zero chain calls; only required when enabled.
+        SOROBAN_ENABLED: Joi.boolean()
+          .truthy('true')
+          .falsy('false')
+          .default(false),
+        SOROBAN_RPC_URL: Joi.string().when('SOROBAN_ENABLED', {
+          is: true,
+          then: Joi.required(),
+          otherwise: Joi.optional(),
+        }),
+        STELLAR_NETWORK_PASSPHRASE: Joi.string().when('SOROBAN_ENABLED', {
+          is: true,
+          then: Joi.required(),
+          otherwise: Joi.optional(),
+        }),
+        ESCROW_CONTRACT_ADDRESS: Joi.string().when('SOROBAN_ENABLED', {
+          is: true,
+          then: Joi.required(),
+          otherwise: Joi.optional(),
+        }),
+        TOKEN_CONTRACT_ADDRESS: Joi.string().when('SOROBAN_ENABLED', {
+          is: true,
+          then: Joi.required(),
+          otherwise: Joi.optional(),
+        }),
+        PLATFORM_ADMIN_SECRET: Joi.string().when('SOROBAN_ENABLED', {
+          is: true,
+          then: Joi.required(),
+          otherwise: Joi.optional(),
+        }),
       }),
       validationOptions: {
         allowUnknown: true,
@@ -130,6 +162,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     CarriersModule,
     ReviewsModule,
     PaymentsModule,
+    StellarModule,
   ],
   controllers: [AppController],
   providers: [
