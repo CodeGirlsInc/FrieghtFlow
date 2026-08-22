@@ -106,6 +106,13 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
           then: Joi.required(),
           otherwise: Joi.optional(),
         }),
+        // Test-only shipper-signing path for verifying the funding flow
+        // (issue #1276) end-to-end before the frontend wallet UI exists.
+        // Must never be true in production.
+        ALLOW_TEST_SIGNING: Joi.boolean()
+          .truthy('true')
+          .falsy('false')
+          .default(false),
       }),
       validationOptions: {
         allowUnknown: true,

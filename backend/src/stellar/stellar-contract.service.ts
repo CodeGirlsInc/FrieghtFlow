@@ -8,6 +8,7 @@ import {
   nativeToScVal,
   scValToNative,
   SorobanRpc,
+  Transaction,
   TransactionBuilder,
   xdr,
 } from '@stellar/stellar-sdk';
@@ -106,6 +107,69 @@ export class StellarContractService implements OnModuleInit {
       nativeToScVal(shipmentId, { type: 'u64' }),
       nativeToScVal(amount, { type: 'i128' }),
     );
+  }
+
+  /**
+   * Builds and simulates a `fund_escrow` call for `shipperPublicKey` but does
+   * NOT sign it — the platform never holds shipper keys (non-custodial
+   * deposit model, issue #1276). Returns the prepared, unsigned transaction
+   * as a base64 XDR envelope for the shipper's own wallet to sign.
+   */
+  async buildFundEscrowTransaction(
+    shipperPublicKey: string,
+    carrierAddress: string,
+    shipmentId: bigint,
+    amount: bigint,
+  ): Promise<string> {
+    this.assertEnabled();
+    const sourceAccount = await this.server.getAccount(shipperPublicKey);
+
+    const rawTx = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(
+        this.contract.call(
+          'fund_escrow',
+          new Address(shipperPublicKey).toScVal(),
+          new Address(carrierAddress).toScVal(),
+          nativeToScVal(shipmentId, { type: 'u64' }),
+          nativeToScVal(amount, { type: 'i128' }),
+        ),
+      )
+      .setTimeout(TX_TIMEOUT_SECONDS)
+      .build();
+
+    const sim = await this.server.simulateTransaction(rawTx);
+    this.throwIfSimulationFailed(sim, 'fund_escrow');
+
+    let prepared;
+    try {
+      prepared = SorobanRpc.assembleTransaction(rawTx, sim).build();
+    } catch (error) {
+      throw new SimulationError(
+        'Failed to assemble "fund_escrow" from its simulation',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+
+    return prepared.toXDR();
+  }
+
+  /**
+   * Submits a `fund_escrow` transaction the shipper's own wallet has already
+   * signed (the counterpart to buildFundEscrowTransaction — see ADR-style
+   * note there on why the backend never signs this one itself).
+   */
+  async submitSignedTransaction(
+    signedXdr: string,
+  ): Promise<ContractCallResult> {
+    this.assertEnabled();
+    const prepared = TransactionBuilder.fromXDR(
+      signedXdr,
+      this.networkPassphrase,
+    ) as Transaction;
+    return this.submitPrepared(prepared, 'fund_escrow');
   }
 
   /** Either party raises a dispute. `signer` must be the shipper's or carrier's keypair. */
@@ -254,6 +318,14 @@ export class StellarContractService implements OnModuleInit {
 
     prepared.sign(signer);
 
+    return this.submitPrepared(prepared, method);
+  }
+
+  /** Shared submit + status-mapping tail for both self-signed and externally-signed calls. */
+  private async submitPrepared(
+    prepared: Transaction,
+    method: string,
+  ): Promise<ContractCallResult> {
     let sendResult;
     try {
       sendResult = await this.server.sendTransaction(prepared);

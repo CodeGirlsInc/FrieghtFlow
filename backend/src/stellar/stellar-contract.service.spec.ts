@@ -1,5 +1,14 @@
 import { randomBytes } from 'crypto';
-import { Address, Keypair, nativeToScVal, xdr } from '@stellar/stellar-sdk';
+import {
+  Account,
+  Address,
+  BASE_FEE,
+  Keypair,
+  nativeToScVal,
+  Operation,
+  TransactionBuilder,
+  xdr,
+} from '@stellar/stellar-sdk';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { StellarContractService } from './stellar-contract.service';
@@ -284,6 +293,97 @@ describe('StellarContractService', () => {
 
       await expect(service.releasePayment(42n)).rejects.toThrow(
         /SOROBAN_ENABLED/,
+      );
+    });
+  });
+
+  describe('non-custodial funding (issue #1276)', () => {
+    it('buildFundEscrowTransaction builds and simulates without signing or submitting', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        successSim(xdr.ScVal.scvVoid()),
+      );
+      mockAssembleTransaction.mockImplementation((rawTx: unknown) => ({
+        build: () => rawTx,
+      }));
+
+      const xdrString = await service.buildFundEscrowTransaction(
+        shipperKeypair.publicKey(),
+        carrierKeypair.publicKey(),
+        42n,
+        500_000_000n,
+      );
+
+      expect(typeof xdrString).toBe('string');
+      expect(xdrString.length).toBeGreaterThan(0);
+      expect(mockGetAccount).toHaveBeenCalledWith(shipperKeypair.publicKey());
+      expect(mockSendTransaction).not.toHaveBeenCalled();
+    });
+
+    it('buildFundEscrowTransaction maps a simulation failure to a typed error', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        errorSim('HostError: Error(WasmVm, InvalidAction)'),
+      );
+
+      await expect(
+        service.buildFundEscrowTransaction(
+          shipperKeypair.publicKey(),
+          carrierKeypair.publicKey(),
+          42n,
+          500_000_000n,
+        ),
+      ).rejects.toThrow(SimulationError);
+    });
+
+    it('submitSignedTransaction submits an already-signed transaction and returns the result', async () => {
+      const service = await readyService();
+      const networkPassphrase = 'Test SDF Network ; September 2015';
+
+      const source = new Account(shipperKeypair.publicKey(), '100');
+      const tx = new TransactionBuilder(source, {
+        fee: BASE_FEE,
+        networkPassphrase,
+      })
+        .addOperation(Operation.manageData({ name: 'test', value: 'ok' }))
+        .setTimeout(30)
+        .build();
+      tx.sign(shipperKeypair);
+
+      mockSendTransaction.mockResolvedValueOnce({
+        status: 'PENDING',
+        hash: 'signed-tx-hash',
+      });
+
+      const result = await service.submitSignedTransaction(tx.toXDR());
+
+      expect(result).toEqual({ txHash: 'signed-tx-hash', status: 'PENDING' });
+      expect(mockSendTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('submitSignedTransaction throws SubmissionError when the network rejects it', async () => {
+      const service = await readyService();
+      const networkPassphrase = 'Test SDF Network ; September 2015';
+
+      const source = new Account(shipperKeypair.publicKey(), '100');
+      const tx = new TransactionBuilder(source, {
+        fee: BASE_FEE,
+        networkPassphrase,
+      })
+        .addOperation(Operation.manageData({ name: 'test', value: 'ok' }))
+        .setTimeout(30)
+        .build();
+      tx.sign(shipperKeypair);
+
+      mockSendTransaction.mockResolvedValueOnce({
+        status: 'ERROR',
+        hash: 'bad-hash',
+      });
+
+      await expect(service.submitSignedTransaction(tx.toXDR())).rejects.toThrow(
+        SubmissionError,
       );
     });
   });
