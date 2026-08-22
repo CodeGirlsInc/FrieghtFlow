@@ -63,6 +63,15 @@ export class Payment {
   @Column({ name: 'settled_at', type: 'timestamptz', nullable: true })
   settledAt: Date | null;
 
+  // Set once submitFunding() successfully reaches Horizon/Soroban RPC.
+  @Column({ name: 'stellar_tx_hash', length: 64, nullable: true })
+  stellarTxHash: string | null;
+
+  // Typed failure code (see errors/payment-flow.errors.ts), not a raw
+  // stack trace — safe to surface back to the shipper-facing client.
+  @Column({ name: 'failure_reason', length: 64, nullable: true })
+  failureReason: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
