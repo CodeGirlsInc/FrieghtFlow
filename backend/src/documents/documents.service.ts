@@ -81,6 +81,7 @@ export class DocumentsService {
       sizeBytes: file.size,
       sha256Hash,
       ipfsCid: null,
+      onChainDocumentId: null,
       notes: dto.notes ?? null,
     });
 

@@ -29,6 +29,7 @@ export interface AuthResponse {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly refreshInFlight = new Map<string, Promise<AuthResponse>>();
 
   constructor(
     private readonly usersService: UsersService,
@@ -93,24 +94,39 @@ export class AuthService {
     userId: string,
     rawRefreshToken: string,
   ): Promise<AuthResponse> {
-    const baseUser = await this.usersService.findOne(userId);
-    if (!baseUser) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-    const user = await this.usersService.findByEmail(baseUser.email);
-
-    if (!user || !user.refreshToken) {
-      throw new UnauthorizedException('Invalid refresh token');
+    const cacheKey = `${userId}:${rawRefreshToken}`;
+    const inflight = this.refreshInFlight.get(cacheKey);
+    if (inflight) {
+      return inflight;
     }
 
-    const isValid = await bcrypt.compare(rawRefreshToken, user.refreshToken);
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
+    const work = (async () => {
+      const baseUser = await this.usersService.findOne(userId);
+      if (!baseUser) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      const user = await this.usersService.findByEmail(baseUser.email);
 
-    const tokens = await this.generateTokens(user);
-    await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
-    return this.buildAuthResponse(user, tokens);
+      if (!user || !user.refreshToken) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const isValid = await bcrypt.compare(rawRefreshToken, user.refreshToken);
+      if (!isValid) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const tokens = await this.generateTokens(user);
+      await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
+      return this.buildAuthResponse(user, tokens);
+    })();
+
+    this.refreshInFlight.set(cacheKey, work);
+    try {
+      return await work;
+    } finally {
+      this.refreshInFlight.delete(cacheKey);
+    }
   }
 
   async logout(userId: string): Promise<void> {

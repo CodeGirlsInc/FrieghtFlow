@@ -4,9 +4,10 @@ import { ShipmentsService } from './shipments.service';
 import { ShipmentsController } from './shipments.controller';
 import { Shipment } from './entities/shipment.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Shipment, ShipmentStatusHistory])],
+  imports: [TypeOrmModule.forFeature([Shipment, ShipmentStatusHistory]), PaymentsModule],
   controllers: [ShipmentsController],
   providers: [ShipmentsService],
   exports: [ShipmentsService],

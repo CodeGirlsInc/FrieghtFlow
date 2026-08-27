@@ -81,6 +81,9 @@ export class Shipment {
   @Column({ name: 'is_insured', default: false })
   isInsured: boolean;
 
+  @Column({ name: 'on_chain_shipment_id', type: 'bigint', nullable: true })
+  onChainShipmentId: number | null;
+
   @Column({
     name: 'insurance_premium',
     type: 'decimal',
