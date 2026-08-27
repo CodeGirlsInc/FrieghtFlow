@@ -7,6 +7,7 @@ import { ShipmentStatusHistory } from './entities/shipment-status-history.entity
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
+import { PaymentsService } from '../payments/payments.service';
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
@@ -90,6 +91,7 @@ describe('ShipmentsService.getAnalytics()', () => {
         { provide: getRepositoryToken(Shipment), useValue: shipmentRepo },
         { provide: getRepositoryToken(ShipmentStatusHistory), useValue: {} },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: PaymentsService, useValue: { releaseEscrowForShipment: jest.fn() } },
       ],
     }).compile();
 
