@@ -347,16 +347,45 @@ export class StellarContractService implements OnModuleInit {
       sendResult.status === 'TRY_AGAIN_LATER' ||
       sendResult.status === 'DUPLICATE'
     ) {
-      // Not a hard failure, but not a confirmed success either — the
-      // caller-facing distinction between "unknown" and "confirmed" is a
-      // later issue's retry/polling concern. Surface it distinctly so that
-      // issue can build on top of it rather than treating it as success.
-      throw new ChainTimeoutError(
-        `Escrow contract call "${method}" did not reach the network in a confirmable way: ${sendResult.status}`,
-      );
+      return this.pollForConfirmation(sendResult.hash, method);
     }
 
     return { txHash: sendResult.hash, status: sendResult.status };
+  }
+
+  private async pollForConfirmation(
+    txHash: string,
+    method: string,
+  ): Promise<ContractCallResult> {
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      try {
+        const tx = await (this.server as unknown as {
+          getTransaction: (hash: string) => Promise<{ status: string }>;
+        }).getTransaction(txHash);
+
+        if (tx.status === 'SUCCESS') {
+          return { txHash, status: 'SUCCESS' };
+        }
+
+        if (tx.status === 'FAILED') {
+          throw new SubmissionError(
+            `Escrow contract call "${method}" failed after submission`,
+            tx,
+          );
+        }
+      } catch (error) {
+        if (error instanceof SubmissionError) {
+          throw error;
+        }
+      }
+
+      await this.delay(1_000);
+    }
+
+    throw new ChainTimeoutError(
+      `Escrow contract call "${method}" did not confirm before the polling window expired`,
+    );
   }
 
   private throwIfSimulationFailed(
@@ -420,5 +449,9 @@ export class StellarContractService implements OnModuleInit {
       throw new Error(`StellarContractService: ${key} is not configured`);
     }
     return value;
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
