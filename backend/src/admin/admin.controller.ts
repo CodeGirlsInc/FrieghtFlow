@@ -119,12 +119,16 @@ export class AdminController {
   @Patch('certifications/:id/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify or unverify a carrier certification' })
-  @ApiResponse({ status: 200, description: 'Certification verification updated' })
+  @ApiResponse({
+    status: 200,
+    description: 'Certification verification updated',
+  })
   @ApiResponse({ status: 404, description: 'Certification not found' })
   verifyCertification(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCertificationVerificationDto,
+    @CurrentUser() admin: User,
   ) {
-    return this.certificationsService.updateVerification(id, dto);
+    return this.certificationsService.updateVerification(id, dto, admin.id);
   }
 }

@@ -5,9 +5,13 @@ import { CarrierCertification } from './entities/carrier-certification.entity';
 import { CarriersService } from './carriers.service';
 import { CarrierCertificationsService } from './carrier-certifications.service';
 import { CarriersController } from './carriers.controller';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Shipment, CarrierCertification])],
+  imports: [
+    TypeOrmModule.forFeature([Shipment, CarrierCertification]),
+    AuditLogModule,
+  ],
   controllers: [CarriersController],
   providers: [CarriersService, CarrierCertificationsService],
   exports: [CarrierCertificationsService],
