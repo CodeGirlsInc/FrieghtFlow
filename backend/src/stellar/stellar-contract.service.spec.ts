@@ -23,6 +23,7 @@ import { EscrowErrorCode } from './errors/escrow-error-code.enum';
 const mockGetAccount = jest.fn();
 const mockSimulateTransaction = jest.fn();
 const mockSendTransaction = jest.fn();
+const mockGetTransaction = jest.fn();
 const mockAssembleTransaction = jest.fn();
 
 // Only SorobanRpc.Server (network I/O) and assembleTransaction are mocked;
@@ -47,6 +48,7 @@ jest.mock('@stellar/stellar-sdk', () => {
         simulateTransaction: (...args: unknown[]) =>
           mockSimulateTransaction(...args),
         sendTransaction: (...args: unknown[]) => mockSendTransaction(...args),
+        getTransaction: (...args: unknown[]) => mockGetTransaction(...args),
       })),
       assembleTransaction: (...args: unknown[]) =>
         mockAssembleTransaction(...args),
@@ -279,10 +281,25 @@ describe('StellarContractService', () => {
         successSim(xdr.ScVal.scvVoid()),
       );
       stubAssembleAndSend({ status: 'TRY_AGAIN_LATER', hash: 'unclear-hash' });
+      mockGetTransaction.mockResolvedValue({ status: 'NOT_FOUND' });
 
       await expect(service.resolveDispute(42n, true)).rejects.toThrow(
         ChainTimeoutError,
       );
+    });
+
+    it('polls until the transaction is confirmed after TRY_AGAIN_LATER', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        successSim(xdr.ScVal.scvVoid()),
+      );
+      stubAssembleAndSend({ status: 'TRY_AGAIN_LATER', hash: 'later-hash' });
+      mockGetTransaction.mockResolvedValue({ status: 'SUCCESS' });
+
+      const result = await service.resolveDispute(42n, true);
+
+      expect(result).toEqual({ txHash: 'later-hash', status: 'SUCCESS' });
     });
 
     it('rejects calls when SOROBAN_ENABLED is false', async () => {

@@ -20,6 +20,7 @@ import {
 } from './errors/payment-flow.errors';
 import {
   EscrowContractError,
+  ChainTimeoutError,
   SimulationError,
 } from '../stellar/errors/stellar-integration.errors';
 import { EscrowErrorCode } from '../stellar/errors/escrow-error-code.enum';
@@ -409,6 +410,24 @@ describe('PaymentsService', () => {
         status: PaymentStatus.PENDING,
         failureReason: 'ESCROW_CONTRACT_REJECTED',
       });
+    });
+
+    it('maps a chain timeout to the submission error code', async () => {
+      shipmentRepo.findOne.mockResolvedValue(makeShipment());
+      paymentRepo.findOne.mockResolvedValue(makePayment());
+      paymentRepo.update.mockResolvedValueOnce({ affected: 1 });
+      stellarContractService.submitSignedTransaction.mockRejectedValue(
+        new ChainTimeoutError('network never confirmed the tx'),
+      );
+
+      await expect(
+        service.submitFunding(
+          'shipment-1',
+          'payment-1',
+          'shipper-1',
+          'signed-xdr',
+        ),
+      ).rejects.toMatchObject({ code: 'ESCROW_SUBMISSION_FAILED' });
     });
   });
 
