@@ -5,18 +5,18 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  MinLength,
 } from 'class-validator';
 import { UserRole } from '../../common/enums/role.enum';
+import { IsStrongPassword } from '../../common/validators/is-strong-password.decorator';
 
 export class RegisterDto {
   @ApiProperty({ example: 'user@example.com' })
   @IsEmail()
   email: string;
 
-  @ApiProperty({ example: 'SecurePass123!', minLength: 8 })
+  @ApiProperty({ example: 'SecurePass123!' })
   @IsString()
-  @MinLength(8)
+  @IsStrongPassword()
   password: string;
 
   @ApiProperty({ example: 'John' })

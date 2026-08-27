@@ -52,8 +52,8 @@ describe('DisputeEvidenceService', () => {
       throw new NotFoundException('Shipment ship-1 not found');
     });
 
-    expect(() =>
-      service.findAll('ship-1', 'carrier-1', false),
-    ).toThrow(NotFoundException);
+    expect(() => service.findAll('ship-1', 'carrier-1', false)).toThrow(
+      NotFoundException,
+    );
   });
 });

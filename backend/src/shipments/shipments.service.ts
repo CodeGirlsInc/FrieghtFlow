@@ -236,7 +236,8 @@ export class ShipmentsService {
     const createdIds: string[] = [];
 
     // Use TypeORM transaction
-    const queryRunner = this.shipmentRepo.manager.connection.createQueryRunner();
+    const queryRunner =
+      this.shipmentRepo.manager.connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -307,7 +308,14 @@ export class ShipmentsService {
     user: User,
     query: QueryShipmentDto,
   ): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, status, origin, destination, cargoCategory } = query;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      origin,
+      destination,
+      cargoCategory,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {};
