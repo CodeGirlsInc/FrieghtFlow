@@ -66,7 +66,10 @@ export class UsersService {
     return bcrypt.compare(plainPassword, hash);
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
+  async update(
+    id: string,
+    updateUserDto: UpdateUserDto & { walletAddress?: string },
+  ): Promise<User> {
     const user = await this.findOne(id);
     if (updateUserDto.password) {
       user.passwordHash = await bcrypt.hash(updateUserDto.password, 12);
@@ -76,6 +79,9 @@ export class UsersService {
       ...(updateUserDto.lastName && { lastName: updateUserDto.lastName }),
       ...(updateUserDto.email && { email: updateUserDto.email }),
       ...(updateUserDto.role && { role: updateUserDto.role }),
+      ...(updateUserDto.walletAddress !== undefined && {
+        walletAddress: updateUserDto.walletAddress,
+      }),
     });
     return this.usersRepository.save(user);
   }

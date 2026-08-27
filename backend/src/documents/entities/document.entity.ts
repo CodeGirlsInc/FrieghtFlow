@@ -59,6 +59,9 @@ export class Document {
   @Column({ name: 'ipfs_cid', nullable: true, type: 'varchar' })
   ipfsCid: string | null;
 
+  @Column({ name: 'on_chain_document_id', type: 'bigint', nullable: true })
+  onChainDocumentId: number | null;
+
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 

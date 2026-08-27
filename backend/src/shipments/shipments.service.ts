@@ -26,6 +26,7 @@ import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
+import { PaymentsService } from '../payments/payments.service';
 import {
   SHIPMENT_CREATED,
   SHIPMENT_ACCEPTED,
@@ -105,6 +106,7 @@ export class ShipmentsService {
     @InjectRepository(ShipmentStatusHistory)
     private readonly historyRepo: Repository<ShipmentStatusHistory>,
     private readonly eventEmitter: EventEmitter2,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   // ── Tracking number ──────────────────────────────────────────────────────────
@@ -202,6 +204,7 @@ export class ShipmentsService {
       notes: dto.notes ?? null,
       status: ShipmentStatus.PENDING,
       isInsured: dto.isInsured ?? false,
+      onChainShipmentId: null,
       insurancePremium,
       pickupDate: dto.pickupDate ? new Date(dto.pickupDate) : null,
       estimatedDeliveryDate: dto.estimatedDeliveryDate
@@ -258,6 +261,7 @@ export class ShipmentsService {
           notes: shipmentDto.notes ?? null,
           status: ShipmentStatus.PENDING,
           isInsured: shipmentDto.isInsured ?? false,
+          onChainShipmentId: null,
           insurancePremium,
           pickupDate: shipmentDto.pickupDate
             ? new Date(shipmentDto.pickupDate)
@@ -534,6 +538,15 @@ export class ShipmentsService {
       ShipmentStatus.COMPLETED,
       shipper.id,
     );
+    try {
+      await this.paymentsService.releaseEscrowForShipment(shipmentId);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to release escrow for shipment ${shipmentId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
     const full = await this.findOne(shipmentId);
     this.eventEmitter.emit(
       SHIPMENT_COMPLETED,

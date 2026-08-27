@@ -15,6 +15,7 @@ import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { User } from '../users/entities/user.entity';
+import { PaymentsService } from '../payments/payments.service';
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
@@ -55,6 +56,7 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     price: 5000,
     currency: 'USD',
     isInsured: false,
+    onChainShipmentId: null,
     insurancePremium: null,
     status: ShipmentStatus.PENDING,
     notes: null,
@@ -107,11 +109,13 @@ describe('ShipmentsService', () => {
   let shipmentRepo: ReturnType<typeof mockRepo>;
   let historyRepo: ReturnType<typeof mockRepo>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
+  let paymentsService: { releaseEscrowForShipment: jest.Mock };
 
   beforeEach(async () => {
     shipmentRepo = mockRepo();
     historyRepo = mockRepo();
     eventEmitter = { emit: jest.fn() } as unknown as jest.Mocked<EventEmitter2>;
+    paymentsService = { releaseEscrowForShipment: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -122,6 +126,7 @@ describe('ShipmentsService', () => {
           useValue: historyRepo,
         },
         { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: PaymentsService, useValue: paymentsService },
       ],
     }).compile();
 
@@ -430,6 +435,7 @@ describe('ShipmentsService', () => {
       shipmentRepo.save.mockResolvedValue(completed);
       historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
       historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+      paymentsService.releaseEscrowForShipment.mockResolvedValue(undefined);
 
       await service.confirmDelivery('shipment-uuid-1', shipper);
 
@@ -439,6 +445,9 @@ describe('ShipmentsService', () => {
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'shipment.completed',
         expect.anything(),
+      );
+      expect(paymentsService.releaseEscrowForShipment).toHaveBeenCalledWith(
+        'shipment-uuid-1',
       );
     });
 

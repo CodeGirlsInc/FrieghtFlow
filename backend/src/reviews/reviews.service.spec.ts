@@ -47,6 +47,7 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     currency: 'USD',
     cargoCategory: null,
     isInsured: false,
+    onChainShipmentId: null,
     insurancePremium: null,
     status: ShipmentStatus.COMPLETED,
     notes: null,
