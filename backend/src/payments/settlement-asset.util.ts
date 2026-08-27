@@ -10,7 +10,20 @@ export const SETTLEMENT_ASSET_DECIMALS = 7;
 
 const BASE_UNITS_PER_ASSET_UNIT = 10 ** SETTLEMENT_ASSET_DECIMALS;
 
-/** Converts a fiat-decimal shipment price (e.g. 1234.56) to the contract's raw i128 base units. */
-export function priceToBaseUnits(price: number): bigint {
-  return BigInt(Math.round(price * BASE_UNITS_PER_ASSET_UNIT));
+const SUPPORTED_SETTLEMENT_ASSETS: Record<string, number> = {
+  USDC: SETTLEMENT_ASSET_DECIMALS,
+  XLM: SETTLEMENT_ASSET_DECIMALS,
+};
+
+export function resolveSettlementAssetDecimals(assetCode: string): number {
+  const decimals = SUPPORTED_SETTLEMENT_ASSETS[assetCode];
+  if (decimals === undefined) {
+    throw new Error(`Unsupported settlement asset: ${assetCode}`);
+  }
+  return decimals;
+}
+
+export function priceToBaseUnits(price: number, assetCode = 'USDC'): bigint {
+  const decimals = resolveSettlementAssetDecimals(assetCode);
+  return BigInt(Math.round(price * 10 ** decimals));
 }
