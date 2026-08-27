@@ -16,7 +16,10 @@ import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { User } from '../users/entities/user.entity';
 import { StellarContractService } from '../stellar/stellar-contract.service';
 import { ContractCallResult } from '../stellar/escrow-record.interface';
-import { priceToBaseUnits } from './settlement-asset.util';
+import {
+  priceToBaseUnits,
+  resolveSettlementAssetDecimals,
+} from './settlement-asset.util';
 import { mapStellarFundingError } from './errors/stellar-error-mapper';
 import {
   ForbiddenPaymentActionError,
@@ -70,6 +73,8 @@ export class PaymentsService {
     shipperWalletAddress?: string,
     carrierWalletAddress?: string,
   ): Promise<Payment> {
+    resolveSettlementAssetDecimals(assetCode);
+
     const existing = await this.paymentRepo.findOne({ where: { shipmentId } });
     if (existing) {
       return existing;
@@ -183,7 +188,7 @@ export class PaymentsService {
       shipper.walletAddress,
     );
 
-    const amount = priceToBaseUnits(Number(shipment.price));
+    const amount = priceToBaseUnits(Number(shipment.price), payment.assetCode);
     try {
       const unsignedXdr =
         await this.stellarContractService.buildFundEscrowTransaction(
@@ -257,7 +262,7 @@ export class PaymentsService {
         signer,
         payment.carrierWalletAddress as string,
         BigInt(payment.onChainShipmentId),
-        priceToBaseUnits(Number(payment.amount)),
+        priceToBaseUnits(Number(payment.amount), payment.assetCode),
       ),
     );
   }

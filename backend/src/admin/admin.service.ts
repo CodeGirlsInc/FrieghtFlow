@@ -8,43 +8,48 @@ import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { Shipment } from '../shipments/entities/shipment.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
+import { Payment } from '../payments/entities/payment.entity';
+import { PaymentStatus } from '../common/enums/payment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { QueryUsersDto } from './dto/query-users.dto';
 import { QueryAdminShipmentsDto } from './dto/query-admin-shipments.dto';
+import { StellarContractService } from '../stellar/stellar-contract.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
+import { EscrowRecord } from '../stellar/escrow-record.interface';
+import { EscrowContractError } from '../stellar/errors/stellar-integration.errors';
+import { ContractCallResult } from '../stellar/escrow-record.interface';
 
-export interface PaginatedUsers {
-  data: User[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+export interface EscrowReconciliationResult {
+  shipmentId: string;
+  offChain: {
+    paymentId: string;
+    status: PaymentStatus;
+    onChainShipmentId: number | null;
+    stellarTxHash: string | null;
+    amount: number;
+    assetCode: string;
+  };
+  onChain: {
+    status: EscrowRecord['status'];
+    amount: bigint;
+    shipper: string;
+    carrier: string;
+    fundedAt: bigint;
+    settledAt: bigint;
+  } | null;
+  match: boolean;
+  mismatches: string[];
 }
 
-export interface PaginatedAdminShipments {
-  data: Shipment[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
-export interface PlatformStats {
-  users: {
-    total: number;
-    byRole: Record<UserRole, number>;
-    active: number;
-    inactive: number;
-  };
-  shipments: {
-    total: number;
-    byStatus: Record<ShipmentStatus, number>;
-    disputesPending: number;
-  };
-  revenue: {
-    totalCompleted: number;
-    currency: string;
-  };
-}
+const PAYMENT_TO_ESCROW_STATUS: Record<PaymentStatus, EscrowRecord['status'] | null> = {
+  [PaymentStatus.PENDING]: 'Pending',
+  [PaymentStatus.FUNDING]: 'Pending',
+  [PaymentStatus.FUNDED]: 'Funded',
+  [PaymentStatus.RELEASED]: 'Released',
+  [PaymentStatus.REFUNDED]: 'Refunded',
+  [PaymentStatus.DISPUTED]: 'Disputed',
+  [PaymentStatus.CANCELLED]: null,
+};
 
 @Injectable()
 export class AdminService {
@@ -53,6 +58,10 @@ export class AdminService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(Shipment)
     private readonly shipmentRepo: Repository<Shipment>,
+    @InjectRepository(Payment)
+    private readonly paymentRepo: Repository<Payment>,
+    private readonly stellarContractService: StellarContractService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   // ── Users ────────────────────────────────────────────────────────────────────
@@ -221,5 +230,143 @@ export class AdminService {
         currency: 'USD',
       },
     };
+  }
+
+  // ── Escrow reconciliation ────────────────────────────────────────────────────
+
+  async reconcileEscrow(
+    shipmentId: string,
+  ): Promise<EscrowReconciliationResult> {
+    const shipment = await this.shipmentRepo.findOne({
+      where: { id: shipmentId },
+    });
+    if (!shipment) {
+      throw new NotFoundException(`Shipment ${shipmentId} not found`);
+    }
+
+    const payment = await this.paymentRepo.findOne({
+      where: { shipmentId },
+    });
+    if (!payment) {
+      throw new NotFoundException(
+        `Payment for shipment ${shipmentId} not found`,
+      );
+    }
+
+    let onChain: EscrowRecord | null = null;
+    let onChainError: string | null = null;
+
+    try {
+      onChain = await this.stellarContractService.getEscrow(
+        BigInt(payment.onChainShipmentId),
+      );
+    } catch (error) {
+      if (error instanceof EscrowContractError) {
+        onChainError = `On-chain escrow not found (code=${error.code})`;
+      } else {
+        onChainError =
+          error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    const expectedStatus = PAYMENT_TO_ESCROW_STATUS[payment.status];
+    const mismatches: string[] = [];
+
+    if (!onChain) {
+      mismatches.push(onChainError ?? 'On-chain escrow record is unavailable');
+    } else if (expectedStatus && onChain.status !== expectedStatus) {
+      mismatches.push(
+        `Status mismatch: off-chain=${payment.status}, on-chain=${onChain.status}`,
+      );
+    }
+
+    const match = mismatches.length === 0;
+
+    return {
+      shipmentId,
+      offChain: {
+        paymentId: payment.id,
+        status: payment.status,
+        onChainShipmentId: payment.onChainShipmentId,
+        stellarTxHash: payment.stellarTxHash,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+      },
+      onChain,
+      match,
+      mismatches,
+    };
+  }
+
+  async adminReleaseEscrow(shipmentId: string, adminId: string): Promise<ContractCallResult> {
+    const payment = await this.paymentRepo.findOne({
+      where: { shipmentId },
+    });
+    if (!payment) {
+      throw new NotFoundException(
+        `Payment for shipment ${shipmentId} not found`,
+      );
+    }
+
+    const result = await this.stellarContractService.releasePayment(
+      BigInt(payment.onChainShipmentId),
+    );
+
+    await this.paymentRepo.update(payment.id, {
+      status: PaymentStatus.RELEASED,
+      settledAt: new Date(),
+      stellarTxHash: result.txHash,
+      failureReason: null,
+    });
+
+    await this.auditLogService.log({
+      adminId,
+      action: 'POST /admin/escrow/:shipmentId/release',
+      targetType: 'payment',
+      targetId: payment.id,
+      metadata: {
+        shipmentId,
+        onChainShipmentId: payment.onChainShipmentId,
+        txHash: result.txHash,
+      },
+    });
+
+    return result;
+  }
+
+  async adminRefundEscrow(shipmentId: string, adminId: string): Promise<ContractCallResult> {
+    const payment = await this.paymentRepo.findOne({
+      where: { shipmentId },
+    });
+    if (!payment) {
+      throw new NotFoundException(
+        `Payment for shipment ${shipmentId} not found`,
+      );
+    }
+
+    const result = await this.stellarContractService.refundPayment(
+      BigInt(payment.onChainShipmentId),
+    );
+
+    await this.paymentRepo.update(payment.id, {
+      status: PaymentStatus.REFUNDED,
+      settledAt: new Date(),
+      stellarTxHash: result.txHash,
+      failureReason: null,
+    });
+
+    await this.auditLogService.log({
+      adminId,
+      action: 'POST /admin/escrow/:shipmentId/refund',
+      targetType: 'payment',
+      targetId: payment.id,
+      metadata: {
+        shipmentId,
+        onChainShipmentId: payment.onChainShipmentId,
+        txHash: result.txHash,
+      },
+    });
+
+    return result;
   }
 }

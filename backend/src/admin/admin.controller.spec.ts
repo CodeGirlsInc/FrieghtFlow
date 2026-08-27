@@ -6,10 +6,23 @@ import { AdminService } from './admin.service';
 import { CarrierCertificationsService } from '../carriers/carrier-certifications.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/enums/role.enum';
+import { PaymentStatus } from '../common/enums/payment-status.enum';
+import { EscrowRecord } from '../stellar/escrow-record.interface';
 
 describe('AdminController', () => {
   let app: INestApplication;
-  let adminService: { getStats: jest.Mock; changeUserRole: jest.Mock; listUsers: jest.Mock; findUser: jest.Mock; deactivateUser: jest.Mock; activateUser: jest.Mock; listShipments: jest.Mock };
+  let adminService: {
+    getStats: jest.Mock;
+    changeUserRole: jest.Mock;
+    listUsers: jest.Mock;
+    findUser: jest.Mock;
+    deactivateUser: jest.Mock;
+    activateUser: jest.Mock;
+    listShipments: jest.Mock;
+    reconcileEscrow: jest.Mock;
+    adminReleaseEscrow: jest.Mock;
+    adminRefundEscrow: jest.Mock;
+  };
   let certificationsService: { updateVerification: jest.Mock };
 
   beforeEach(async () => {
@@ -21,6 +34,29 @@ describe('AdminController', () => {
       deactivateUser: jest.fn().mockResolvedValue({ id: 'user-1', isActive: false }),
       activateUser: jest.fn().mockResolvedValue({ id: 'user-1', isActive: true }),
       listShipments: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+      reconcileEscrow: jest.fn().mockResolvedValue({
+        shipmentId: 'shipment-1',
+        offChain: {
+          paymentId: 'payment-1',
+          status: PaymentStatus.FUNDED,
+          onChainShipmentId: 1,
+          stellarTxHash: 'tx-hash',
+          amount: 100,
+          assetCode: 'USDC',
+        },
+        onChain: {
+          status: 'Funded',
+          amount: 1_000_000_000n,
+          shipper: 'GSHIPPER',
+          carrier: 'GCARRIER',
+          fundedAt: 1_700_000_000n,
+          settledAt: 0n,
+        } as EscrowRecord,
+        match: true,
+        mismatches: [],
+      }),
+      adminReleaseEscrow: jest.fn().mockResolvedValue({ txHash: 'release-hash', status: 'PENDING' }),
+      adminRefundEscrow: jest.fn().mockResolvedValue({ txHash: 'refund-hash', status: 'PENDING' }),
     };
     certificationsService = {
       updateVerification: jest.fn().mockResolvedValue({ id: 'cert-1' }),
@@ -83,5 +119,36 @@ describe('AdminController', () => {
       .set('x-user-role', UserRole.ADMIN)
       .send({ role: 'invalid' })
       .expect(400);
+  });
+
+  it('returns 200 for escrow reconciliation', async () => {
+    await request(app.getHttpServer())
+      .get('/admin/escrow/shipment-1/reconcile')
+      .set('x-user-role', UserRole.ADMIN)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.match).toBe(true);
+        expect(res.body.mismatches).toHaveLength(0);
+      });
+  });
+
+  it('returns 200 for admin release', async () => {
+    await request(app.getHttpServer())
+      .post('/admin/escrow/shipment-1/release')
+      .set('x-user-role', UserRole.ADMIN)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.txHash).toBe('release-hash');
+      });
+  });
+
+  it('returns 200 for admin refund', async () => {
+    await request(app.getHttpServer())
+      .post('/admin/escrow/shipment-1/refund')
+      .set('x-user-role', UserRole.ADMIN)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.txHash).toBe('refund-hash');
+      });
   });
 });
