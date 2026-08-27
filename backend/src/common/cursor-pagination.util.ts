@@ -1,7 +1,7 @@
 import { Repository, FindOptionsWhere, LessThan } from 'typeorm';
 
 export interface CursorPageOptions {
-  cursor?: string;   // opaque base64 cursor from previous response
+  cursor?: string; // opaque base64 cursor from previous response
   limit?: number;
   // Legacy offset fallback
   page?: number;
@@ -26,7 +26,9 @@ export function encodeCursor(createdAt: Date, id: string): string {
 
 export function decodeCursor(cursor: string): CursorPayload {
   try {
-    return JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as CursorPayload;
+    return JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as CursorPayload;
   } catch {
     throw new Error('Invalid pagination cursor');
   }
@@ -40,7 +42,10 @@ export async function cursorPaginate<T extends { id: string; createdAt: Date }>(
   const limit = Math.min(options.limit ?? 20, 100);
 
   // Offset fallback for backwards compatibility
-  if (!options.cursor && (options.page !== undefined || options.pageSize !== undefined)) {
+  if (
+    !options.cursor &&
+    (options.page !== undefined || options.pageSize !== undefined)
+  ) {
     const page = options.page ?? 1;
     const pageSize = options.pageSize ?? limit;
     const [data, total] = await repo.findAndCount({

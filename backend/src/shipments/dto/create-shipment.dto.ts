@@ -36,7 +36,10 @@ export class CreateShipmentDto {
   @MaxLength(2000)
   cargoDescription: string;
 
-  @ApiPropertyOptional({ enum: CargoCategory, example: CargoCategory.ELECTRONICS })
+  @ApiPropertyOptional({
+    enum: CargoCategory,
+    example: CargoCategory.ELECTRONICS,
+  })
   @IsOptional()
   @IsEnum(CargoCategory)
   cargoCategory?: CargoCategory;
