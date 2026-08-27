@@ -10,12 +10,14 @@ import {
   CreateCarrierCertificationDto,
   UpdateCertificationVerificationDto,
 } from './dto/carrier-certification.dto';
+import { AuditLogService } from '../audit-log/audit-log.service';
 
 @Injectable()
 export class CarrierCertificationsService {
   constructor(
     @InjectRepository(CarrierCertification)
     private readonly certificationRepo: Repository<CarrierCertification>,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async create(
@@ -55,6 +57,7 @@ export class CarrierCertificationsService {
   async updateVerification(
     id: string,
     dto: UpdateCertificationVerificationDto,
+    adminId: string,
   ): Promise<CarrierCertification> {
     const certification = await this.findOne(id);
 
@@ -63,7 +66,23 @@ export class CarrierCertificationsService {
       certification.notes = dto.notes;
     }
 
-    return this.certificationRepo.save(certification);
+    const saved = await this.certificationRepo.save(certification);
+
+    await this.auditLogService.log({
+      adminId,
+      action: dto.isVerified
+        ? 'CERTIFICATION_VERIFIED'
+        : 'CERTIFICATION_UNVERIFIED',
+      targetType: 'CarrierCertification',
+      targetId: certification.id,
+      metadata: {
+        carrierId: certification.carrierId,
+        documentType: certification.documentType,
+        isVerified: dto.isVerified,
+      },
+    });
+
+    return saved;
   }
 
   async delete(id: string, carrierId: string): Promise<void> {

@@ -10,6 +10,7 @@ import {
   CreateCarrierCertificationDto,
   UpdateCertificationVerificationDto,
 } from './dto/carrier-certification.dto';
+import { AuditLogService } from '../audit-log/audit-log.service';
 
 function makeCertification(
   overrides: Partial<CarrierCertification> = {},
@@ -48,9 +49,11 @@ function mockRepo() {
 describe('CarrierCertificationsService', () => {
   let service: CarrierCertificationsService;
   let certificationRepo: ReturnType<typeof mockRepo>;
+  let auditLogService: { log: jest.Mock };
 
   beforeEach(async () => {
     certificationRepo = mockRepo();
+    auditLogService = { log: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -58,6 +61,10 @@ describe('CarrierCertificationsService', () => {
         {
           provide: getRepositoryToken(CarrierCertification),
           useValue: certificationRepo,
+        },
+        {
+          provide: AuditLogService,
+          useValue: auditLogService,
         },
       ],
     }).compile();
@@ -146,7 +153,11 @@ describe('CarrierCertificationsService', () => {
         notes: 'Verified by admin',
       });
 
-      const result = await service.updateVerification('cert-uuid-1', dto);
+      const result = await service.updateVerification(
+        'cert-uuid-1',
+        dto,
+        'admin-uuid-1',
+      );
 
       expect(certificationRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -155,6 +166,62 @@ describe('CarrierCertificationsService', () => {
         }),
       );
       expect(result.isVerified).toBe(true);
+    });
+
+    it('creates an audit log entry when verifying a certification', async () => {
+      const certification = makeCertification();
+      const dto: UpdateCertificationVerificationDto = {
+        isVerified: true,
+        notes: 'Verified by admin',
+      };
+
+      certificationRepo.findOne.mockResolvedValue(certification);
+      certificationRepo.save.mockResolvedValue({
+        ...certification,
+        isVerified: true,
+        notes: 'Verified by admin',
+      });
+
+      await service.updateVerification('cert-uuid-1', dto, 'admin-uuid-1');
+
+      expect(auditLogService.log).toHaveBeenCalledWith({
+        adminId: 'admin-uuid-1',
+        action: 'CERTIFICATION_VERIFIED',
+        targetType: 'CarrierCertification',
+        targetId: 'cert-uuid-1',
+        metadata: {
+          carrierId: 'carrier-uuid-1',
+          documentType: CertificationType.OPERATING_LICENSE,
+          isVerified: true,
+        },
+      });
+    });
+
+    it('creates an audit log entry when unverified a certification', async () => {
+      const certification = makeCertification({ isVerified: true });
+      const dto: UpdateCertificationVerificationDto = {
+        isVerified: false,
+      };
+
+      certificationRepo.findOne.mockResolvedValue(certification);
+      certificationRepo.save.mockResolvedValue({
+        ...certification,
+        isVerified: false,
+      });
+
+      await service.updateVerification('cert-uuid-1', dto, 'admin-uuid-1');
+
+      expect(auditLogService.log).toHaveBeenCalledWith({
+        adminId: 'admin-uuid-1',
+        action: 'CERTIFICATION_UNVERIFIED',
+        targetType: 'CarrierCertification',
+        targetId: 'cert-uuid-1',
+        metadata: {
+          carrierId: 'carrier-uuid-1',
+          documentType: CertificationType.OPERATING_LICENSE,
+          isVerified: false,
+        },
+      });
     });
   });
 

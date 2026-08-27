@@ -23,6 +23,7 @@ import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
 import { QueryShipmentDto } from './dto/query-shipment.dto';
 import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
+import { BatchCreateResultDto } from './dto/batch-create-result.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -92,14 +93,22 @@ export class ShipmentsController {
   @ApiOperation({
     summary: 'Create multiple shipments in a batch (max 50)',
     description:
-      'Creates up to 50 shipments in a single transaction. If any shipment fails validation, the entire batch is rolled back.',
+      'Creates up to 50 shipments with per-item validation reporting. Each shipment is processed individually, and the response includes success/failure status for each item.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Batch shipments created successfully',
+    description: 'Batch processed with per-item results',
+    type: BatchCreateResultDto,
   })
   @ApiResponse({ status: 400, description: 'Validation error in batch data' })
+
   batchCreate(@CurrentUser() user: User, @Body() dto: BatchCreateShipmentsDto) {
+
+  batchCreate(
+    @CurrentUser() user: User,
+    @Body() dto: BatchCreateShipmentsDto,
+  ): Promise<BatchCreateResultDto> {
+
     return this.shipmentsService.batchCreate(user.id, dto);
   }
 

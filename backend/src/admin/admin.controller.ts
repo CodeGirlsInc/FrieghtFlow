@@ -127,7 +127,8 @@ export class AdminController {
   verifyCertification(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCertificationVerificationDto,
+    @CurrentUser() admin: User,
   ) {
-    return this.certificationsService.updateVerification(id, dto);
+    return this.certificationsService.updateVerification(id, dto, admin.id);
   }
 }

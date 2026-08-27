@@ -287,6 +287,53 @@ describe('ShipmentsService', () => {
       expect(csvOutput).toContain('id,trackingNumber,shipperId');
       expect(csvOutput).toContain('FF-TEST-001');
     });
+
+    it('sanitizes formula injection characters in CSV export', async () => {
+      const queryBuilder = mockQueryBuilder();
+      queryBuilder.stream.mockResolvedValue(
+        Readable.from([
+          {
+            id: 'shipment-1',
+            trackingNumber: 'FF-TEST-001',
+            shipperId: 'shipper-1',
+            carrierId: null,
+            origin: '=HYPERLINK("http://evil.com","Click")',
+            destination: '+SUM(A1:A10)',
+            cargoDescription: '-1@cmd|"/C calc"!A0',
+            weightKg: '100.00',
+            volumeCbm: null,
+            price: '5000.00',
+            currency: 'USD',
+            status: ShipmentStatus.PENDING,
+            pickupDate: null,
+            estimatedDeliveryDate: null,
+            actualDeliveryDate: null,
+            createdAt: '2026-04-24T10:00:00.000Z',
+            updatedAt: '2026-04-24T10:00:00.000Z',
+          },
+        ]),
+      );
+      shipmentRepo.createQueryBuilder.mockReturnValue(queryBuilder as never);
+
+      const result = await service.exportShipments(makeUser(), 'csv');
+      const chunks: Uint8Array[] = [];
+
+      await new Promise<void>((resolve, reject) => {
+        result.stream.on('data', (chunk: string | Uint8Array) => {
+          chunks.push(
+            typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk,
+          );
+        });
+        result.stream.on('end', () => resolve());
+        result.stream.on('error', reject);
+      });
+
+      const csvOutput = Buffer.concat(chunks).toString('utf8');
+      // Formula characters should be prefixed with single quote
+      expect(csvOutput).toContain("'=HYPERLINK");
+      expect(csvOutput).toContain("'+SUM");
+      expect(csvOutput).toContain("'-1@");
+    });
   });
 
   describe('accept()', () => {
@@ -587,7 +634,7 @@ describe('ShipmentsService', () => {
   });
 
   describe('batchCreate()', () => {
-    it('creates multiple shipments transactionally and returns their IDs', async () => {
+    it('creates multiple shipments and returns per-item results', async () => {
       const mockQueryRunner = {
         connect: jest.fn(),
         startTransaction: jest.fn(),
@@ -628,14 +675,27 @@ describe('ShipmentsService', () => {
         ],
       });
 
-      expect(result).toEqual(['batch-1', 'batch-2']);
-      expect(mockQueryRunner.startTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
+      expect(result.total).toBe(2);
+      expect(result.succeeded).toBe(2);
+      expect(result.failed).toBe(0);
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0]).toEqual({
+        index: 0,
+        success: true,
+        id: 'batch-1',
+      });
+      expect(result.items[1]).toEqual({
+        index: 1,
+        success: true,
+        id: 'batch-2',
+      });
+      expect(mockQueryRunner.startTransaction).toHaveBeenCalledTimes(2);
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalledTimes(2);
       expect(mockQueryRunner.rollbackTransaction).not.toHaveBeenCalled();
       expect(eventEmitter.emit).toHaveBeenCalledTimes(2);
     });
 
-    it('rolls back the entire batch if any shipment fails', async () => {
+    it('returns per-item results with mixed success and failure', async () => {
       const mockQueryRunner = {
         connect: jest.fn(),
         startTransaction: jest.fn(),
@@ -646,39 +706,66 @@ describe('ShipmentsService', () => {
           save: jest
             .fn()
             .mockResolvedValueOnce({ id: 'batch-1' })
-            .mockRejectedValueOnce(new Error('Validation error')),
+            .mockRejectedValueOnce(new Error('Validation error'))
+            .mockResolvedValueOnce({ id: 'batch-3' }),
         },
       };
       shipmentRepo.manager.connection.createQueryRunner.mockReturnValue(
         mockQueryRunner,
       );
       shipmentRepo.create.mockImplementation((dto) => dto as Shipment);
+      shipmentRepo.findOne.mockResolvedValue(makeShipment());
       historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
       historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
 
-      await expect(
-        service.batchCreate('shipper-1', {
-          shipments: [
-            {
-              origin: 'Lagos',
-              destination: 'Abuja',
-              cargoDescription: 'Valid shipment',
-              weightKg: 100,
-              price: 5000,
-            },
-            {
-              origin: 'Lagos',
-              destination: 'Kano',
-              cargoDescription: 'Invalid shipment',
-              weightKg: 200,
-              price: 8000,
-            },
-          ],
-        }),
-      ).rejects.toThrow('Validation error');
+      const result = await service.batchCreate('shipper-1', {
+        shipments: [
+          {
+            origin: 'Lagos',
+            destination: 'Abuja',
+            cargoDescription: 'Valid shipment 1',
+            weightKg: 100,
+            price: 5000,
+          },
+          {
+            origin: 'Lagos',
+            destination: 'Kano',
+            cargoDescription: 'Invalid shipment',
+            weightKg: -200, // Invalid negative weight
+            price: 8000,
+          },
+          {
+            origin: 'Lagos',
+            destination: 'Port Harcourt',
+            cargoDescription: 'Valid shipment 2',
+            weightKg: 150,
+            price: 6000,
+          },
+        ],
+      });
 
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.commitTransaction).not.toHaveBeenCalled();
+      expect(result.total).toBe(3);
+      expect(result.succeeded).toBe(2);
+      expect(result.failed).toBe(1);
+      expect(result.items).toHaveLength(3);
+      expect(result.items[0]).toEqual({
+        index: 0,
+        success: true,
+        id: 'batch-1',
+      });
+      expect(result.items[1]).toEqual({
+        index: 1,
+        success: false,
+        error: 'Validation error',
+      });
+      expect(result.items[2]).toEqual({
+        index: 2,
+        success: true,
+        id: 'batch-3',
+      });
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalledTimes(2);
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(2);
     });
   });
 });

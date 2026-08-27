@@ -22,6 +22,10 @@ import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
 import { QueryShipmentDto } from './dto/query-shipment.dto';
 import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
+import {
+  BatchCreateResultDto,
+  BatchItemResultDto,
+} from './dto/batch-create-result.dto';
 import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
@@ -232,6 +236,7 @@ export class ShipmentsService {
   async batchCreate(
     shipperId: string,
     dto: BatchCreateShipmentsDto,
+
   ): Promise<string[]> {
     const createdIds: string[] = [];
 
@@ -243,6 +248,20 @@ export class ShipmentsService {
 
     try {
       for (const shipmentDto of dto.shipments) {
+
+  ): Promise<BatchCreateResultDto> {
+    const results: BatchItemResultDto[] = [];
+
+    // Process each shipment individually for per-item validation reporting
+    for (let i = 0; i < dto.shipments.length; i++) {
+      const shipmentDto = dto.shipments[i];
+      const queryRunner =
+        this.shipmentRepo.manager.connection.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      try {
+
         const insurancePremium = shipmentDto.isInsured
           ? Math.round(shipmentDto.price * 0.015 * 100) / 100
           : null;
@@ -273,7 +292,6 @@ export class ShipmentsService {
         });
 
         const saved = await queryRunner.manager.save(shipment);
-        createdIds.push(saved.id);
 
         await this.recordHistory(
           saved.id,
@@ -282,26 +300,42 @@ export class ShipmentsService {
           shipperId,
           'Shipment created via batch',
         );
-      }
 
-      await queryRunner.commitTransaction();
+        await queryRunner.commitTransaction();
 
-      // Emit events for all created shipments
-      for (const id of createdIds) {
-        const full = await this.findOne(id);
+        // Emit event for successfully created shipment
+        const full = await this.findOne(saved.id);
         this.eventEmitter.emit(
           SHIPMENT_CREATED,
           new ShipmentEvent(full, shipperId),
         );
-      }
 
-      return createdIds;
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
+        results.push({
+          index: i,
+          success: true,
+          id: saved.id,
+        });
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+        results.push({
+          index: i,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      } finally {
+        await queryRunner.release();
+      }
     }
+
+    const succeeded = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success).length;
+
+    return {
+      total: dto.shipments.length,
+      succeeded,
+      failed,
+      items: results,
+    };
   }
 
   async findAll(
@@ -850,8 +884,15 @@ export class ShipmentsService {
   }
 
   private escapeCsvValue(value: string): string {
-    const escapedValue = value.replace(/"/g, '""');
-    if (/[",\n]/.test(value)) {
+    // Prevent CSV formula injection by prefixing dangerous characters
+    // See: https://owasp.org/www-community/attacks/CSV_Injection
+    let sanitized = value;
+    if (/^[=+\-@\t\r]/.test(value)) {
+      sanitized = `'${value}`;
+    }
+
+    const escapedValue = sanitized.replace(/"/g, '""');
+    if (/[",\n]/.test(sanitized)) {
       return `"${escapedValue}"`;
     }
 
