@@ -125,6 +125,17 @@ export class PaymentsService {
     return this.paymentRepo.save(payment);
   }
 
+  async releaseEscrowForShipment(shipmentId: string): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (!payment) {
+      return;
+    }
+
+    await this.stellarContractService.releasePayment(
+      BigInt(payment.onChainShipmentId),
+    );
+  }
+
   private async generateNextOnChainId(): Promise<number> {
     const result = await this.paymentRepo
       .createQueryBuilder('payment')
