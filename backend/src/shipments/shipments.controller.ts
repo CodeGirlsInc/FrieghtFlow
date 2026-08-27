@@ -101,10 +101,14 @@ export class ShipmentsController {
     type: BatchCreateResultDto,
   })
   @ApiResponse({ status: 400, description: 'Validation error in batch data' })
+
+  batchCreate(@CurrentUser() user: User, @Body() dto: BatchCreateShipmentsDto) {
+
   batchCreate(
     @CurrentUser() user: User,
     @Body() dto: BatchCreateShipmentsDto,
   ): Promise<BatchCreateResultDto> {
+
     return this.shipmentsService.batchCreate(user.id, dto);
   }
 

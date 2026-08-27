@@ -360,9 +360,11 @@ export class StellarContractService implements OnModuleInit {
     const deadline = Date.now() + 2_000;
     while (Date.now() < deadline) {
       try {
-        const tx = await (this.server as unknown as {
-          getTransaction: (hash: string) => Promise<{ status: string }>;
-        }).getTransaction(txHash);
+        const tx = await (
+          this.server as unknown as {
+            getTransaction: (hash: string) => Promise<{ status: string }>;
+          }
+        ).getTransaction(txHash);
 
         if (tx.status === 'SUCCESS') {
           return { txHash, status: 'SUCCESS' };

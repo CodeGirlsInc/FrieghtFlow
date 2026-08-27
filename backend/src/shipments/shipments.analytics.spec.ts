@@ -91,7 +91,10 @@ describe('ShipmentsService.getAnalytics()', () => {
         { provide: getRepositoryToken(Shipment), useValue: shipmentRepo },
         { provide: getRepositoryToken(ShipmentStatusHistory), useValue: {} },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
-        { provide: PaymentsService, useValue: { releaseEscrowForShipment: jest.fn() } },
+        {
+          provide: PaymentsService,
+          useValue: { releaseEscrowForShipment: jest.fn() },
+        },
       ],
     }).compile();
 

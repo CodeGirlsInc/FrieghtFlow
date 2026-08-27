@@ -75,6 +75,8 @@ describe('BidsService', () => {
       await expect(
         service.submitBid('ship1', 'carrier1', { proposedPrice: 100 }),
       ).rejects.toThrow(BadRequestException);
+
+
     });
 
     it('throws if carrier is the shipper', async () => {
@@ -82,6 +84,7 @@ describe('BidsService', () => {
       await expect(
         service.submitBid('ship1', 'shipper1', { proposedPrice: 100 }),
       ).rejects.toThrow(ForbiddenException);
+
     });
 
     it('throws if carrier already has a pending bid', async () => {

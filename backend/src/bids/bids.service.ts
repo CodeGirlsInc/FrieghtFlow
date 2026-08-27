@@ -39,10 +39,12 @@ export class BidsService {
       throw new BadRequestException(
         'Bids can only be placed on PENDING shipments',
       );
+
     }
 
     if (shipment.shipperId === carrierId) {
       throw new ForbiddenException('Cannot bid on your own shipment');
+
     }
 
     const existing = await this.bidRepo.findOne({

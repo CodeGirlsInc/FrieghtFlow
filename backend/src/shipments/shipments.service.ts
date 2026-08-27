@@ -236,6 +236,19 @@ export class ShipmentsService {
   async batchCreate(
     shipperId: string,
     dto: BatchCreateShipmentsDto,
+
+  ): Promise<string[]> {
+    const createdIds: string[] = [];
+
+    // Use TypeORM transaction
+    const queryRunner =
+      this.shipmentRepo.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      for (const shipmentDto of dto.shipments) {
+
   ): Promise<BatchCreateResultDto> {
     const results: BatchItemResultDto[] = [];
 
@@ -248,6 +261,7 @@ export class ShipmentsService {
       await queryRunner.startTransaction();
 
       try {
+
         const insurancePremium = shipmentDto.isInsured
           ? Math.round(shipmentDto.price * 0.015 * 100) / 100
           : null;
