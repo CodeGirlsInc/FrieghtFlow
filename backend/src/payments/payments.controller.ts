@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
   Post,
@@ -10,6 +11,7 @@ import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiForbiddenResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnprocessableEntityResponse,
@@ -20,18 +22,36 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { PaymentsService } from './payments.service';
+import { Payment } from './entities/payment.entity';
 import { SubmitPaymentDto } from './dto/submit-payment.dto';
 import { TestSignAndSubmitPaymentDto } from './dto/test-sign-and-submit-payment.dto';
 
 @ApiTags('payments')
 @ApiBearerAuth()
 @Controller('shipments/:shipmentId/payment')
-@UseGuards(RolesGuard)
-@Roles(UserRole.SHIPPER, UserRole.ADMIN)
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  @Get()
+  @ApiOperation({
+    summary: 'Get payment/escrow status for a shipment',
+    description:
+      'Returns the escrow payment record if one exists for this shipment. Accessible to the shipper, carrier, and admin.',
+  })
+  @ApiOkResponse({ description: 'Payment record found', type: Payment })
+  @ApiOperation({ summary: 'Get escrow status for a shipment' })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
+  getStatus(
+    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.paymentsService.findByShipmentIdForUser(shipmentId, user);
+  }
+
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SHIPPER, UserRole.ADMIN)
   @ApiOperation({
     summary:
       'Build an unsigned funding transaction for an accepted shipment (shipper only)',

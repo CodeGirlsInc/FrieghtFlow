@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Shipment, ShipmentStatus, ShipmentStatusHistory } from '../../../../types/shipment.types';
+import { Payment, PaymentStatus } from '../../../../types/payment.types';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
+import { paymentApi } from '../../../../lib/api/payments.api';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { StatusBadge } from '../../../../components/shipment/status-badge';
 import { StatusTimeline } from '../../../../components/shipment/status-timeline';
@@ -18,7 +20,9 @@ export default function ShipmentDetailPage() {
 
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [history, setHistory] = useState<ShipmentStatusHistory[]>([]);
+  const [payment, setPayment] = useState<Payment | null>(null);
   const [loading, setLoading] = useState(true);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const reload = useCallback(async () => {

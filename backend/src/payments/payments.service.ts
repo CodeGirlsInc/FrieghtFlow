@@ -41,6 +41,10 @@ export interface SubmitFundingResult {
   stellarTxHash: string | null;
 }
 
+export interface PaymentResponse {
+  payment: Payment | null;
+}
+
 // A payment beyond this point is either funded or otherwise terminal for
 // this issue's purposes — funding it again (or funding a still-in-flight
 // one) is always a 4xx, never a fresh chain call.
@@ -64,6 +68,26 @@ export class PaymentsService {
     private readonly stellarContractService: StellarContractService,
     private readonly config: ConfigService,
   ) {}
+
+  async findByShipmentIdForUser(
+    shipmentId: string,
+    user: User,
+  ): Promise<PaymentResponse> {
+    const shipment = await this.getShipment(shipmentId);
+
+    const isShipper = shipment.shipperId === user.id;
+    const isCarrier = shipment.carrierId === user.id;
+    const isAdmin = user.role === 'admin';
+
+    if (!isShipper && !isCarrier && !isAdmin) {
+      throw new ForbiddenException(
+        'You do not have access to this shipment payment',
+      );
+    }
+
+    const payment = await this.findByShipmentId(shipmentId);
+    return { payment };
+  }
 
   async getOrCreatePayment(
     shipmentId: string,
