@@ -24,8 +24,8 @@ function getStrength(password: string): StrengthResult {
 
   if (score <= 2) return { score, label: 'Weak', color: 'bg-red-500' };
   if (score === 3) return { score, label: 'Fair', color: 'bg-orange-400' };
-  if (score === 4) return { score, label: 'Strong', color: 'bg-green-500' };
-  return { score, label: 'Very Strong', color: 'bg-green-600' };
+  if (score === 4) return { score, label: 'Strong', color: 'bg-orange-400' };
+  return { score, label: 'Very Strong', color: 'bg-green-500' };
 }
 
 export default function PasswordStrengthBar({ password }: PasswordStrengthBarProps) {
@@ -49,9 +49,8 @@ export default function PasswordStrengthBar({ password }: PasswordStrengthBarPro
       {password && (
         <p className={cn('text-xs font-medium', {
           'text-red-500': label === 'Weak',
-          'text-orange-400': label === 'Fair',
-          'text-green-500': label === 'Strong',
-          'text-green-600': label === 'Very Strong',
+          'text-orange-400': label === 'Fair' || label === 'Strong',
+          'text-green-500': label === 'Very Strong',
         })}>
           {label}
         </p>
