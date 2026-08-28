@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useNotificationStore, ShipmentNotification } from '../../stores/notification.store';
+import { useSocketStatusStore } from '../../stores/socket-status.store';
 
 const EVENT_LABELS: Record<string, string> = {
   'shipment:created': 'Created',
@@ -58,6 +59,7 @@ function NotificationItem({ n }: { n: ShipmentNotification }) {
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const { notifications, unreadCount, markAllRead, clearAll } = useNotificationStore();
+  const socketStatus = useSocketStatusStore((s) => s.status);
   const ref = useRef<HTMLDivElement>(null);
 
   // Close when clicking outside
@@ -102,6 +104,14 @@ export function NotificationBell() {
           <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
+        )}
+        {socketStatus === 'reconnecting' && (
+          <span
+            className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-yellow-500 ring-1 ring-background"
+            role="status"
+            aria-label="Real-time updates reconnecting"
+            title="Real-time updates reconnecting…"
+          />
         )}
       </button>
 

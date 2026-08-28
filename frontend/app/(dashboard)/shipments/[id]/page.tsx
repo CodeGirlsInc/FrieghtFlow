@@ -10,6 +10,7 @@ import { paymentApi } from '../../../../lib/api/payments.api';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { StatusBadge } from '../../../../components/shipment/status-badge';
 import { StatusTimeline } from '../../../../components/shipment/status-timeline';
+import { SubmitReviewForm } from '../../../../components/reviews/SubmitReviewForm';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 
@@ -293,7 +294,7 @@ export default function ShipmentDetailPage() {
         </div>
 
         {/* Right: timeline */}
-        <div>
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Status Timeline</CardTitle>
@@ -302,6 +303,10 @@ export default function ShipmentDetailPage() {
               <StatusTimeline history={history} />
             </CardContent>
           </Card>
+
+          {shipment.status === ShipmentStatus.COMPLETED && isShipper && shipment.carrierId && (
+            <SubmitReviewForm shipmentId={shipment.id} title="Rate your carrier" />
+          )}
         </div>
       </div>
     </div>
