@@ -2,27 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../../lib/api/client';
+import { reviewsApi, ReviewsResponse } from '../../lib/api/reviews.api';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-
-interface Review {
-  id: string;
-  reviewerId: string;
-  reviewerName: string;
-  rating: number; // 1-5
-  comment: string;
-  createdAt: string;
-}
-
-interface ReviewsResponse {
-  data: Review[];
-  total: number;
-  averageRating: number;
-  distribution: Record<1 | 2 | 3 | 4 | 5, number>;
-  page: number;
-  totalPages: number;
-}
 
 function Stars({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'lg' }) {
   const sz = size === 'lg' ? 'text-2xl' : 'text-sm';
@@ -46,7 +28,7 @@ export function CarrierReviews({ carrierId }: CarrierReviewsProps) {
 
   const { data, isLoading, error } = useQuery<ReviewsResponse>({
     queryKey: ['carrier-reviews', carrierId, page],
-    queryFn: () => apiClient(`/carriers/${carrierId}/reviews?page=${page}&limit=5`),
+    queryFn: () => reviewsApi.listByCarrier(carrierId, { page, limit: 5 }),
   });
 
   if (isLoading) {

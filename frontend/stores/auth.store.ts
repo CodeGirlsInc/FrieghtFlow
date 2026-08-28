@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import type { User, LoginPayload, RegisterPayload } from '../types/auth.types';
 import * as authApi from '../lib/api/auth.api';
+import { onTokenChange } from '../lib/api/client';
 
 interface AuthState {
   user: User | null;
@@ -63,3 +64,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 }));
+
+// FE-110: if the API client hard-logs-out (a failed token refresh clears
+// the token via setAccessToken(null)) without the user ever calling this
+// store's own logout(), the store would otherwise keep reporting a logged-in
+// user until the next fetchCurrentUser() call. Syncing here keeps both in
+// lockstep the moment the client-side session actually ends.
+onTokenChange((token) => {
+  if (token === null && useAuthStore.getState().user !== null) {
+    useAuthStore.getState().setUser(null);
+  }
+});

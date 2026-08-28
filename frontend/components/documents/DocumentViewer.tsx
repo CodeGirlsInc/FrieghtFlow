@@ -3,11 +3,13 @@
 import { useEffect, useCallback } from 'react';
 import { X, Download } from 'lucide-react';
 import { Button } from '../ui/button';
+import { documentsApi } from '../../lib/api/documents.api';
 
 interface DocumentViewerProps {
   open: boolean;
   onClose: () => void;
-  url: string;
+  /** Document ID — the download URL is resolved via documentsApi (FE-107). */
+  documentId: string;
   fileName: string;
   mimeType?: string;
 }
@@ -24,7 +26,14 @@ function getFileType(url: string, mimeType?: string): 'image' | 'pdf' | 'other' 
   return 'other';
 }
 
-export function DocumentViewer({ open, onClose, url, fileName, mimeType }: DocumentViewerProps) {
+export function DocumentViewer({
+  open,
+  onClose,
+  documentId,
+  fileName,
+  mimeType,
+}: DocumentViewerProps) {
+  const url = documentsApi.getDownloadUrl(documentId);
   const fileType = getFileType(url, mimeType);
 
   const handleKeyDown = useCallback(

@@ -6,17 +6,18 @@ import { X, Upload, FileText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
-import { apiClient } from '../../lib/api/client';
+import { documentsApi, DocumentType } from '../../lib/api/documents.api';
 import { partitionValidFiles } from '../../lib/validation/file-upload';
 
-const DOCUMENT_TYPES = [
-  'Bill of Lading',
-  'Commercial Invoice',
-  'Packing List',
-  'Certificate of Origin',
-  'Insurance Certificate',
-  'Other',
-];
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  [DocumentType.BILL_OF_LADING]: 'Bill of Lading',
+  [DocumentType.PROOF_OF_DELIVERY]: 'Proof of Delivery',
+  [DocumentType.INVOICE]: 'Invoice',
+  [DocumentType.CUSTOMS_DECLARATION]: 'Customs Declaration',
+  [DocumentType.INSURANCE_CERTIFICATE]: 'Insurance Certificate',
+  [DocumentType.PHOTO]: 'Photo',
+  [DocumentType.OTHER]: 'Other',
+};
 
 interface SelectedFile {
   file: File;
@@ -26,14 +27,19 @@ interface SelectedFile {
 interface DocumentUploadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Optional shipment/entity ID to associate the document with */
-  entityId?: string;
+  /** Shipment this document belongs to — required by the backend. */
+  shipmentId: string;
   onSuccess?: () => void;
 }
 
-export function DocumentUploadModal({ open, onOpenChange, entityId, onSuccess }: DocumentUploadModalProps) {
+export function DocumentUploadModal({
+  open,
+  onOpenChange,
+  shipmentId,
+  onSuccess,
+}: DocumentUploadModalProps) {
   const [files, setFiles] = useState<SelectedFile[]>([]);
-  const [docType, setDocType] = useState(DOCUMENT_TYPES[0]);
+  const [docType, setDocType] = useState<DocumentType>(DocumentType.OTHER);
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -71,37 +77,21 @@ export function DocumentUploadModal({ open, onOpenChange, entityId, onSuccess }:
       return;
     }
 
-    const formData = new FormData();
-    files.forEach(({ file }) => formData.append('files', file));
-    formData.append('documentType', docType);
-    if (entityId) formData.append('entityId', entityId);
-
     setProgress(0);
 
     try {
-      // Use XMLHttpRequest for progress tracking
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:6000/api/v1'}/documents/upload`);
-
-        // Attach auth token if available
-        const token = (apiClient as unknown as { _token?: string })._token;
-        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-
-        xhr.withCredentials = true;
-
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(xhr.statusText));
-        };
-
-        xhr.onerror = () => reject(new Error('Upload failed'));
-        xhr.send(formData);
-      });
+      // The backend accepts one file per request, so upload sequentially
+      // and report overall progress across the whole batch.
+      for (let i = 0; i < files.length; i++) {
+        await documentsApi.upload(
+          files[i].file,
+          { shipmentId, documentType: docType },
+          (filePercent) => {
+            const overall = ((i + filePercent / 100) / files.length) * 100;
+            setProgress(Math.round(overall));
+          },
+        );
+      }
 
       toast.success('Documents uploaded successfully!');
       setFiles([]);
@@ -153,11 +143,13 @@ export function DocumentUploadModal({ open, onOpenChange, entityId, onSuccess }:
             <select
               id="docType"
               value={docType}
-              onChange={(e) => setDocType(e.target.value)}
+              onChange={(e) => setDocType(e.target.value as DocumentType)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {DOCUMENT_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+              {Object.values(DocumentType).map((t) => (
+                <option key={t} value={t}>
+                  {DOCUMENT_TYPE_LABELS[t]}
+                </option>
               ))}
             </select>
           </div>
