@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { apiClient } from '../../lib/api/client';
+import { partitionValidFiles } from '../../lib/validation/file-upload';
 
 const schema = z.object({
   reason: z.string().min(10, 'Please describe the issue (min 10 characters)'),
@@ -31,11 +32,19 @@ export function DisputeForm({ shipmentId, onSuccess, onClose }: Props) {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const onSubmit = async (data: FormData) => {
+    const files = fileRef.current?.files;
+    if (files && files.length > 0) {
+      const { errors } = partitionValidFiles(files);
+      if (errors.length > 0) {
+        errors.forEach((message) => toast.error(message));
+        return;
+      }
+    }
+
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append('reason', data.reason);
-      const files = fileRef.current?.files;
       if (files) {
         Array.from(files).forEach((f) => formData.append('evidence', f));
       }
