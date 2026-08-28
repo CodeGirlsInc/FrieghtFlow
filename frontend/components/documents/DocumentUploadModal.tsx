@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { documentsApi, DocumentType } from '../../lib/api/documents.api';
+import { partitionValidFiles } from '../../lib/validation/file-upload';
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   [DocumentType.BILL_OF_LADING]: 'Bill of Lading',
@@ -45,7 +46,10 @@ export function DocumentUploadModal({
 
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return;
-    const next: SelectedFile[] = Array.from(incoming).map((file) => ({
+    const { valid, errors } = partitionValidFiles(incoming);
+    errors.forEach((message) => toast.error(message));
+    if (valid.length === 0) return;
+    const next: SelectedFile[] = valid.map((file) => ({
       file,
       id: `${file.name}-${file.size}-${Date.now()}`,
     }));

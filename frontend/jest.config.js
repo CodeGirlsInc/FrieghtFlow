@@ -22,9 +22,11 @@ const config = {
   },
   collectCoverageFrom: [
     "lib/utils.ts",
+    "lib/api/notifications.api.ts",
     "stores/toast.store.ts",
     "stores/auth.store.ts",
     "components/shipment/status-badge.tsx",
+    "components/ui/ToastContainer.tsx",
     "middleware.ts",
   ],
   coverageThreshold: {

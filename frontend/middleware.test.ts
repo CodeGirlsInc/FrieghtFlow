@@ -110,5 +110,19 @@ describe("middleware", () => {
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).not.toBe(307);
     });
+
+    it("should allow anonymous access to the public tracking page", async () => {
+      const request = createRequest("/track/FF-ABC-123");
+      const response = await middleware(request);
+      expect(response).toBeInstanceOf(NextResponse);
+      expect(response.status).not.toBe(307);
+      expect(response.headers.get("location")).toBeNull();
+    });
+
+    it("should not treat /track as a protected prefix of any auth route", async () => {
+      const request = createRequest("/track/does-not-exist");
+      const response = await middleware(request);
+      expect(response.status).not.toBe(307);
+    });
   });
 });
