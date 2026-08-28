@@ -160,9 +160,58 @@ export class PaymentsService {
       return;
     }
 
-    await this.stellarContractService.releasePayment(
+    const result = await this.stellarContractService.releasePayment(
       BigInt(payment.onChainShipmentId),
     );
+    await this.paymentRepo.update(payment.id, {
+      status: PaymentStatus.RELEASED,
+      settledAt: new Date(),
+      stellarTxHash: result.txHash,
+    });
+  }
+
+  async refundEscrowForShipment(shipmentId: string): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (!payment) return;
+
+    const result = await this.stellarContractService.refundPayment(
+      BigInt(payment.onChainShipmentId),
+    );
+    await this.paymentRepo.update(payment.id, {
+      status: PaymentStatus.REFUNDED,
+      settledAt: new Date(),
+      stellarTxHash: result.txHash,
+    });
+  }
+
+  async raiseEscrowDisputeForShipment(shipmentId: string): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (!payment) return;
+
+    // The escrow entrypoint requires the disputing party's signature. The
+    // backend never holds party secrets, so this is completed by the wallet
+    // flow rather than attempting to sign from a public address.
+    throw new Error(
+      'Escrow dispute must be raised by the shipper or carrier wallet',
+    );
+  }
+
+  async resolveEscrowDisputeForShipment(
+    shipmentId: string,
+    releaseToCarrier: boolean,
+  ): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (!payment) return;
+
+    const result = await this.stellarContractService.resolveDispute(
+      BigInt(payment.onChainShipmentId),
+      releaseToCarrier,
+    );
+    await this.paymentRepo.update(payment.id, {
+      status: releaseToCarrier ? PaymentStatus.RELEASED : PaymentStatus.REFUNDED,
+      settledAt: new Date(),
+      stellarTxHash: result.txHash,
+    });
   }
 
   private async generateNextOnChainId(): Promise<number> {

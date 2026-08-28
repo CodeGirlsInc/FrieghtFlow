@@ -3,7 +3,6 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Readable, Transform } from 'node:stream';
@@ -83,7 +82,6 @@ type ShipmentExportValue = string | number | Date | null | undefined;
 
 @Injectable()
 export class ShipmentsService {
-  private readonly logger = new Logger(ShipmentsService.name);
   private readonly exportColumns: Array<keyof ShipmentExportRow> = [
     'id',
     'trackingNumber',
@@ -572,6 +570,7 @@ export class ShipmentsService {
       shipper.role,
     );
 
+    await this.paymentsService.releaseEscrowForShipment(shipmentId);
     shipment.status = ShipmentStatus.COMPLETED;
     const saved = await this.shipmentRepo.save(shipment);
     await this.recordHistory(
@@ -580,15 +579,6 @@ export class ShipmentsService {
       ShipmentStatus.COMPLETED,
       shipper.id,
     );
-    try {
-      await this.paymentsService.releaseEscrowForShipment(shipmentId);
-    } catch (error) {
-      this.logger.warn(
-        `Failed to release escrow for shipment ${shipmentId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
     const full = await this.findOne(shipmentId);
     this.eventEmitter.emit(
       SHIPMENT_COMPLETED,
@@ -617,6 +607,7 @@ export class ShipmentsService {
       user.role,
     );
 
+    await this.paymentsService.refundEscrowForShipment(shipmentId);
     const previousStatus = shipment.status;
     shipment.status = ShipmentStatus.CANCELLED;
     const saved = await this.shipmentRepo.save(shipment);
@@ -655,6 +646,7 @@ export class ShipmentsService {
       user.role,
     );
 
+    await this.paymentsService.raiseEscrowDisputeForShipment(shipmentId);
     const previousStatus = shipment.status;
     shipment.status = ShipmentStatus.DISPUTED;
     const saved = await this.shipmentRepo.save(shipment);
@@ -682,6 +674,10 @@ export class ShipmentsService {
     const shipment = await this.findOne(shipmentId);
     this.assertTransitionAllowed(shipment.status, resolution, admin.role);
 
+    await this.paymentsService.resolveEscrowDisputeForShipment(
+      shipmentId,
+      resolution === ShipmentStatus.COMPLETED,
+    );
     shipment.status = resolution;
     const saved = await this.shipmentRepo.save(shipment);
     await this.recordHistory(
