@@ -72,6 +72,8 @@ export class PaymentsController {
   }
 
   @Post(':paymentId/submit')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SHIPPER)
   @ApiOperation({
     summary: 'Submit the shipper-signed funding transaction (shipper only)',
     description:
@@ -97,9 +99,10 @@ export class PaymentsController {
   }
 
   @Post(':paymentId/test-sign-and-submit')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SHIPPER)
   @ApiOperation({
-    summary:
-      'TEST ONLY — signs with a provided secret and submits (shipper only)',
+    summary: 'TEST ONLY — signs with a provided secret and submits (shipper only)',
     description:
       'Disabled unless ALLOW_TEST_SIGNING="true". Lets the funding flow be verified end-to-end on testnet before the frontend wallet-signing UI exists. Never use in production.',
   })

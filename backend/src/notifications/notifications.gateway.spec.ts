@@ -87,6 +87,33 @@ describe('NotificationsGateway', () => {
     expect((client as { disconnect: jest.Mock }).disconnect).toHaveBeenCalledWith(true);
   });
 
+  it('disconnects when the token is invalid or expired', async () => {
+    jwtService.verify.mockImplementation(() => {
+      throw new Error('jwt expired');
+    });
+
+    const client = {
+      id: 'socket-2',
+      handshake: { auth: { token: 'bad-token' } },
+      data: {},
+      join: jest.fn(),
+      emit: jest.fn(),
+      disconnect: jest.fn(),
+    } as never;
+
+    await gateway.handleConnection(client);
+
+    expect(jwtService.verify).toHaveBeenCalledWith('bad-token', {
+      secret: 'secret',
+    });
+    expect((client as { emit: jest.Mock }).emit).toHaveBeenCalledWith(
+      'error',
+      expect.objectContaining({ message: 'Invalid or expired token' }),
+    );
+    expect((client as { disconnect: jest.Mock }).disconnect).toHaveBeenCalledWith(true);
+    expect((client as { join: jest.Mock }).join).not.toHaveBeenCalled();
+  });
+
   it('emits shipment updates to the intended user room', () => {
     const emit = jest.fn();
     (server.to as jest.Mock).mockReturnValue({ emit });
@@ -101,5 +128,49 @@ describe('NotificationsGateway', () => {
         trackingNumber: 'FF-001',
       }),
     );
+  });
+
+  it('emits to both shipper and carrier for accepted events but not to unrelated users', () => {
+    const shipperEmit = jest.fn();
+    const carrierEmit = jest.fn();
+    const unrelatedEmit = jest.fn();
+
+    (server.to as jest.Mock).mockImplementation((room: string) => {
+      if (room === 'user:shipper-1') return { emit: shipperEmit };
+      if (room === 'user:carrier-1') return { emit: carrierEmit };
+      return { emit: unrelatedEmit };
+    });
+
+    gateway.onAccepted(new ShipmentEvent(shipment, 'actor-1'));
+
+    expect(server.to).toHaveBeenCalledWith('user:shipper-1');
+    expect(server.to).toHaveBeenCalledWith('user:carrier-1');
+    expect(shipperEmit).toHaveBeenCalledWith(
+      'shipment:updated',
+      expect.objectContaining({ shipmentId: 'shipment-1' }),
+    );
+    expect(carrierEmit).toHaveBeenCalledWith(
+      'shipment:updated',
+      expect.objectContaining({ shipmentId: 'shipment-1' }),
+    );
+    expect(server.to).not.toHaveBeenCalledWith('user:unrelated-user');
+  });
+
+  it('does not emit to carrier room when carrierId is null', () => {
+    const shipperEmit = jest.fn();
+    const carrierEmit = jest.fn();
+
+    (server.to as jest.Mock).mockImplementation((room: string) => {
+      if (room === 'user:shipper-1') return { emit: shipperEmit };
+      if (room === 'user:carrier-1') return { emit: carrierEmit };
+      return { emit: jest.fn() };
+    });
+
+    const shipmentNoCarrier = { ...shipment, carrierId: null } as Shipment;
+    gateway.onCreated(new ShipmentEvent(shipmentNoCarrier, 'actor-1'));
+
+    expect(server.to).toHaveBeenCalledWith('user:shipper-1');
+    expect(server.to).not.toHaveBeenCalledWith('user:carrier-1');
+    expect(shipperEmit).toHaveBeenCalled();
   });
 });
