@@ -63,7 +63,11 @@ export default function ShipmentsInfiniteList({ filters = {} }: ShipmentsInfinit
     );
   }
 
-  if (isError) {
+  // Only take over the whole view for an error when we have nothing to
+  // show yet. A failed *subsequent* page (isError with shipments already
+  // loaded) must not wipe out what's already rendered — it's reported
+  // inline below instead, so the user keeps what loaded successfully.
+  if (isError && shipments.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-destructive">
         Failed to load shipments. Please try again.
@@ -92,7 +96,13 @@ export default function ShipmentsInfiniteList({ filters = {} }: ShipmentsInfinit
         </div>
       )}
 
-      {!hasNextPage && shipments.length > 0 && (
+      {isError && !isFetchingNextPage && (
+        <p className="py-4 text-center text-sm text-destructive">
+          Failed to load more shipments. Scroll down to retry.
+        </p>
+      )}
+
+      {!isError && !hasNextPage && shipments.length > 0 && (
         <p className="py-4 text-center text-sm text-muted-foreground">
           You&apos;ve reached the end.
         </p>
