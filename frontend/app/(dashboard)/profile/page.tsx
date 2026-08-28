@@ -19,10 +19,18 @@ import {
 import { useAuthStore } from '../../../stores/auth.store';
 import { updateProfile } from '../../../lib/api/auth.api';
 
+// Stellar public key: starts with G, 56 chars, base32
+const STELLAR_RE = /^G[A-Z2-7]{55}$/;
+
 const schema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50),
   lastName: z.string().min(1, 'Last name is required').max(50),
-  walletAddress: z.string().optional(),
+  walletAddress: z
+    .string()
+    .optional()
+    .refine((v) => !v || STELLAR_RE.test(v), {
+      message: 'Invalid Stellar address (must start with G and be 56 characters)',
+    }),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -177,6 +185,9 @@ export default function ProfilePage() {
                 autoComplete="off"
                 {...register('walletAddress')}
               />
+              {errors.walletAddress && (
+                <p className="text-sm text-destructive">{errors.walletAddress.message}</p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Link your Stellar wallet for on-chain contract interactions.
               </p>
