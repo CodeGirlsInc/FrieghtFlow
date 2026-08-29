@@ -7,6 +7,7 @@ use crate::contract::{IdentityContract, IdentityContractClient};
 
 mod admin;
 mod events;
+mod lookup;
 mod registry;
 
 pub struct Ctx {
