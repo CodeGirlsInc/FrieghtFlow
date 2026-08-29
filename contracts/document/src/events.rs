@@ -25,3 +25,9 @@ pub fn verified(env: &Env, doc: &DocumentRecord) {
     env.events()
         .publish((SUBJECT, symbol_short!("verified"), doc.id), doc.clone());
 }
+
+/// `(document, flagged, doc id)` → the record with its verification reversed.
+pub fn flagged(env: &Env, doc: &DocumentRecord) {
+    env.events()
+        .publish((SUBJECT, symbol_short!("flagged"), doc.id), doc.clone());
+}

@@ -15,4 +15,7 @@ pub enum DocumentError {
     /// The uploader is neither the shipper nor the carrier of the shipment.
     NotShipmentParty = 8,
     Paused = 9,
+    /// `flag_document` was called on a document that isn't currently verified
+    /// — there is nothing to flag/reverse.
+    NotVerified = 10,
 }

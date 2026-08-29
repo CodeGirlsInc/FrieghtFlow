@@ -4,7 +4,7 @@
 //! externally callable interface can be read in one place; the logic behind
 //! each one lives in [`crate::registry`] or [`crate::verification`].
 
-use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, String, Vec};
 
 use crate::errors::DocumentError;
 use crate::types::{DataKey, DocumentRecord, DocumentType};
@@ -105,6 +105,17 @@ impl DocumentContract {
     /// Admin marks a document authentic. See [`verification::verify`].
     pub fn verify_document(env: Env, verifier: Address, doc_id: u64) -> Result<(), DocumentError> {
         verification::verify(&env, verifier, doc_id)
+    }
+
+    /// Admin flags a previously-verified document as fraudulent, reversing
+    /// its verification. See [`verification::flag`].
+    pub fn flag_document(
+        env: Env,
+        admin: Address,
+        doc_id: u64,
+        reason: String,
+    ) -> Result<(), DocumentError> {
+        verification::flag(&env, admin, doc_id, reason)
     }
 
     /// Check a hash against the registered one. See [`verification::check_integrity`].
