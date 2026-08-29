@@ -92,7 +92,7 @@ fn test_calculate_score_shipper() {
     ctx.client.register_user(&shipper, &UserType::Shipper);
 
     ctx.client.submit_rating(&rater, &1u64, &shipper, &4u32); // 4 stars
-    // 1 successful out of 2 completed.
+                                                              // 1 successful out of 2 completed.
     ctx.client
         .update_stats(&ctx.auth_contract, &shipper, &false, &true);
     ctx.client

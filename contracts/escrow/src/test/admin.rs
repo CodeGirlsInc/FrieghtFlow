@@ -28,7 +28,10 @@ fn test_pause_blocks_funding_and_admin_rotation_works() {
     ctx.client.unpause(&new_admin);
     ctx.client
         .fund_escrow(&ctx.shipper, &ctx.carrier, &SHIPMENT_ID, &AMOUNT);
-    assert_eq!(ctx.client.get_escrow(&SHIPMENT_ID).status, EscrowStatus::Funded);
+    assert_eq!(
+        ctx.client.get_escrow(&SHIPMENT_ID).status,
+        EscrowStatus::Funded
+    );
 }
 
 #[test]
