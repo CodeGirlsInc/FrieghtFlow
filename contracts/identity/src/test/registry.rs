@@ -67,5 +67,5 @@ fn test_double_initialize_fails() {
 
     // `setup` already initialized the contract with `ctx.admin`.
     let result = ctx.client.try_initialize(&ctx.admin);
-    assert_eq!(result, Err(Ok(IdentityError::AlreadyRegistered)));
+    assert_eq!(result, Err(Ok(IdentityError::AlreadyInitialized)));
 }

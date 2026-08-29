@@ -12,7 +12,7 @@ impl IdentityContract {
     /// One-time initialization — sets the admin.
     pub fn initialize(env: Env, admin: Address) -> Result<(), IdentityError> {
         if env.storage().instance().has(&DataKey::Admin) {
-            return Err(IdentityError::AlreadyRegistered);
+            return Err(IdentityError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
