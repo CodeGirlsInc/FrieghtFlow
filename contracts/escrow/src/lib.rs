@@ -53,6 +53,7 @@ pub struct EscrowRecord {
 pub enum DataKey {
     Admin,
     TokenContract,
+    ShipmentContract,
     Escrow(u64), // shipment_id → EscrowRecord
 }
 
@@ -81,6 +82,24 @@ impl EscrowContract {
         env.storage()
             .instance()
             .set(&DataKey::TokenContract, &token_contract);
+        Ok(())
+    }
+
+    /// Configure the shipment contract allowed to settle escrow atomically.
+    /// The platform admin remains supported for custody-model compatibility.
+    pub fn set_shipment_contract(
+        env: Env,
+        shipment_contract: Address,
+    ) -> Result<(), EscrowError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        admin.require_auth();
+        env.storage()
+            .instance()
+            .set(&DataKey::ShipmentContract, &shipment_contract);
         Ok(())
     }
 
@@ -167,12 +186,7 @@ impl EscrowContract {
     /// In production this would be called by an authorized shipment contract;
     /// for now admin can also trigger it after off-chain verification.
     pub fn release_payment(env: Env, shipment_id: u64) -> Result<(), EscrowError> {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .ok_or(EscrowError::NotInitialized)?;
-        admin.require_auth();
+        Self::require_settlement_authority(&env)?;
 
         let mut record = Self::load(&env, shipment_id)?;
 
@@ -201,12 +215,7 @@ impl EscrowContract {
     /// Refund locked funds back to the shipper.
     /// Called when a shipment is Cancelled.
     pub fn refund_payment(env: Env, shipment_id: u64) -> Result<(), EscrowError> {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .ok_or(EscrowError::NotInitialized)?;
-        admin.require_auth();
+        Self::require_settlement_authority(&env)?;
 
         let mut record = Self::load(&env, shipment_id)?;
 
@@ -260,12 +269,7 @@ impl EscrowContract {
         shipment_id: u64,
         release_to_carrier: bool,
     ) -> Result<(), EscrowError> {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .ok_or(EscrowError::NotInitialized)?;
-        admin.require_auth();
+        Self::require_settlement_authority(&env)?;
 
         let mut record = Self::load(&env, shipment_id)?;
 
@@ -345,6 +349,25 @@ impl EscrowContract {
             TTL_LEDGERS,
             TTL_LEDGERS,
         );
+    }
+
+    fn require_settlement_authority(env: &Env) -> Result<(), EscrowError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        let shipment_contract: Option<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ShipmentContract);
+
+        if shipment_contract.as_ref() == Some(&env.current_contract_address()) {
+            return Ok(());
+        }
+
+        admin.require_auth();
+        Ok(())
     }
 }
 

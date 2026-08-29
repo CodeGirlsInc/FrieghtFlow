@@ -13,6 +13,58 @@ import { StatusTimeline } from '../../../../components/shipment/status-timeline'
 import { SubmitReviewForm } from '../../../../components/reviews/SubmitReviewForm';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import DisputePage from '../page';
+import '@testing-library/jest-dom';
+
+// Mock router and params
+jest.mock('next/navigation', () => ({
+  useParams: () => ({ id: 'shipment-123' }),
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
+describe('ShipmentDisputePage', () => {
+  it('should display an eligibility warning or block form for ineligible shipment statuses', async () => {
+    // Mock API response returning a shipment status ineligible for dispute (e.g., 'Pending')
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'shipment-123', status: 'Pending' }),
+    });
+
+    render(<DisputePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/disputes can only be raised for shipments in InTransit or Delivered status/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('button', { name: /submit dispute/i })).not.toBeInTheDocument();
+  });
+
+  it('should allow successful dispute submission for eligible shipment statuses', async () => {
+    // Mock API response returning an eligible shipment status ('Delivered')
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'shipment-123', status: 'Delivered' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+    render(<DisputePage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /submit dispute/i })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/reason/i), { target: { value: 'Damaged cargo upon delivery' } });
+    fireEvent.click(screen.getByRole('button', { name: /submit dispute/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/dispute submitted successfully/i)).toBeInTheDocument();
+    });
+  });
+});
 
 export default function ShipmentDetailPage() {
   const { id } = useParams<{ id: string }>();
