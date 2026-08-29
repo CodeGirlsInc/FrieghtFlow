@@ -73,10 +73,8 @@ pub fn update(
     storage::require_not_paused(env)?;
 
     let mut shipment = storage::load(env, shipment_id)?;
+    require_shipper(&shipment, &shipper)?;
 
-    if shipment.shipper != shipper {
-        return Err(ShipmentError::NotShipper);
-    }
     if shipment.status != ShipmentStatus::Created {
         return Err(ShipmentError::InvalidStatus);
     }
@@ -110,10 +108,8 @@ pub fn confirm_delivery(
     storage::require_not_paused(env)?;
 
     let mut shipment = storage::load(env, shipment_id)?;
+    require_shipper(&shipment, &shipper)?;
 
-    if shipment.shipper != shipper {
-        return Err(ShipmentError::NotShipper);
-    }
     if shipment.status != ShipmentStatus::Delivered {
         return Err(ShipmentError::InvalidStatus);
     }
@@ -132,10 +128,8 @@ pub fn cancel(env: &Env, shipper: Address, shipment_id: u64) -> Result<(), Shipm
     storage::require_not_paused(env)?;
 
     let mut shipment = storage::load(env, shipment_id)?;
+    require_shipper(&shipment, &shipper)?;
 
-    if shipment.shipper != shipper {
-        return Err(ShipmentError::NotShipper);
-    }
     if !matches!(
         shipment.status,
         ShipmentStatus::Created | ShipmentStatus::Accepted
@@ -148,5 +142,14 @@ pub fn cancel(env: &Env, shipper: Address, shipment_id: u64) -> Result<(), Shipm
     storage::save(env, &shipment);
 
     events::cancelled(env, &shipment);
+    Ok(())
+}
+
+/// Confirm `caller` is the shipment's shipper — the one ownership check
+/// every shipper-gated transition needs.
+fn require_shipper(shipment: &Shipment, caller: &Address) -> Result<(), ShipmentError> {
+    if shipment.shipper != *caller {
+        return Err(ShipmentError::NotShipper);
+    }
     Ok(())
 }
