@@ -21,6 +21,10 @@ pub fn created(env: &Env, shipment: &Shipment) {
     publish(env, symbol_short!("created"), shipment);
 }
 
+pub fn updated(env: &Env, shipment: &Shipment) {
+    publish(env, symbol_short!("updated"), shipment);
+}
+
 pub fn accepted(env: &Env, shipment: &Shipment) {
     publish(env, symbol_short!("accepted"), shipment);
 }

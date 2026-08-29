@@ -6,7 +6,7 @@
 
 use soroban_sdk::{testutils::Address as _, Address, TryFromVal};
 
-use super::{emitted, emitted_key, make_shipment, no_events, setup, Ctx};
+use super::{emitted, emitted_key, make_shipment, no_events, setup, str, Ctx};
 use crate::types::{Shipment, ShipmentStatus};
 
 /// Asserts the call that just ran emitted exactly one `action` event, and
@@ -31,6 +31,32 @@ fn test_create_emits_created() {
 
     let key: u64 = emitted_key(&ctx.env, &ctx.client.address, "created");
     assert_eq!(key, id);
+
+    // Querying the contract clears the event buffer, so do it last.
+    assert_eq!(payload, ctx.client.get_shipment(&id));
+}
+
+#[test]
+fn test_update_emits_updated() {
+    let ctx = setup();
+    let shipper = Address::generate(&ctx.env);
+
+    let id = make_shipment(&ctx, &shipper);
+    assert_eq!(only_event(&ctx, "created").status, ShipmentStatus::Created);
+
+    ctx.client.update_shipment(
+        &shipper,
+        &id,
+        &str(&ctx.env, "Accra, Ghana"),
+        &str(&ctx.env, "Furniture — 10 units"),
+        &200u32,
+        &6_000_000_000i128,
+    );
+
+    let payload = only_event(&ctx, "updated");
+    assert_eq!(payload.destination, str(&ctx.env, "Accra, Ghana"));
+    assert_eq!(payload.weight_kg, 200);
+    assert_eq!(payload.status, ShipmentStatus::Created);
 
     // Querying the contract clears the event buffer, so do it last.
     assert_eq!(payload, ctx.client.get_shipment(&id));

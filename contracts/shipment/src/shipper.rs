@@ -57,6 +57,48 @@ pub fn create(
     Ok(id)
 }
 
+/// Shipper edits a shipment's terms — only while it's still `Created`, i.e.
+/// before any carrier has committed to it. Subject to the same validation as
+/// [`create`]; `origin` and `carrier` are not editable.
+pub fn update(
+    env: &Env,
+    shipper: Address,
+    shipment_id: u64,
+    destination: String,
+    cargo_description: String,
+    weight_kg: u32,
+    price: i128,
+) -> Result<(), ShipmentError> {
+    shipper.require_auth();
+    storage::require_not_paused(env)?;
+
+    let mut shipment = storage::load(env, shipment_id)?;
+
+    if shipment.shipper != shipper {
+        return Err(ShipmentError::NotShipper);
+    }
+    if shipment.status != ShipmentStatus::Created {
+        return Err(ShipmentError::InvalidStatus);
+    }
+
+    if weight_kg == 0 || weight_kg > 1_000_000 || price <= 0 {
+        return Err(ShipmentError::InvalidInput);
+    }
+    if destination.len() > 255 || cargo_description.len() > 1024 {
+        return Err(ShipmentError::InvalidInput);
+    }
+
+    shipment.destination = destination;
+    shipment.cargo_description = cargo_description;
+    shipment.weight_kg = weight_kg;
+    shipment.price = price;
+    shipment.updated_at = env.ledger().timestamp();
+    storage::save(env, &shipment);
+
+    events::updated(env, &shipment);
+    Ok(())
+}
+
 /// Shipper confirms delivery and marks the shipment Completed.
 /// This is the trigger for escrow payment release.
 pub fn confirm_delivery(
