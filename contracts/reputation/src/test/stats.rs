@@ -84,6 +84,28 @@ fn test_calculate_score_perfect_carrier() {
 }
 
 #[test]
+fn test_calculate_score_shipper() {
+    let ctx = setup();
+    let rater = Address::generate(&ctx.env);
+    let shipper = Address::generate(&ctx.env);
+    ctx.client.register_user(&rater, &UserType::Carrier);
+    ctx.client.register_user(&shipper, &UserType::Shipper);
+
+    ctx.client.submit_rating(&rater, &1u64, &shipper, &4u32); // 4 stars
+    // 1 successful out of 2 completed.
+    ctx.client
+        .update_stats(&ctx.auth_contract, &shipper, &false, &true);
+    ctx.client
+        .update_stats(&ctx.auth_contract, &shipper, &false, &false);
+
+    // rating_component = 400 (4 stars × 100)
+    // rate_component = 1/2 success × 3 = 150
+    // completion_component = 1 rated / 2 completed × 2 = 100
+    // Total = 400 + 150 + 100 = 650
+    assert_eq!(ctx.client.calculate_score(&shipper), 650);
+}
+
+#[test]
 fn test_calculate_score_new_user() {
     let ctx = setup();
     let user = Address::generate(&ctx.env);

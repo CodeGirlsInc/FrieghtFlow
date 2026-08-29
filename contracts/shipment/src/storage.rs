@@ -55,3 +55,21 @@ pub fn append_to_list(env: &Env, key: DataKey, id: u64) {
     // Note: extend_ttl on Vec keys requires the key to be cloneable;
     // we skip it here for simplicity (lists extend with each write).
 }
+
+/// Slice `list[offset..offset+limit]`, clamped to the list's bounds.
+pub fn paginate(env: &Env, list: Vec<u64>, offset: u32, limit: u32) -> Vec<u64> {
+    let mut paged = Vec::new(env);
+    let len = list.len();
+
+    if offset >= len {
+        return paged;
+    }
+
+    let end = (offset + limit).min(len);
+    for i in offset..end {
+        if let Some(item) = list.get(i) {
+            paged.push_back(item);
+        }
+    }
+    paged
+}

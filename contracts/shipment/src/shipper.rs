@@ -18,7 +18,11 @@ pub fn create(
 ) -> Result<u64, ShipmentError> {
     shipper.require_auth();
 
-    if weight_kg == 0 || price <= 0 {
+    if weight_kg == 0 || weight_kg > 1_000_000 || price <= 0 {
+        return Err(ShipmentError::InvalidInput);
+    }
+
+    if origin.len() > 255 || destination.len() > 255 || cargo_description.len() > 1024 {
         return Err(ShipmentError::InvalidInput);
     }
 

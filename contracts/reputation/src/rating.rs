@@ -80,3 +80,50 @@ pub fn submit(
     events::updated(env, &rep);
     Ok(rating_id)
 }
+
+/// Admin voids a rating, reversing its effect on the rated user's aggregate
+/// and freeing the rater to submit a new rating for the same shipment.
+pub fn void(env: &Env, rating_id: u64) -> Result<(), ReputationError> {
+    storage::admin(env)?.require_auth();
+
+    let record: RatingRecord = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Rating(rating_id))
+        .ok_or(ReputationError::RatingNotFound)?;
+
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Rating(rating_id));
+
+    // Free the rater to submit a new rating for this shipment.
+    let raters: Vec<Address> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::ShipmentRaters(record.shipment_id))
+        .unwrap_or_else(|| Vec::new(env));
+    let mut remaining = Vec::new(env);
+    for rater in raters.into_iter() {
+        if rater != record.rater {
+            remaining.push_back(rater);
+        }
+    }
+    env.storage()
+        .persistent()
+        .set(&DataKey::ShipmentRaters(record.shipment_id), &remaining);
+
+    // Reverse the rating's effect on the rated user's aggregate.
+    let mut rep = storage::load_reputation(env, &record.rated)?;
+    rep.total_rating_points = rep.total_rating_points.saturating_sub(record.score * 100);
+    rep.rating_count = rep.rating_count.saturating_sub(1);
+    rep.average_rating = if rep.rating_count == 0 {
+        0
+    } else {
+        rep.total_rating_points / rep.rating_count
+    };
+    rep.last_updated = env.ledger().timestamp();
+    storage::save_reputation(env, &rep);
+
+    events::updated(env, &rep);
+    Ok(())
+}

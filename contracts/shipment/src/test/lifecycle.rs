@@ -126,3 +126,33 @@ fn test_invalid_input_zero_weight() {
     );
     assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
 }
+
+#[test]
+fn test_invalid_input_excessive_bounds() {
+    const LONG_256: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    let ctx = setup();
+    let shipper = Address::generate(&ctx.env);
+
+    // Max weight exceeded
+    let result = ctx.client.try_create_shipment(
+        &shipper,
+        &str(&ctx.env, "A"),
+        &str(&ctx.env, "B"),
+        &str(&ctx.env, "cargo"),
+        &1_000_001u32,
+        &1_000i128,
+    );
+    assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+
+    // String length exceeded
+    let result = ctx.client.try_create_shipment(
+        &shipper,
+        &str(&ctx.env, LONG_256),
+        &str(&ctx.env, "B"),
+        &str(&ctx.env, "cargo"),
+        &100u32,
+        &1_000i128,
+    );
+    assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+}

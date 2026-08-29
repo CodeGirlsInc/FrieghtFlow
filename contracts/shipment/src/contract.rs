@@ -110,18 +110,32 @@ impl ShipmentContract {
         storage::load(&env, shipment_id)
     }
 
-    pub fn get_shipments_by_shipper(env: Env, shipper: Address) -> Vec<u64> {
-        env.storage()
+    pub fn get_shipments_by_shipper(
+        env: Env,
+        shipper: Address,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<u64> {
+        let list: Vec<u64> = env
+            .storage()
             .persistent()
             .get(&DataKey::ShipperList(shipper))
-            .unwrap_or_else(|| Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env));
+        storage::paginate(&env, list, offset, limit)
     }
 
-    pub fn get_shipments_by_carrier(env: Env, carrier: Address) -> Vec<u64> {
-        env.storage()
+    pub fn get_shipments_by_carrier(
+        env: Env,
+        carrier: Address,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<u64> {
+        let list: Vec<u64> = env
+            .storage()
             .persistent()
             .get(&DataKey::CarrierList(carrier))
-            .unwrap_or_else(|| Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env));
+        storage::paginate(&env, list, offset, limit)
     }
 
     pub fn get_total_shipments(env: Env) -> u64 {

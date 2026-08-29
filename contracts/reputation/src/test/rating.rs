@@ -112,6 +112,43 @@ fn test_get_rating() {
 }
 
 #[test]
+fn test_void_rating() {
+    let ctx = setup();
+    let rater1 = Address::generate(&ctx.env);
+    let rater2 = Address::generate(&ctx.env);
+    let rated = Address::generate(&ctx.env);
+    ctx.client.register_user(&rater1, &UserType::Shipper);
+    ctx.client.register_user(&rater2, &UserType::Shipper);
+    ctx.client.register_user(&rated, &UserType::Carrier);
+
+    ctx.client.submit_rating(&rater1, &1u64, &rated, &5u32);
+    let rating2 = ctx.client.submit_rating(&rater2, &2u64, &rated, &1u32);
+
+    let rep_before = ctx.client.get_reputation(&rated);
+    assert_eq!(rep_before.average_rating, 300); // (5+1)*100 / 2 = 300
+
+    // Admin voids the bad rating.
+    ctx.client.void_rating(&rating2);
+
+    let rep_after = ctx.client.get_reputation(&rated);
+    assert_eq!(rep_after.average_rating, 500); // 5.00
+    assert_eq!(rep_after.rating_count, 1);
+
+    // Rater2 can rate again for the same shipment.
+    ctx.client.submit_rating(&rater2, &2u64, &rated, &4u32);
+
+    let rep_final = ctx.client.get_reputation(&rated);
+    assert_eq!(rep_final.average_rating, 450); // (5+4)*100 / 2 = 450
+}
+
+#[test]
+fn test_void_unknown_rating_fails() {
+    let ctx = setup();
+    let result = ctx.client.try_void_rating(&999u64);
+    assert_eq!(result, Err(Ok(ReputationError::RatingNotFound)));
+}
+
+#[test]
 fn test_total_ratings_counter() {
     let ctx = setup();
     let rater1 = Address::generate(&ctx.env);

@@ -56,6 +56,11 @@ impl ReputationContract {
         rating::submit(&env, rater, shipment_id, rated, score)
     }
 
+    /// Admin voids a rating. See [`rating::void`].
+    pub fn void_rating(env: Env, rating_id: u64) -> Result<(), ReputationError> {
+        rating::void(&env, rating_id)
+    }
+
     /// Record a completed shipment. See [`stats::update`].
     pub fn update_stats(
         env: Env,
