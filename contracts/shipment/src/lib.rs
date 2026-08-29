@@ -93,7 +93,11 @@ impl ShipmentContract {
     ) -> Result<u64, ShipmentError> {
         shipper.require_auth();
 
-        if weight_kg == 0 || price <= 0 {
+        if weight_kg == 0 || weight_kg > 1_000_000 || price <= 0 {
+            return Err(ShipmentError::InvalidInput);
+        }
+
+        if origin.len() > 255 || destination.len() > 255 || cargo_description.len() > 1024 {
             return Err(ShipmentError::InvalidInput);
         }
 
@@ -308,18 +312,22 @@ impl ShipmentContract {
         Self::load(&env, shipment_id)
     }
 
-    pub fn get_shipments_by_shipper(env: Env, shipper: Address) -> Vec<u64> {
-        env.storage()
+    pub fn get_shipments_by_shipper(env: Env, shipper: Address, offset: u32, limit: u32) -> Vec<u64> {
+        let list: Vec<u64> = env.storage()
             .persistent()
             .get(&DataKey::ShipperList(shipper))
-            .unwrap_or_else(|| Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env));
+            
+        Self::paginate_vec(&env, list, offset, limit)
     }
 
-    pub fn get_shipments_by_carrier(env: Env, carrier: Address) -> Vec<u64> {
-        env.storage()
+    pub fn get_shipments_by_carrier(env: Env, carrier: Address, offset: u32, limit: u32) -> Vec<u64> {
+        let list: Vec<u64> = env.storage()
             .persistent()
             .get(&DataKey::CarrierList(carrier))
-            .unwrap_or_else(|| Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env));
+            
+        Self::paginate_vec(&env, list, offset, limit)
     }
 
     pub fn get_total_shipments(env: Env) -> u64 {
@@ -373,6 +381,23 @@ impl ShipmentContract {
         env.storage().persistent().set(&key, &list);
         // Note: extend_ttl on Vec keys requires the key to be cloneable;
         // we skip it here for simplicity (lists extend with each write).
+    }
+
+    fn paginate_vec(env: &Env, list: Vec<u64>, offset: u32, limit: u32) -> Vec<u64> {
+        let mut paged = Vec::new(env);
+        let len = list.len();
+        
+        if offset >= len {
+            return paged;
+        }
+        
+        let end = (offset + limit).min(len);
+        for i in offset..end {
+            if let Some(item) = list.get(i) {
+                paged.push_back(item);
+            }
+        }
+        paged
     }
 }
 
@@ -549,10 +574,10 @@ mod tests {
         client.accept_shipment(&carrier, &id1);
         client.accept_shipment(&carrier, &id2);
 
-        let by_shipper = client.get_shipments_by_shipper(&shipper);
+        let by_shipper = client.get_shipments_by_shipper(&shipper, &0, &10);
         assert_eq!(by_shipper.len(), 2);
 
-        let by_carrier = client.get_shipments_by_carrier(&carrier);
+        let by_carrier = client.get_shipments_by_carrier(&carrier, &0, &10);
         assert_eq!(by_carrier.len(), 2);
     }
 
@@ -577,5 +602,60 @@ mod tests {
             &1_000i128,
         );
         assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+    }
+
+    #[test]
+    fn test_invalid_input_excessive_bounds() {
+        let (env, _, client) = setup();
+        let shipper = Address::generate(&env);
+
+        // Max weight exceeded
+        let result = client.try_create_shipment(
+            &shipper,
+            &str(&env, "A"),
+            &str(&env, "B"),
+            &str(&env, "cargo"),
+            &1_000_001u32,
+            &1_000i128,
+        );
+        assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+
+        // String length exceeded
+        let mut long_str = std::string::String::new();
+        for _ in 0..256 {
+            long_str.push('A');
+        }
+        let result = client.try_create_shipment(
+            &shipper,
+            &str(&env, &long_str),
+            &str(&env, "B"),
+            &str(&env, "cargo"),
+            &100u32,
+            &1_000i128,
+        );
+        assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+    }
+
+    #[test]
+    fn test_pagination() {
+        let (env, _, client) = setup();
+        let shipper = Address::generate(&env);
+
+        for _ in 0..15 {
+            make_shipment(&env, &client, &shipper);
+        }
+
+        let page1 = client.get_shipments_by_shipper(&shipper, &0, &10);
+        assert_eq!(page1.len(), 10);
+        assert_eq!(page1.get(0), Some(1));
+        assert_eq!(page1.get(9), Some(10));
+
+        let page2 = client.get_shipments_by_shipper(&shipper, &10, &10);
+        assert_eq!(page2.len(), 5);
+        assert_eq!(page2.get(0), Some(11));
+        assert_eq!(page2.get(4), Some(15));
+        
+        let page3 = client.get_shipments_by_shipper(&shipper, &20, &10);
+        assert_eq!(page3.len(), 0);
     }
 }

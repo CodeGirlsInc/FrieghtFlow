@@ -8,7 +8,8 @@
 //! ```
 //! score = (avg_rating / 5 * 500)          ← 0-500  rating component
 //!       + (on_time_pct * 3)               ← 0-300  punctuality  (carriers only)
-//!       + (completion_rate * 2)           ← 0-200  reliability  (shippers only)
+//!       + (success_pct * 3)               ← 0-300  success rate (shippers only)
+//!       + (rating_rate * 2)               ← 0-200  rating rate  (all users)
 //! ```
 //! Fixed-point arithmetic: `average_rating` is stored as `score * 100`
 //! (i.e. 500 = 5.00 stars, 350 = 3.50 stars).
@@ -259,6 +260,66 @@ impl ReputationContract {
         Ok(rating_id)
     }
 
+    /// Admin voids a specific rating.
+    pub fn void_rating(env: Env, rating_id: u64) -> Result<(), ReputationError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ReputationError::NotInitialized)?;
+        admin.require_auth();
+
+        let record: RatingRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Rating(rating_id))
+            .ok_or(ReputationError::RatingNotFound)?;
+
+        // Remove from storage
+        env.storage().persistent().remove(&DataKey::Rating(rating_id));
+
+        // Remove rater from shipment raters
+        let raters: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ShipmentRaters(record.shipment_id))
+            .unwrap_or_else(|| Vec::new(&env));
+            
+        let mut new_raters = Vec::new(&env);
+        for rater in raters.into_iter() {
+            if rater != record.rater {
+                new_raters.push_back(rater);
+            }
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::ShipmentRaters(record.shipment_id), &new_raters);
+
+        // Update reputation
+        let mut rep: Reputation = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Reputation(record.rated.clone()))
+            .ok_or(ReputationError::UserNotFound)?;
+
+        rep.total_rating_points = rep.total_rating_points.saturating_sub(record.score * 100);
+        rep.rating_count = rep.rating_count.saturating_sub(1);
+        
+        rep.average_rating = if rep.rating_count == 0 {
+            0
+        } else {
+            rep.total_rating_points / rep.rating_count
+        };
+        
+        rep.last_updated = env.ledger().timestamp();
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Reputation(record.rated.clone()), &rep);
+
+        Ok(())
+    }
+
     // ── Shipment stats ────────────────────────────────────────────────────
 
     /// Update shipment completion statistics.
@@ -334,8 +395,8 @@ impl ReputationContract {
     /// Calculate a 0-1000 composite reputation score.
     ///
     /// ```
-    /// Carriers:  (avg_rating / 500 * 500) + (on_time_pct * 3)  + (completion_pct * 2)
-    /// Shippers:  (avg_rating / 500 * 500) + (completion_pct * 2) + (completion_pct * 3)
+    /// Carriers:  (avg_rating / 500 * 500) + (on_time_pct * 3)  + (rating_pct * 2)
+    /// Shippers:  (avg_rating / 500 * 500) + (success_pct * 3)  + (rating_pct * 2)
     /// ```
     /// Capped at 1000.
     pub fn calculate_score(env: Env, user: Address) -> Result<u32, ReputationError> {
@@ -654,5 +715,56 @@ mod tests {
         client.submit_rating(&rater1, &1u64, &rated, &5u32);
         client.submit_rating(&rater2, &2u64, &rated, &3u32);
         assert_eq!(client.get_total_ratings(), 2);
+    }
+
+    #[test]
+    fn test_calculate_score_shipper() {
+        let (env, _, auth_contract, client) = setup();
+        let rater = Address::generate(&env);
+        let shipper = Address::generate(&env);
+        client.register_user(&rater, &UserType::Carrier);
+        client.register_user(&shipper, &UserType::Shipper);
+
+        client.submit_rating(&rater, &1u64, &shipper, &4u32); // 4 stars
+        // Update stats: 2 successful out of 2 completed
+        client.update_stats(&auth_contract, &shipper, &false, &true);
+        client.update_stats(&auth_contract, &shipper, &false, &true);
+
+        // rating = 400 (4 stars * 100). Rating component = 400
+        // rate_component = 100% success * 3 = 300
+        // completion_component = 1 rating / 2 completed = 50% * 2 = 100
+        // Total = 400 + 300 + 100 = 800
+        let score = client.calculate_score(&shipper);
+        assert_eq!(score, 800);
+    }
+
+    #[test]
+    fn test_void_rating() {
+        let (env, admin, _, client) = setup();
+        let rater1 = Address::generate(&env);
+        let rater2 = Address::generate(&env);
+        let rated = Address::generate(&env);
+        client.register_user(&rater1, &UserType::Shipper);
+        client.register_user(&rater2, &UserType::Shipper);
+        client.register_user(&rated, &UserType::Carrier);
+
+        let rating1 = client.submit_rating(&rater1, &1u64, &rated, &5u32);
+        let rating2 = client.submit_rating(&rater2, &2u64, &rated, &1u32);
+
+        let rep_before = client.get_reputation(&rated);
+        assert_eq!(rep_before.average_rating, 300); // (5+1) / 2 = 3.00
+
+        // Admin voids the bad rating
+        client.void_rating(&rating2);
+
+        let rep_after = client.get_reputation(&rated);
+        assert_eq!(rep_after.average_rating, 500); // 5.00
+        assert_eq!(rep_after.rating_count, 1);
+        
+        // Rater2 can rate again for the same shipment
+        client.submit_rating(&rater2, &2u64, &rated, &4u32);
+        
+        let rep_final = client.get_reputation(&rated);
+        assert_eq!(rep_final.average_rating, 450); // (5+4) / 2 = 4.50
     }
 }
