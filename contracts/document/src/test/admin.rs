@@ -3,7 +3,7 @@ use soroban_sdk::Address;
 
 use super::setup;
 use crate::errors::DocumentError;
-use crate::types::DocumentType;
+use crate::types::{DocumentType, HashAlgorithm};
 
 #[test]
 fn test_admin_rotation_and_pause_block_uploads() {
@@ -18,6 +18,7 @@ fn test_admin_rotation_and_pause_block_uploads() {
         &ctx.shipment_id,
         &DocumentType::Invoice,
         &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
         &ctx.fake_cid(),
     );
     assert_eq!(result, Err(Ok(DocumentError::Paused)));
@@ -28,6 +29,7 @@ fn test_admin_rotation_and_pause_block_uploads() {
         &ctx.shipment_id,
         &DocumentType::Invoice,
         &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
         &ctx.fake_cid(),
     );
     assert_eq!(id, 1);

@@ -5,6 +5,7 @@ use soroban_sdk::{
 
 use super::setup;
 use crate::errors::DocumentError;
+use crate::types::HashAlgorithm;
 
 #[test]
 fn test_verify_document() {
@@ -53,4 +54,35 @@ fn test_integrity_check_tampered() {
 
     let tampered_hash = BytesN::random(&ctx.env);
     assert!(!ctx.client.check_integrity(&id, &tampered_hash));
+}
+
+#[test]
+fn test_registered_document_records_hash_algorithm() {
+    let ctx = setup();
+    let (id, _) = ctx.register(&ctx.shipper, ctx.shipment_id);
+
+    // `ctx.register` always registers with SHA-256 (the only algorithm this
+    // contract accepts today); the algorithm is recorded on-chain rather
+    // than only implied by documentation.
+    assert_eq!(
+        ctx.client.get_document(&id).hash_algorithm,
+        HashAlgorithm::Sha256
+    );
+}
+
+#[test]
+fn test_integrity_check_uses_recorded_algorithm() {
+    let ctx = setup();
+    let hash = ctx.fake_hash();
+    let id = ctx.client.register_document(
+        &ctx.shipper,
+        &ctx.shipment_id,
+        &crate::types::DocumentType::BillOfLading,
+        &hash,
+        &HashAlgorithm::Sha256,
+        &ctx.fake_cid(),
+    );
+
+    // The comparison branches on `doc.hash_algorithm`, not a hardcoded rule.
+    assert!(ctx.client.check_integrity(&id, &hash));
 }

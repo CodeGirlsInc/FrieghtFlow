@@ -7,7 +7,7 @@ use soroban_sdk::Address;
 use super::setup;
 use crate::errors::DocumentError;
 use crate::shipment::{ShipmentClient, ShipmentStatus};
-use crate::types::DocumentType;
+use crate::types::{DocumentType, HashAlgorithm};
 
 #[test]
 fn test_register_against_nonexistent_shipment_fails() {
@@ -18,6 +18,7 @@ fn test_register_against_nonexistent_shipment_fails() {
         &9_999u64,
         &DocumentType::BillOfLading,
         &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
         &ctx.fake_cid(),
     );
 
@@ -36,6 +37,7 @@ fn test_register_by_non_party_fails() {
         &ctx.shipment_id,
         &DocumentType::BillOfLading,
         &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
         &ctx.fake_cid(),
     );
 
@@ -65,6 +67,7 @@ fn test_carrier_of_another_shipment_is_not_a_party() {
         &other,
         &DocumentType::BillOfLading,
         &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
         &ctx.fake_cid(),
     );
 
@@ -96,6 +99,7 @@ fn test_registry_can_be_repointed_at_another_shipment_contract() {
         &ctx.shipment_id,
         &DocumentType::BillOfLading,
         &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
         &ctx.fake_cid(),
     );
     assert_eq!(result, Err(Ok(DocumentError::ShipmentNotFound)));

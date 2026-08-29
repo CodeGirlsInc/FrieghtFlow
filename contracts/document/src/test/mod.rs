@@ -4,7 +4,7 @@ use soroban_sdk::{
 };
 
 use crate::contract::{DocumentContract, DocumentContractClient};
-use crate::types::DocumentType;
+use crate::types::{DocumentType, HashAlgorithm};
 
 mod admin;
 mod events;
@@ -54,6 +54,7 @@ impl Ctx {
             &shipment_id,
             &DocumentType::BillOfLading,
             &hash,
+            &HashAlgorithm::Sha256,
             &self.fake_cid(),
         );
         (id, hash)

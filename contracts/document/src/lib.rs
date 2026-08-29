@@ -39,4 +39,4 @@ mod test;
 
 pub use contract::{DocumentContract, DocumentContractClient};
 pub use errors::DocumentError;
-pub use types::{DataKey, DocumentRecord, DocumentType};
+pub use types::{DataKey, DocumentRecord, DocumentType, HashAlgorithm};

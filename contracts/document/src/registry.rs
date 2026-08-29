@@ -4,13 +4,15 @@ use soroban_sdk::{Address, Bytes, BytesN, Env, Vec};
 
 use crate::errors::DocumentError;
 use crate::shipment::{Shipment, ShipmentClient};
-use crate::types::{DataKey, DocumentRecord, DocumentType, TTL_LEDGERS};
+use crate::types::{DataKey, DocumentRecord, DocumentType, HashAlgorithm, TTL_LEDGERS};
 use crate::{events, storage};
 
 /// Register a new document for a shipment.
 ///
-/// `content_hash` — 32-byte SHA-256 hash of the document file.
-/// `ipfs_cid`     — IPFS CID (as bytes) pointing to the full document.
+/// `content_hash`    — 32-byte hash of the document file, computed with
+///                      `hash_algorithm`.
+/// `hash_algorithm`  — which algorithm `content_hash` was computed with.
+/// `ipfs_cid`        — IPFS CID (as bytes) pointing to the full document.
 ///
 /// The shipment must exist in the configured shipment contract, and
 /// `uploader` must be a party to it (its shipper or its carrier). Without both
@@ -22,6 +24,7 @@ pub fn register(
     shipment_id: u64,
     doc_type: DocumentType,
     content_hash: BytesN<32>,
+    hash_algorithm: HashAlgorithm,
     ipfs_cid: Bytes,
 ) -> Result<u64, DocumentError> {
     uploader.require_auth();
@@ -39,6 +42,7 @@ pub fn register(
         uploader,
         doc_type,
         content_hash,
+        hash_algorithm,
         ipfs_cid,
         uploaded_at: env.ledger().timestamp(),
         is_verified: false,

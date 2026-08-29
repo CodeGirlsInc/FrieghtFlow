@@ -7,7 +7,7 @@
 use soroban_sdk::{testutils::Address as _, Address, TryFromVal};
 
 use super::{emitted, emitted_key, no_events, setup, Ctx};
-use crate::types::{DocumentRecord, DocumentType};
+use crate::types::{DocumentRecord, DocumentType, HashAlgorithm};
 
 /// Asserts the call that just ran emitted exactly one `action` event, and
 /// returns its payload.
@@ -28,6 +28,7 @@ fn test_register_emits_registered() {
     assert_eq!(payload.shipment_id, ctx.shipment_id);
     assert_eq!(payload.uploader, ctx.shipper);
     assert_eq!(payload.content_hash, hash);
+    assert_eq!(payload.hash_algorithm, HashAlgorithm::Sha256);
     assert!(!payload.is_verified);
 
     let key: u64 = emitted_key(&ctx.env, &ctx.client.address, "registered");
@@ -65,6 +66,7 @@ fn test_rejected_registration_emits_nothing() {
         &ctx.shipment_id,
         &DocumentType::BillOfLading,
         &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
         &ctx.fake_cid(),
     );
 
