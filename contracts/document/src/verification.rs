@@ -13,6 +13,7 @@ pub fn verify(env: &Env, verifier: Address, doc_id: u64) -> Result<(), DocumentE
         return Err(DocumentError::Unauthorized);
     }
     verifier.require_auth();
+    storage::require_not_paused(env)?;
 
     let mut doc = storage::load(env, doc_id)?;
 

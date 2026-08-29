@@ -12,6 +12,18 @@ pub fn admin(env: &Env) -> Result<Address, DocumentError> {
         .ok_or(DocumentError::NotInitialized)
 }
 
+pub fn require_not_paused(env: &Env) -> Result<(), DocumentError> {
+    if env
+        .storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
+    {
+        return Err(DocumentError::Paused);
+    }
+    Ok(())
+}
+
 /// Address of the shipment contract `register_document` validates against.
 pub fn shipment_contract(env: &Env) -> Result<Address, DocumentError> {
     env.storage()

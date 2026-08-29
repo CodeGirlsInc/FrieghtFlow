@@ -9,6 +9,7 @@ use crate::{events, storage};
 /// Carrier accepts an open shipment.
 pub fn accept(env: &Env, carrier: Address, shipment_id: u64) -> Result<(), ShipmentError> {
     carrier.require_auth();
+    storage::require_not_paused(env)?;
 
     let mut shipment = storage::load(env, shipment_id)?;
 
@@ -62,6 +63,7 @@ fn advance(
     emit: fn(&Env, &Shipment),
 ) -> Result<(), ShipmentError> {
     carrier.require_auth();
+    storage::require_not_paused(env)?;
 
     let mut shipment = storage::load(env, shipment_id)?;
 

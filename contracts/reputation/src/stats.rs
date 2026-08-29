@@ -20,6 +20,7 @@ pub fn update(
     was_successful: bool,
 ) -> Result<(), ReputationError> {
     caller.require_auth();
+    storage::require_not_paused(env)?;
 
     // Only the authorised contract or the admin may call this.
     if caller != storage::authorized_contract(env)? && caller != storage::admin(env)? {

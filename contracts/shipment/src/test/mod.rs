@@ -5,6 +5,7 @@ use soroban_sdk::{
 
 use crate::contract::{ShipmentContract, ShipmentContractClient};
 
+mod admin;
 mod dispute;
 mod events;
 mod lifecycle;

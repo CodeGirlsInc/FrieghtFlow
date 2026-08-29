@@ -28,10 +28,45 @@ impl DocumentContract {
             return Err(DocumentError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
             .instance()
             .set(&DataKey::ShipmentContract, &shipment_contract);
         env.storage().persistent().set(&DataKey::Counter, &0u64);
+        Ok(())
+    }
+
+    /// Transfer admin rights to a new address. Callable only by the current admin.
+    pub fn rotate_admin(
+        env: Env,
+        current_admin: Address,
+        new_admin: Address,
+    ) -> Result<(), DocumentError> {
+        current_admin.require_auth();
+        if current_admin != storage::admin(&env)? {
+            return Err(DocumentError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    /// Admin-only: pause all state-mutating entrypoints.
+    pub fn pause(env: Env, admin: Address) -> Result<(), DocumentError> {
+        admin.require_auth();
+        if admin != storage::admin(&env)? {
+            return Err(DocumentError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &true);
+        Ok(())
+    }
+
+    /// Admin-only: resume state-mutating entrypoints.
+    pub fn unpause(env: Env, admin: Address) -> Result<(), DocumentError> {
+        admin.require_auth();
+        if admin != storage::admin(&env)? {
+            return Err(DocumentError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 

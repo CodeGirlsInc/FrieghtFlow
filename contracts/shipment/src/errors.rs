@@ -12,4 +12,5 @@ pub enum ShipmentError {
     InvalidInput = 6,
     NotCarrier = 7,
     NotShipper = 8,
+    Paused = 9,
 }

@@ -5,6 +5,7 @@ use soroban_sdk::{
 
 use crate::contract::{ReputationContract, ReputationContractClient};
 
+mod admin;
 mod events;
 mod rating;
 mod stats;

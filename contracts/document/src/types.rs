@@ -35,6 +35,7 @@ pub struct DocumentRecord {
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     /// Address of the shipment contract that `register_document` validates against.
@@ -42,4 +43,5 @@ pub enum DataKey {
     Counter,
     Document(u64),
     ShipmentDocs(u64), // shipment_id → Vec<u64> of doc IDs
+    Paused,
 }

@@ -8,4 +8,5 @@ pub enum IdentityError {
     NotRegistered = 2,
     Unauthorized = 3,
     NotInitialized = 4,
+    Paused = 5,
 }

@@ -20,6 +20,7 @@ pub fn fund(
     amount: i128,
 ) -> Result<(), EscrowError> {
     shipper.require_auth();
+    storage::require_not_paused(env)?;
 
     if amount <= 0 {
         return Err(EscrowError::InvalidAmount);

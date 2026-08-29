@@ -4,7 +4,7 @@ use soroban_sdk::{Address, Bytes, BytesN, Env, Vec};
 
 use crate::errors::DocumentError;
 use crate::shipment::{Shipment, ShipmentClient};
-use crate::types::{DataKey, DocumentRecord, DocumentType};
+use crate::types::{DataKey, DocumentRecord, DocumentType, TTL_LEDGERS};
 use crate::{events, storage};
 
 /// Register a new document for a shipment.
@@ -25,6 +25,7 @@ pub fn register(
     ipfs_cid: Bytes,
 ) -> Result<u64, DocumentError> {
     uploader.require_auth();
+    storage::require_not_paused(env)?;
 
     let shipment = fetch_shipment(env, shipment_id)?;
     if !shipment.is_party(&uploader) {
@@ -57,6 +58,11 @@ pub fn register(
     env.storage()
         .persistent()
         .set(&DataKey::ShipmentDocs(shipment_id), &list);
+    env.storage().persistent().extend_ttl(
+        &DataKey::ShipmentDocs(shipment_id),
+        TTL_LEDGERS,
+        TTL_LEDGERS,
+    );
 
     events::registered(env, &doc);
     Ok(id)

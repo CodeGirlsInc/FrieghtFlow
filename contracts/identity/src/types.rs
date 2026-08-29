@@ -4,7 +4,9 @@ use soroban_sdk::{contracttype, Address};
 pub const TTL_LEDGERS: u32 = 6_307_200;
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Identity(Address),
     Admin,
+    Paused,
 }

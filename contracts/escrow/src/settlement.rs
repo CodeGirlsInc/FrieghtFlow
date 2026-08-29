@@ -23,6 +23,7 @@ pub fn refund(env: &Env, shipment_id: u64) -> Result<(), EscrowError> {
 /// Pay out a `Funded` escrow to the carrier or back to the shipper.
 fn settle(env: &Env, shipment_id: u64, to_carrier: bool) -> Result<(), EscrowError> {
     storage::require_settlement_authority(env)?;
+    storage::require_not_paused(env)?;
 
     let mut record = storage::load(env, shipment_id)?;
 
@@ -57,6 +58,7 @@ fn settle(env: &Env, shipment_id: u64, to_carrier: bool) -> Result<(), EscrowErr
 /// Either party can call this; admin then resolves via release or refund.
 pub fn raise_dispute(env: &Env, caller: Address, shipment_id: u64) -> Result<(), EscrowError> {
     caller.require_auth();
+    storage::require_not_paused(env)?;
 
     let mut record = storage::load(env, shipment_id)?;
 
@@ -84,6 +86,7 @@ pub fn resolve_dispute(
     release_to_carrier: bool,
 ) -> Result<(), EscrowError> {
     storage::require_settlement_authority(env)?;
+    storage::require_not_paused(env)?;
 
     let mut record = storage::load(env, shipment_id)?;
 

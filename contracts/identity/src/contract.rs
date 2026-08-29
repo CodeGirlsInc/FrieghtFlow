@@ -15,6 +15,56 @@ impl IdentityContract {
             return Err(IdentityError::AlreadyRegistered);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
+        Ok(())
+    }
+
+    /// Transfer admin rights to a new address. Callable only by the current admin.
+    pub fn rotate_admin(
+        env: Env,
+        current_admin: Address,
+        new_admin: Address,
+    ) -> Result<(), IdentityError> {
+        current_admin.require_auth();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(IdentityError::NotInitialized)?;
+        if current_admin != admin {
+            return Err(IdentityError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    /// Admin-only: pause all state-mutating entrypoints.
+    pub fn pause(env: Env, admin: Address) -> Result<(), IdentityError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(IdentityError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(IdentityError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &true);
+        Ok(())
+    }
+
+    /// Admin-only: resume state-mutating entrypoints.
+    pub fn unpause(env: Env, admin: Address) -> Result<(), IdentityError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(IdentityError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(IdentityError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 
@@ -25,6 +75,7 @@ impl IdentityContract {
         wallet: Address,
     ) -> Result<(), IdentityError> {
         wallet.require_auth();
+        Self::require_not_paused(&env)?;
 
         if env
             .storage()
@@ -70,6 +121,7 @@ impl IdentityContract {
             .ok_or(IdentityError::NotInitialized)?;
 
         admin.require_auth();
+        Self::require_not_paused(&env)?;
 
         let user_id_hash: BytesN<32> = env
             .storage()
@@ -82,6 +134,18 @@ impl IdentityContract {
             .remove(&DataKey::Identity(wallet.clone()));
 
         events::revoked(&env, &wallet, &user_id_hash);
+        Ok(())
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), IdentityError> {
+        if env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+        {
+            return Err(IdentityError::Paused);
+        }
         Ok(())
     }
 }

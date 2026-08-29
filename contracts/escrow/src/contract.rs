@@ -26,9 +26,44 @@ impl EscrowContract {
             return Err(EscrowError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
             .instance()
             .set(&DataKey::TokenContract, &token_contract);
+        Ok(())
+    }
+
+    /// Transfer admin rights to a new address. Callable only by the current admin.
+    pub fn rotate_admin(
+        env: Env,
+        current_admin: Address,
+        new_admin: Address,
+    ) -> Result<(), EscrowError> {
+        current_admin.require_auth();
+        if current_admin != storage::admin(&env)? {
+            return Err(EscrowError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    /// Admin-only: pause all state-mutating entrypoints.
+    pub fn pause(env: Env, admin: Address) -> Result<(), EscrowError> {
+        admin.require_auth();
+        if admin != storage::admin(&env)? {
+            return Err(EscrowError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &true);
+        Ok(())
+    }
+
+    /// Admin-only: resume state-mutating entrypoints.
+    pub fn unpause(env: Env, admin: Address) -> Result<(), EscrowError> {
+        admin.require_auth();
+        if admin != storage::admin(&env)? {
+            return Err(EscrowError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 
@@ -36,6 +71,7 @@ impl EscrowContract {
     /// The platform admin remains supported for custody-model compatibility.
     pub fn set_shipment_contract(env: Env, shipment_contract: Address) -> Result<(), EscrowError> {
         storage::admin(&env)?.require_auth();
+        storage::require_not_paused(&env)?;
         env.storage()
             .instance()
             .set(&DataKey::ShipmentContract, &shipment_contract);

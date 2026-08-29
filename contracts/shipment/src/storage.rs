@@ -12,6 +12,18 @@ pub fn admin(env: &Env) -> Result<Address, ShipmentError> {
         .ok_or(ShipmentError::NotInitialized)
 }
 
+pub fn require_not_paused(env: &Env) -> Result<(), ShipmentError> {
+    if env
+        .storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
+    {
+        return Err(ShipmentError::Paused);
+    }
+    Ok(())
+}
+
 pub fn load(env: &Env, id: u64) -> Result<Shipment, ShipmentError> {
     env.storage()
         .persistent()
@@ -52,8 +64,9 @@ pub fn append_to_list(env: &Env, key: DataKey, id: u64) {
         .unwrap_or_else(|| Vec::new(env));
     list.push_back(id);
     env.storage().persistent().set(&key, &list);
-    // Note: extend_ttl on Vec keys requires the key to be cloneable;
-    // we skip it here for simplicity (lists extend with each write).
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
 }
 
 /// Slice `list[offset..offset+limit]`, clamped to the list's bounds.

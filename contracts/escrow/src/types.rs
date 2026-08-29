@@ -32,9 +32,11 @@ pub struct EscrowRecord {
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     TokenContract,
     ShipmentContract,
     Escrow(u64), // shipment_id → EscrowRecord
+    Paused,
 }

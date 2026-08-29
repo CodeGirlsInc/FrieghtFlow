@@ -6,6 +6,7 @@ use soroban_sdk::{
 use crate::contract::{DocumentContract, DocumentContractClient};
 use crate::types::DocumentType;
 
+mod admin;
 mod events;
 mod registration;
 mod shipment_link;

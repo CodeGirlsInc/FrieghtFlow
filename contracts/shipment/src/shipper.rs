@@ -17,6 +17,7 @@ pub fn create(
     price: i128,
 ) -> Result<u64, ShipmentError> {
     shipper.require_auth();
+    storage::require_not_paused(env)?;
 
     if weight_kg == 0 || weight_kg > 1_000_000 || price <= 0 {
         return Err(ShipmentError::InvalidInput);
@@ -64,6 +65,7 @@ pub fn confirm_delivery(
     shipment_id: u64,
 ) -> Result<(), ShipmentError> {
     shipper.require_auth();
+    storage::require_not_paused(env)?;
 
     let mut shipment = storage::load(env, shipment_id)?;
 
@@ -85,6 +87,7 @@ pub fn confirm_delivery(
 /// Shipper cancels — only allowed from Created or Accepted.
 pub fn cancel(env: &Env, shipper: Address, shipment_id: u64) -> Result<(), ShipmentError> {
     shipper.require_auth();
+    storage::require_not_paused(env)?;
 
     let mut shipment = storage::load(env, shipment_id)?;
 

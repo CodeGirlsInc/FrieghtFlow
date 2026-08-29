@@ -9,6 +9,7 @@ use crate::{events, storage};
 /// Register a user.  Called once per address (e.g. at account creation).
 pub fn register(env: &Env, user: Address, user_type: UserType) -> Result<(), ReputationError> {
     user.require_auth();
+    storage::require_not_paused(env)?;
 
     if env
         .storage()

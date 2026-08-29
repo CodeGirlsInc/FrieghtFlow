@@ -12,6 +12,18 @@ pub fn admin(env: &Env) -> Result<Address, EscrowError> {
         .ok_or(EscrowError::NotInitialized)
 }
 
+pub fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
+    if env
+        .storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
+    {
+        return Err(EscrowError::Paused);
+    }
+    Ok(())
+}
+
 pub fn token(env: &Env) -> Result<token::Client<'_>, EscrowError> {
     let token_addr: Address = env
         .storage()

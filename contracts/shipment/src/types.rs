@@ -40,10 +40,12 @@ impl Shipment {
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     Counter,
     Shipment(u64),
     ShipperList(Address),
     CarrierList(Address),
+    Paused,
 }

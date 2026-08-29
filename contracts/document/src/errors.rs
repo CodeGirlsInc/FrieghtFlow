@@ -14,4 +14,5 @@ pub enum DocumentError {
     ShipmentNotFound = 7,
     /// The uploader is neither the shipper nor the carrier of the shipment.
     NotShipmentParty = 8,
+    Paused = 9,
 }

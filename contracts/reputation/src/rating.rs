@@ -21,6 +21,7 @@ pub fn submit(
     score: u32,
 ) -> Result<u64, ReputationError> {
     rater.require_auth();
+    storage::require_not_paused(env)?;
 
     if !(1..=5).contains(&score) {
         return Err(ReputationError::InvalidScore);
@@ -68,6 +69,11 @@ pub fn submit(
     env.storage()
         .persistent()
         .set(&DataKey::ShipmentRaters(shipment_id), &raters);
+    env.storage().persistent().extend_ttl(
+        &DataKey::ShipmentRaters(shipment_id),
+        TTL_LEDGERS,
+        TTL_LEDGERS,
+    );
 
     // Update the rated user's reputation.
     rep.total_rating_points += score * 100;

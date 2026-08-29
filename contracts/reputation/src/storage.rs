@@ -12,6 +12,18 @@ pub fn admin(env: &Env) -> Result<Address, ReputationError> {
         .ok_or(ReputationError::NotInitialized)
 }
 
+pub fn require_not_paused(env: &Env) -> Result<(), ReputationError> {
+    if env
+        .storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
+    {
+        return Err(ReputationError::Paused);
+    }
+    Ok(())
+}
+
 pub fn authorized_contract(env: &Env) -> Result<Address, ReputationError> {
     env.storage()
         .instance()

@@ -6,6 +6,7 @@ use soroban_sdk::{
 
 use crate::contract::{EscrowContract, EscrowContractClient};
 
+mod admin;
 mod events;
 mod funding;
 mod settlement;

@@ -47,6 +47,7 @@ pub struct RatingRecord {
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     AuthorizedContract, // Shipment contract allowed to call update_stats
@@ -54,4 +55,5 @@ pub enum DataKey {
     Reputation(Address),
     Rating(u64),
     ShipmentRaters(u64), // Vec<Address> — who has already rated this shipment
+    Paused,
 }

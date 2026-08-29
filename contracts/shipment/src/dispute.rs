@@ -9,6 +9,7 @@ use crate::{events, storage};
 /// Either party can raise a dispute when the shipment is InTransit or Delivered.
 pub fn raise(env: &Env, caller: Address, shipment_id: u64) -> Result<(), ShipmentError> {
     caller.require_auth();
+    storage::require_not_paused(env)?;
 
     let mut shipment = storage::load(env, shipment_id)?;
 
@@ -37,6 +38,7 @@ pub fn resolve(
     resolve_as_completed: bool,
 ) -> Result<(), ShipmentError> {
     storage::admin(env)?.require_auth();
+    storage::require_not_paused(env)?;
 
     let mut shipment = storage::load(env, shipment_id)?;
 

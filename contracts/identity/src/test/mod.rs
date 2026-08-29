@@ -5,6 +5,7 @@ use soroban_sdk::{
 
 use crate::contract::{IdentityContract, IdentityContractClient};
 
+mod admin;
 mod events;
 mod registry;
 

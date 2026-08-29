@@ -14,4 +14,5 @@ pub enum ReputationError {
     Unauthorized = 8,
     UserTypeMismatch = 9,
     RatingNotFound = 10,
+    Paused = 11,
 }
