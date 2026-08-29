@@ -23,6 +23,7 @@ pub enum DocumentError {
     Unauthorized = 4,
     AlreadyVerified = 5,
     HashMismatch = 6,
+    Paused = 7,
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -59,11 +60,13 @@ pub struct DocumentRecord {
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     Counter,
     Document(u64),
     ShipmentDocs(u64), // shipment_id → Vec<u64> of doc IDs
+    Paused,
 }
 
 const TTL_LEDGERS: u32 = 6_307_200; // ~1 year
@@ -82,7 +85,50 @@ impl DocumentContract {
             return Err(DocumentError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().persistent().set(&DataKey::Counter, &0u64);
+        Ok(())
+    }
+
+    pub fn rotate_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), DocumentError> {
+        current_admin.require_auth();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(DocumentError::NotInitialized)?;
+        if current_admin != admin {
+            return Err(DocumentError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    pub fn pause(env: Env, admin: Address) -> Result<(), DocumentError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(DocumentError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(DocumentError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &true);
+        Ok(())
+    }
+
+    pub fn unpause(env: Env, admin: Address) -> Result<(), DocumentError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(DocumentError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(DocumentError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 
@@ -101,6 +147,7 @@ impl DocumentContract {
         ipfs_cid: Bytes,
     ) -> Result<u64, DocumentError> {
         uploader.require_auth();
+        Self::require_not_paused(&env)?;
 
         let id = Self::next_id(&env);
         let now = env.ledger().timestamp();
@@ -133,6 +180,9 @@ impl DocumentContract {
         env.storage()
             .persistent()
             .set(&DataKey::ShipmentDocs(shipment_id), &list);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::ShipmentDocs(shipment_id), TTL_LEDGERS, TTL_LEDGERS);
 
         Ok(id)
     }
@@ -153,6 +203,7 @@ impl DocumentContract {
             return Err(DocumentError::Unauthorized);
         }
         verifier.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut doc = Self::load(&env, doc_id)?;
 
@@ -232,6 +283,13 @@ impl DocumentContract {
             .persistent()
             .extend_ttl(&DataKey::Counter, TTL_LEDGERS, TTL_LEDGERS);
         next
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), DocumentError> {
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            return Err(DocumentError::Paused);
+        }
+        Ok(())
     }
 }
 
@@ -410,5 +468,40 @@ mod tests {
         let (_, _, client) = setup();
         let result = client.try_get_document(&404u64);
         assert_eq!(result, Err(Ok(DocumentError::NotFound)));
+    }
+
+    #[test]
+    fn test_admin_rotation_and_pause_block_uploads() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let new_admin = Address::generate(&env);
+        let uploader = Address::generate(&env);
+        let contract_id = env.register(DocumentContract {}, ());
+        let client = DocumentContractClient::new(&env, &contract_id);
+        client.initialize(&admin);
+
+        client.rotate_admin(&admin, &new_admin);
+        client.pause(&new_admin);
+
+        let result = client.try_register_document(
+            &uploader,
+            &7u64,
+            &DocumentType::Invoice,
+            &fake_hash(&env),
+            &fake_cid(&env),
+        );
+        assert_eq!(result, Err(Ok(DocumentError::Paused)));
+
+        client.unpause(&new_admin);
+        let id = client.register_document(
+            &uploader,
+            &7u64,
+            &DocumentType::Invoice,
+            &fake_hash(&env),
+            &fake_cid(&env),
+        );
+        assert_eq!(id, 1);
     }
 }

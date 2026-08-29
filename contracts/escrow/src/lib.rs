@@ -17,6 +17,7 @@ pub enum EscrowError {
     Unauthorized = 7,
     InvalidAmount = 8,
     InsufficientBalance = 9,
+    Paused = 10,
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -50,11 +51,13 @@ pub struct EscrowRecord {
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     TokenContract,
     ShipmentContract,
     Escrow(u64), // shipment_id → EscrowRecord
+    Paused,
 }
 
 const TTL_LEDGERS: u32 = 6_307_200; // ~1 year
@@ -79,9 +82,52 @@ impl EscrowContract {
             return Err(EscrowError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
             .instance()
             .set(&DataKey::TokenContract, &token_contract);
+        Ok(())
+    }
+
+    pub fn rotate_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), EscrowError> {
+        current_admin.require_auth();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if current_admin != admin {
+            return Err(EscrowError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    pub fn pause(env: Env, admin: Address) -> Result<(), EscrowError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(EscrowError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &true);
+        Ok(())
+    }
+
+    pub fn unpause(env: Env, admin: Address) -> Result<(), EscrowError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(EscrowError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 
@@ -97,6 +143,7 @@ impl EscrowContract {
             .get(&DataKey::Admin)
             .ok_or(EscrowError::NotInitialized)?;
         admin.require_auth();
+        Self::require_not_paused(&env)?;
         env.storage()
             .instance()
             .set(&DataKey::ShipmentContract, &shipment_contract);
@@ -119,6 +166,7 @@ impl EscrowContract {
         amount: i128,
     ) -> Result<(), EscrowError> {
         shipper.require_auth();
+        Self::require_not_paused(&env)?;
 
         if amount <= 0 {
             return Err(EscrowError::InvalidAmount);
@@ -187,6 +235,7 @@ impl EscrowContract {
     /// for now admin can also trigger it after off-chain verification.
     pub fn release_payment(env: Env, shipment_id: u64) -> Result<(), EscrowError> {
         Self::require_settlement_authority(&env)?;
+        Self::require_not_paused(&env)?;
 
         let mut record = Self::load(&env, shipment_id)?;
 
@@ -216,6 +265,7 @@ impl EscrowContract {
     /// Called when a shipment is Cancelled.
     pub fn refund_payment(env: Env, shipment_id: u64) -> Result<(), EscrowError> {
         Self::require_settlement_authority(&env)?;
+        Self::require_not_paused(&env)?;
 
         let mut record = Self::load(&env, shipment_id)?;
 
@@ -245,6 +295,7 @@ impl EscrowContract {
     /// Either party can call this; admin then resolves via release or refund.
     pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), EscrowError> {
         caller.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut record = Self::load(&env, shipment_id)?;
 
@@ -270,6 +321,7 @@ impl EscrowContract {
         release_to_carrier: bool,
     ) -> Result<(), EscrowError> {
         Self::require_settlement_authority(&env)?;
+        Self::require_not_paused(&env)?;
 
         let mut record = Self::load(&env, shipment_id)?;
 
@@ -367,6 +419,13 @@ impl EscrowContract {
         }
 
         admin.require_auth();
+        Ok(())
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            return Err(EscrowError::Paused);
+        }
         Ok(())
     }
 }
@@ -543,5 +602,29 @@ mod tests {
         let random = Address::generate(&env);
         let result = client.try_raise_dispute(&random, &SHIPMENT_ID);
         assert_eq!(result, Err(Ok(EscrowError::Unauthorized)));
+    }
+
+    #[test]
+    fn test_pause_blocks_funding_and_admin_rotation_works() {
+        let (env, admin, shipper, carrier, token_addr, client) = setup(AMOUNT * 2);
+        let new_admin = Address::generate(&env);
+
+        client.rotate_admin(&admin, &new_admin);
+        client.pause(&new_admin);
+
+        let token = TokenClient::new(&env, &token_addr);
+        token.approve(
+            &shipper,
+            &client.address,
+            &AMOUNT,
+            &(env.ledger().sequence() + 1000),
+        );
+
+        let result = client.try_fund_escrow(&shipper, &carrier, &SHIPMENT_ID, &AMOUNT);
+        assert_eq!(result, Err(Ok(EscrowError::Paused)));
+
+        client.unpause(&new_admin);
+        client.fund_escrow(&shipper, &carrier, &SHIPMENT_ID, &AMOUNT);
+        assert_eq!(client.get_escrow(&SHIPMENT_ID).status, EscrowStatus::Funded);
     }
 }

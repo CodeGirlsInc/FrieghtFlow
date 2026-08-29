@@ -16,6 +16,7 @@ pub enum ShipmentError {
     InvalidInput = 6,
     NotCarrier = 7,
     NotShipper = 8,
+    Paused = 9,
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -50,12 +51,14 @@ pub struct Shipment {
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     Counter,
     Shipment(u64),
     ShipperList(Address),
     CarrierList(Address),
+    Paused,
 }
 
 const TTL_LEDGERS: u32 = 6_307_200; // ~1 year at ~5 s/ledger
@@ -75,7 +78,50 @@ impl ShipmentContract {
             return Err(ShipmentError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().persistent().set(&DataKey::Counter, &0u64);
+        Ok(())
+    }
+
+    pub fn rotate_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), ShipmentError> {
+        current_admin.require_auth();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ShipmentError::NotInitialized)?;
+        if current_admin != admin {
+            return Err(ShipmentError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    pub fn pause(env: Env, admin: Address) -> Result<(), ShipmentError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ShipmentError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(ShipmentError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &true);
+        Ok(())
+    }
+
+    pub fn unpause(env: Env, admin: Address) -> Result<(), ShipmentError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ShipmentError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(ShipmentError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 
@@ -92,6 +138,7 @@ impl ShipmentContract {
         price: i128,
     ) -> Result<u64, ShipmentError> {
         shipper.require_auth();
+        Self::require_not_paused(&env)?;
 
         if weight_kg == 0 || price <= 0 {
             return Err(ShipmentError::InvalidInput);
@@ -134,6 +181,7 @@ impl ShipmentContract {
         shipment_id: u64,
     ) -> Result<(), ShipmentError> {
         shipper.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -157,6 +205,7 @@ impl ShipmentContract {
         shipment_id: u64,
     ) -> Result<(), ShipmentError> {
         shipper.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -185,6 +234,7 @@ impl ShipmentContract {
         shipment_id: u64,
     ) -> Result<(), ShipmentError> {
         carrier.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -208,6 +258,7 @@ impl ShipmentContract {
         shipment_id: u64,
     ) -> Result<(), ShipmentError> {
         carrier.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -231,6 +282,7 @@ impl ShipmentContract {
         shipment_id: u64,
     ) -> Result<(), ShipmentError> {
         carrier.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -252,6 +304,7 @@ impl ShipmentContract {
     /// Either party can raise a dispute when the shipment is InTransit or Delivered.
     pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), ShipmentError> {
         caller.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -285,6 +338,7 @@ impl ShipmentContract {
             .get(&DataKey::Admin)
             .ok_or(ShipmentError::NotInitialized)?;
         admin.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut shipment = Self::load(&env, shipment_id)?;
 
@@ -371,8 +425,18 @@ impl ShipmentContract {
             .unwrap_or_else(|| Vec::new(env));
         list.push_back(id);
         env.storage().persistent().set(&key, &list);
-        // Note: extend_ttl on Vec keys requires the key to be cloneable;
-        // we skip it here for simplicity (lists extend with each write).
+        env.storage().persistent().extend_ttl(
+            &key,
+            TTL_LEDGERS,
+            TTL_LEDGERS,
+        );
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), ShipmentError> {
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            return Err(ShipmentError::Paused);
+        }
+        Ok(())
     }
 }
 

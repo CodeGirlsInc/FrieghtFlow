@@ -10,12 +10,15 @@ pub enum IdentityError {
     NotRegistered = 2,
     Unauthorized = 3,
     NotInitialized = 4,
+    Paused = 5,
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Identity(Address),
     Admin,
+    Paused,
 }
 
 // ~1 year in ledgers at ~5 second ledger time
@@ -32,6 +35,49 @@ impl IdentityContract {
             return Err(IdentityError::AlreadyRegistered);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
+        Ok(())
+    }
+
+    pub fn rotate_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), IdentityError> {
+        current_admin.require_auth();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(IdentityError::NotInitialized)?;
+        if current_admin != admin {
+            return Err(IdentityError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    pub fn pause(env: Env, admin: Address) -> Result<(), IdentityError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(IdentityError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(IdentityError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &true);
+        Ok(())
+    }
+
+    pub fn unpause(env: Env, admin: Address) -> Result<(), IdentityError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(IdentityError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(IdentityError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 
@@ -42,6 +88,7 @@ impl IdentityContract {
         wallet: Address,
     ) -> Result<(), IdentityError> {
         wallet.require_auth();
+        Self::require_not_paused(&env)?;
 
         if env
             .storage()
@@ -86,6 +133,7 @@ impl IdentityContract {
             .ok_or(IdentityError::NotInitialized)?;
 
         admin.require_auth();
+        Self::require_not_paused(&env)?;
 
         if !env
             .storage()
@@ -99,6 +147,13 @@ impl IdentityContract {
             .persistent()
             .remove(&DataKey::Identity(wallet));
 
+        Ok(())
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), IdentityError> {
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            return Err(IdentityError::Paused);
+        }
         Ok(())
     }
 }
@@ -184,5 +239,30 @@ mod tests {
 
         let result = client.try_get_user_identity(&wallet);
         assert_eq!(result, Err(Ok(IdentityError::NotRegistered)));
+    }
+
+    #[test]
+    fn test_admin_rotation_and_pause_gate() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(IdentityContract {}, ());
+        let client = IdentityContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let new_admin = Address::generate(&env);
+        let wallet = Address::generate(&env);
+        let hash = BytesN::random(&env);
+
+        client.initialize(&admin);
+        client.rotate_admin(&admin, &new_admin);
+        client.pause(&new_admin);
+
+        let result = client.try_register_identity(&hash, &wallet);
+        assert_eq!(result, Err(Ok(IdentityError::Paused)));
+
+        client.unpause(&new_admin);
+        client.register_identity(&hash, &wallet);
+        assert!(client.verify_identity(&wallet));
     }
 }

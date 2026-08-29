@@ -31,6 +31,7 @@ pub enum ReputationError {
     Unauthorized = 8,
     UserTypeMismatch = 9,
     RatingNotFound = 10,
+    Paused = 11,
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ pub struct RatingRecord {
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     AuthorizedContract, // Shipment contract allowed to call update_stats
@@ -86,6 +88,7 @@ pub enum DataKey {
     Reputation(Address),
     Rating(u64),
     ShipmentRaters(u64), // Vec<Address> — who has already rated this shipment
+    Paused,
 }
 
 const TTL_LEDGERS: u32 = 6_307_200; // ~1 year
@@ -111,12 +114,55 @@ impl ReputationContract {
             return Err(ReputationError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
             .instance()
             .set(&DataKey::AuthorizedContract, &authorized_contract);
         env.storage()
             .persistent()
             .set(&DataKey::RatingCounter, &0u64);
+        Ok(())
+    }
+
+    pub fn rotate_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), ReputationError> {
+        current_admin.require_auth();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ReputationError::NotInitialized)?;
+        if current_admin != admin {
+            return Err(ReputationError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    pub fn pause(env: Env, admin: Address) -> Result<(), ReputationError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ReputationError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(ReputationError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &true);
+        Ok(())
+    }
+
+    pub fn unpause(env: Env, admin: Address) -> Result<(), ReputationError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ReputationError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(ReputationError::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 
@@ -129,6 +175,7 @@ impl ReputationContract {
         user_type: UserType,
     ) -> Result<(), ReputationError> {
         user.require_auth();
+        Self::require_not_paused(&env)?;
 
         if env
             .storage()
@@ -179,6 +226,7 @@ impl ReputationContract {
         score: u32,
     ) -> Result<u64, ReputationError> {
         rater.require_auth();
+        Self::require_not_paused(&env)?;
 
         if !(1..=5).contains(&score) {
             return Err(ReputationError::InvalidScore);
@@ -234,6 +282,9 @@ impl ReputationContract {
         env.storage()
             .persistent()
             .set(&DataKey::ShipmentRaters(shipment_id), &raters);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::ShipmentRaters(shipment_id), TTL_LEDGERS, TTL_LEDGERS);
 
         // Update the rated user's reputation.
         let mut rep: Reputation = env
@@ -275,6 +326,7 @@ impl ReputationContract {
         was_successful: bool,
     ) -> Result<(), ReputationError> {
         caller.require_auth();
+        Self::require_not_paused(&env)?;
 
         // Only the authorised contract or the admin may call this.
         let auth_contract: Address = env
@@ -424,6 +476,13 @@ impl ReputationContract {
             .persistent()
             .extend_ttl(&DataKey::RatingCounter, TTL_LEDGERS, TTL_LEDGERS);
         next
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), ReputationError> {
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            return Err(ReputationError::Paused);
+        }
+        Ok(())
     }
 }
 
