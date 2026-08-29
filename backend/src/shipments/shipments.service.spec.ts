@@ -109,13 +109,23 @@ describe('ShipmentsService', () => {
   let shipmentRepo: ReturnType<typeof mockRepo>;
   let historyRepo: ReturnType<typeof mockRepo>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
-  let paymentsService: { releaseEscrowForShipment: jest.Mock };
+  let paymentsService: {
+    releaseEscrowForShipment: jest.Mock;
+    refundEscrowForShipment: jest.Mock;
+    raiseEscrowDisputeForShipment: jest.Mock;
+    resolveEscrowDisputeForShipment: jest.Mock;
+  };
 
   beforeEach(async () => {
     shipmentRepo = mockRepo();
     historyRepo = mockRepo();
     eventEmitter = { emit: jest.fn() } as unknown as jest.Mocked<EventEmitter2>;
-    paymentsService = { releaseEscrowForShipment: jest.fn() };
+    paymentsService = {
+      releaseEscrowForShipment: jest.fn(),
+      refundEscrowForShipment: jest.fn(),
+      raiseEscrowDisputeForShipment: jest.fn(),
+      resolveEscrowDisputeForShipment: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -509,6 +519,23 @@ describe('ShipmentsService', () => {
       await expect(
         service.confirmDelivery('shipment-uuid-1', outsider),
       ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('does not mark the shipment completed when escrow release fails', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.DELIVERED,
+        shipperId: shipper.id,
+      });
+      shipmentRepo.findOne.mockResolvedValue(shipment);
+      paymentsService.releaseEscrowForShipment.mockRejectedValue(
+        new Error('escrow unavailable'),
+      );
+
+      await expect(
+        service.confirmDelivery('shipment-uuid-1', shipper),
+      ).rejects.toThrow('escrow unavailable');
+      expect(shipmentRepo.save).not.toHaveBeenCalled();
     });
   });
 

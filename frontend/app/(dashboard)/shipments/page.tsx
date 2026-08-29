@@ -7,6 +7,7 @@ import { shipmentApi } from '../../../lib/api/shipment.api';
 import { ShipmentStatus, PaginatedShipments } from '../../../types/shipment.types';
 import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
+import { EmptyShipments } from '../../../components/ui/empty-state';
 import { Button } from '../../../components/ui/button';
 import { toast } from 'sonner';
 import { apiClient } from '../../../lib/api/client';
@@ -116,18 +117,11 @@ export default function ShipmentsPage() {
           ))}
         </div>
       ) : !result || result.data.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-muted-foreground text-sm">
-            {activeTab === 'all'
-              ? 'No shipments yet.'
-              : `No shipments with status "${activeTab}".`}
-          </p>
-          {isShipper && activeTab === 'all' && (
-            <Button asChild className="mt-4" variant="outline">
-              <Link href="/shipments/new">Create your first shipment</Link>
-            </Button>
-          )}
-        </div>
+        <EmptyShipments
+          title={activeTab === 'all' ? 'No shipments yet' : `No shipments with status "${activeTab}"`}
+          description={activeTab === 'all' ? 'Create your first shipment to get started.' : 'Try another status filter.'}
+          onCreate={isShipper && activeTab === 'all' ? () => window.location.assign('/shipments/new') : undefined}
+        />
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2">

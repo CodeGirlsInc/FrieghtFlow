@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui
 import { Button } from '../../../components/ui/button';
 import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { ShipmentCardSkeleton, StatsCardSkeleton } from '../../../components/ui/skeleton';
+import { EmptyShipments } from '../../../components/ui/empty-state';
 import { Shipment, ShipmentStatus } from '../../../types/shipment.types';
 
 interface Stats {
@@ -167,23 +168,11 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : recentShipments.length === 0 ? (
-          <div className="text-center py-10 rounded-lg border border-dashed border-border">
-            <p className="text-muted-foreground text-sm">
-              {isShipper
-                ? 'No shipments yet. Create your first one!'
-                : 'No assigned shipments yet. Check the marketplace.'}
-            </p>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="mt-3"
-            >
-              <Link href={isShipper ? '/shipments/new' : '/marketplace'}>
-                {isShipper ? 'Create Shipment' : 'Open Marketplace'}
-              </Link>
-            </Button>
-          </div>
+          <EmptyShipments
+            title={isShipper ? 'No shipments yet' : 'No assigned shipments yet'}
+            description={isShipper ? 'Create your first shipment to get started.' : 'Browse the marketplace to find your next job.'}
+            onCreate={isShipper ? () => window.location.assign('/shipments/new') : () => window.location.assign('/marketplace')}
+          />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {recentShipments.map((s) => (

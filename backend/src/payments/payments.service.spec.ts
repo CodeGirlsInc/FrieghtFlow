@@ -41,6 +41,10 @@ const mockStellarContractService = () => ({
   buildFundEscrowTransaction: jest.fn(),
   submitSignedTransaction: jest.fn(),
   fundEscrow: jest.fn(),
+  releasePayment: jest.fn(),
+  refundPayment: jest.fn(),
+  raiseDispute: jest.fn(),
+  resolveDispute: jest.fn(),
 });
 const mockConfigService = (values: Record<string, string> = {}) => ({
   get: jest.fn((key: string): string | undefined => values[key]),

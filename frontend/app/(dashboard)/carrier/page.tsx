@@ -9,6 +9,8 @@ import { useAuthStore } from '../../../stores/auth.store';
 import { shipmentApi } from '../../../lib/api/shipment.api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
+import { EmptyState } from '../../../components/ui/empty-state';
+import { Skeleton } from '../../../components/ui/skeleton';
 import { Shipment, ShipmentStatus } from '../../../types/shipment.types';
 
 export default function CarrierDashboardPage() {
@@ -149,16 +151,15 @@ export default function CarrierDashboardPage() {
         {dataLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-20 bg-muted rounded-lg animate-pulse" />
+              <Skeleton key={i} className="h-20 rounded-lg" />
             ))}
           </div>
         ) : actionable.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border py-10 text-center">
-            <p className="text-muted-foreground text-sm">No shipments require action right now.</p>
-            <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link href="/marketplace">Find new jobs</Link>
-            </Button>
-          </div>
+          <EmptyState
+            title="No shipments require action"
+            description="Browse the marketplace to find your next job."
+            cta={{ label: 'Find new jobs', onClick: () => window.location.assign('/marketplace') }}
+          />
         ) : (
           <div className="space-y-3">
             {actionable.map((shipment) => (
