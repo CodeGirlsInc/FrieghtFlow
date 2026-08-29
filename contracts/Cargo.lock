@@ -460,6 +460,7 @@ dependencies = [
 name = "document"
 version = "0.1.0"
 dependencies = [
+ "shipment",
  "soroban-sdk",
 ]
 
