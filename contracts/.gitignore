@@ -1,2 +1,5 @@
 # Rust build artifacts
 target/
+
+# Soroban writes a JSON ledger snapshot per test run
+test_snapshots/
