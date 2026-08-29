@@ -5,7 +5,8 @@ edition = "2021"
 publish = false
 
 [lib]
-crate-type = ["cdylib"]
+# `rlib` so sibling crates (e.g. `document`) can drive this contract in their tests.
+crate-type = ["cdylib", "rlib"]
 
 [features]
 testutils = ["soroban-sdk/testutils"]

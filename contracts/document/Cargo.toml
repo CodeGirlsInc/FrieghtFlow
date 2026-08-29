@@ -15,6 +15,11 @@ soroban-sdk = { version = "22.0.0", features = ["alloc"] }
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils", "alloc"] }
+# Test-only: lets the cross-contract validation in `register_document` be
+# exercised against the real shipment contract rather than a stub. It is a dev
+# dependency on purpose — linking it into the cdylib would export the shipment
+# contract's own entrypoints from `document.wasm`.
+shipment = { path = "../shipment", features = ["testutils"] }
 
 [profile.release]
 opt-level = "z"
