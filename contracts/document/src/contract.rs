@@ -120,11 +120,18 @@ impl DocumentContract {
         storage::load(&env, doc_id)
     }
 
-    pub fn get_documents_by_shipment(env: Env, shipment_id: u64) -> Vec<u64> {
-        env.storage()
+    pub fn get_documents_by_shipment(
+        env: Env,
+        shipment_id: u64,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<u64> {
+        let list: Vec<u64> = env
+            .storage()
             .persistent()
             .get(&DataKey::ShipmentDocs(shipment_id))
-            .unwrap_or_else(|| Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env));
+        storage::paginate(&env, list, offset, limit)
     }
 
     pub fn get_total_documents(env: Env) -> u64 {
