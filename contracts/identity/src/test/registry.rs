@@ -31,6 +31,32 @@ fn test_double_register_fails() {
 }
 
 #[test]
+fn test_update_identity() {
+    let ctx = setup();
+    let wallet = Address::generate(&ctx.env);
+    let hash = BytesN::random(&ctx.env);
+    let new_hash = BytesN::random(&ctx.env);
+
+    ctx.client.register_identity(&hash, &wallet);
+    ctx.client.update_identity(&wallet, &new_hash);
+
+    assert!(ctx.client.verify_identity(&wallet));
+    assert_eq!(ctx.client.get_user_identity(&wallet), new_hash);
+}
+
+#[test]
+fn test_update_identity_requires_prior_registration() {
+    let ctx = setup();
+    let wallet = Address::generate(&ctx.env);
+    let hash = BytesN::random(&ctx.env);
+
+    // `wallet` was never registered — `register_identity` is the entrypoint
+    // for a fresh registration, not `update_identity`.
+    let result = ctx.client.try_update_identity(&wallet, &hash);
+    assert_eq!(result, Err(Ok(IdentityError::NotRegistered)));
+}
+
+#[test]
 fn test_revoke_identity() {
     let ctx = setup();
     let wallet = Address::generate(&ctx.env);

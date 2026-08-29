@@ -99,6 +99,42 @@ impl IdentityContract {
         Ok(())
     }
 
+    /// Replace the `user_id_hash` of an already-registered wallet, in one
+    /// wallet-signed transaction — no admin `revoke_identity` required first,
+    /// and no window in which the wallet has no registered identity.
+    ///
+    /// Fails with `NotRegistered` if `wallet` has no existing identity; use
+    /// `register_identity` for a fresh registration instead.
+    pub fn update_identity(
+        env: Env,
+        wallet: Address,
+        new_user_id_hash: BytesN<32>,
+    ) -> Result<(), IdentityError> {
+        wallet.require_auth();
+        Self::require_not_paused(&env)?;
+
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::Identity(wallet.clone()))
+        {
+            return Err(IdentityError::NotRegistered);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Identity(wallet.clone()), &new_user_id_hash);
+
+        env.storage().persistent().extend_ttl(
+            &DataKey::Identity(wallet.clone()),
+            TTL_LEDGERS,
+            TTL_LEDGERS,
+        );
+
+        events::updated(&env, &wallet, &new_user_id_hash);
+        Ok(())
+    }
+
     /// Returns true if `wallet` has a registered identity.
     pub fn verify_identity(env: Env, wallet: Address) -> bool {
         env.storage().persistent().has(&DataKey::Identity(wallet))
