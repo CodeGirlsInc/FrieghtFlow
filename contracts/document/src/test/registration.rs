@@ -36,7 +36,9 @@ fn test_multiple_docs_per_shipment() {
         &ctx.fake_cid(),
     );
 
-    let docs = ctx.client.get_documents_by_shipment(&ctx.shipment_id);
+    let docs = ctx
+        .client
+        .get_documents_by_shipment(&ctx.shipment_id, &0, &10);
     assert_eq!(docs.len(), 2);
     assert_eq!(docs.get(0).unwrap(), id1);
     assert_eq!(docs.get(1).unwrap(), id2);
@@ -51,10 +53,43 @@ fn test_documents_are_scoped_to_their_shipment() {
     ctx.register(&ctx.shipper, other);
 
     assert_eq!(
-        ctx.client.get_documents_by_shipment(&ctx.shipment_id).len(),
+        ctx.client
+            .get_documents_by_shipment(&ctx.shipment_id, &0, &10)
+            .len(),
         1
     );
-    assert_eq!(ctx.client.get_documents_by_shipment(&other).len(), 1);
+    assert_eq!(
+        ctx.client.get_documents_by_shipment(&other, &0, &10).len(),
+        1
+    );
+}
+
+#[test]
+fn test_documents_by_shipment_pagination() {
+    let ctx = setup();
+
+    for _ in 0..15 {
+        ctx.register(&ctx.shipper, ctx.shipment_id);
+    }
+
+    let page1 = ctx
+        .client
+        .get_documents_by_shipment(&ctx.shipment_id, &0, &10);
+    assert_eq!(page1.len(), 10);
+    assert_eq!(page1.get(0), Some(1));
+    assert_eq!(page1.get(9), Some(10));
+
+    let page2 = ctx
+        .client
+        .get_documents_by_shipment(&ctx.shipment_id, &10, &10);
+    assert_eq!(page2.len(), 5);
+    assert_eq!(page2.get(0), Some(11));
+    assert_eq!(page2.get(4), Some(15));
+
+    let page3 = ctx
+        .client
+        .get_documents_by_shipment(&ctx.shipment_id, &20, &10);
+    assert_eq!(page3.len(), 0);
 }
 
 #[test]

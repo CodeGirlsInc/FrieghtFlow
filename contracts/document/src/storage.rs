@@ -1,6 +1,6 @@
 //! Storage accessors shared by the contract's entrypoint modules.
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Vec};
 
 use crate::errors::DocumentError;
 use crate::types::{DataKey, DocumentRecord, TTL_LEDGERS};
@@ -60,4 +60,29 @@ pub fn next_id(env: &Env) -> u64 {
         .persistent()
         .extend_ttl(&DataKey::Counter, TTL_LEDGERS, TTL_LEDGERS);
     next
+}
+
+/// Slice `list[offset..offset+limit]`, clamped to the list's bounds.
+///
+/// Registration is uncapped — like the shipment contract's per-shipper and
+/// per-carrier shipment lists, growth is naturally rate-limited by the
+/// authorized parties' willingness to pay a transaction fee per document —
+/// but returning the whole list from `get_documents_by_shipment` in one call
+/// would make read cost grow unbounded with it. Pagination bounds that cost
+/// the same way `shipment::storage::paginate` bounds the shipment lists'.
+pub fn paginate(env: &Env, list: Vec<u64>, offset: u32, limit: u32) -> Vec<u64> {
+    let mut paged = Vec::new(env);
+    let len = list.len();
+
+    if offset >= len {
+        return paged;
+    }
+
+    let end = (offset + limit).min(len);
+    for i in offset..end {
+        if let Some(item) = list.get(i) {
+            paged.push_back(item);
+        }
+    }
+    paged
 }

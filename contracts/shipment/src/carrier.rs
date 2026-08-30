@@ -70,14 +70,21 @@ fn advance(
     if shipment.status != from {
         return Err(ShipmentError::InvalidStatus);
     }
-    if shipment.carrier.as_ref() != Some(&carrier) {
-        return Err(ShipmentError::NotCarrier);
-    }
+    require_carrier(&shipment, &carrier)?;
 
     shipment.status = to;
     shipment.updated_at = env.ledger().timestamp();
     storage::save(env, &shipment);
 
     emit(env, &shipment);
+    Ok(())
+}
+
+/// Confirm `caller` is the shipment's assigned carrier — the one
+/// ownership check every carrier-gated transition needs.
+fn require_carrier(shipment: &Shipment, caller: &Address) -> Result<(), ShipmentError> {
+    if shipment.carrier.as_ref() != Some(caller) {
+        return Err(ShipmentError::NotCarrier);
+    }
     Ok(())
 }

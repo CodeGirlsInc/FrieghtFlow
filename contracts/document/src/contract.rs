@@ -4,7 +4,7 @@
 //! externally callable interface can be read in one place; the logic behind
 //! each one lives in [`crate::registry`] or [`crate::verification`].
 
-use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, String, Vec};
 
 use crate::errors::DocumentError;
 use crate::types::{DataKey, DocumentRecord, DocumentType, HashAlgorithm};
@@ -109,6 +109,17 @@ impl DocumentContract {
         verification::verify(&env, verifier, doc_id)
     }
 
+    /// Admin flags a previously-verified document as fraudulent, reversing
+    /// its verification. See [`verification::flag`].
+    pub fn flag_document(
+        env: Env,
+        admin: Address,
+        doc_id: u64,
+        reason: String,
+    ) -> Result<(), DocumentError> {
+        verification::flag(&env, admin, doc_id, reason)
+    }
+
     /// Check a hash against the registered one. See [`verification::check_integrity`].
     pub fn check_integrity(
         env: Env,
@@ -122,11 +133,18 @@ impl DocumentContract {
         storage::load(&env, doc_id)
     }
 
-    pub fn get_documents_by_shipment(env: Env, shipment_id: u64) -> Vec<u64> {
-        env.storage()
+    pub fn get_documents_by_shipment(
+        env: Env,
+        shipment_id: u64,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<u64> {
+        let list: Vec<u64> = env
+            .storage()
             .persistent()
             .get(&DataKey::ShipmentDocs(shipment_id))
-            .unwrap_or_else(|| Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env));
+        storage::paginate(&env, list, offset, limit)
     }
 
     pub fn get_total_documents(env: Env) -> u64 {

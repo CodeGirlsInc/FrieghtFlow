@@ -41,9 +41,9 @@ Where a transition can go two ways it is still one event, and the payload's
 
 | Contract     | Actions |
 |--------------|---------|
-| `shipment`   | `created`, `accepted`, `intransit`, `delivered`, `completed`, `disputed`, `resolved`, `cancelled` |
+| `shipment`   | `created`, `updated`, `accepted`, `intransit`, `delivered`, `completed`, `disputed`, `resolved`, `cancelled` |
 | `escrow`     | `funded`, `released`, `refunded`, `disputed`, `resolved` |
-| `document`   | `registered`, `verified` |
+| `document`   | `registered`, `verified`, `flagged` |
 | `identity`   | `registered`, `revoked`, `updated` |
 | `reputation` | `registered`, `submitted`, `updated` |
 

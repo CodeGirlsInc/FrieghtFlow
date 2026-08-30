@@ -56,6 +56,72 @@ fn test_full_happy_path() {
 }
 
 #[test]
+fn test_update_shipment_while_created() {
+    let ctx = setup();
+    let shipper = Address::generate(&ctx.env);
+
+    let id = make_shipment(&ctx, &shipper);
+    ctx.client.update_shipment(
+        &shipper,
+        &id,
+        &str(&ctx.env, "Accra, Ghana"),
+        &str(&ctx.env, "Furniture — 10 units"),
+        &200u32,
+        &6_000_000_000i128,
+    );
+
+    let s = ctx.client.get_shipment(&id);
+    assert_eq!(s.destination, str(&ctx.env, "Accra, Ghana"));
+    assert_eq!(s.cargo_description, str(&ctx.env, "Furniture — 10 units"));
+    assert_eq!(s.weight_kg, 200);
+    assert_eq!(s.price, 6_000_000_000);
+    assert_eq!(s.status, ShipmentStatus::Created);
+}
+
+#[test]
+fn test_update_shipment_after_accepted_fails() {
+    let ctx = setup();
+    let shipper = Address::generate(&ctx.env);
+    let carrier = Address::generate(&ctx.env);
+
+    let id = make_shipment(&ctx, &shipper);
+    ctx.client.accept_shipment(&carrier, &id);
+
+    let result = ctx.client.try_update_shipment(
+        &shipper,
+        &id,
+        &str(&ctx.env, "Accra, Ghana"),
+        &str(&ctx.env, "Furniture — 10 units"),
+        &200u32,
+        &6_000_000_000i128,
+    );
+    assert_eq!(result, Err(Ok(ShipmentError::InvalidStatus)));
+
+    // Terms are untouched.
+    let s = ctx.client.get_shipment(&id);
+    assert_eq!(s.destination, str(&ctx.env, "Nairobi, Kenya"));
+}
+
+#[test]
+fn test_update_shipment_wrong_shipper_fails() {
+    let ctx = setup();
+    let shipper = Address::generate(&ctx.env);
+    let impostor = Address::generate(&ctx.env);
+
+    let id = make_shipment(&ctx, &shipper);
+
+    let result = ctx.client.try_update_shipment(
+        &impostor,
+        &id,
+        &str(&ctx.env, "Accra, Ghana"),
+        &str(&ctx.env, "Furniture — 10 units"),
+        &200u32,
+        &6_000_000_000i128,
+    );
+    assert_eq!(result, Err(Ok(ShipmentError::NotShipper)));
+}
+
+#[test]
 fn test_cancel_from_created() {
     let ctx = setup();
     let shipper = Address::generate(&ctx.env);

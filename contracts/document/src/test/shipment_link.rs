@@ -24,7 +24,10 @@ fn test_register_against_nonexistent_shipment_fails() {
 
     assert_eq!(result, Err(Ok(DocumentError::ShipmentNotFound)));
     assert_eq!(ctx.client.get_total_documents(), 0);
-    assert!(ctx.client.get_documents_by_shipment(&9_999u64).is_empty());
+    assert!(ctx
+        .client
+        .get_documents_by_shipment(&9_999u64, &0, &10)
+        .is_empty());
 }
 
 #[test]
