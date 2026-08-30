@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Bytes, BytesN};
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, String};
 
 /// ~1 year in ledgers at ~5 s/ledger.
 pub const TTL_LEDGERS: u32 = 6_307_200;
@@ -32,6 +32,11 @@ pub struct DocumentRecord {
     pub is_verified: bool,
     pub verified_by: Option<Address>,
     pub verified_at: u64,
+    /// Set when an admin flags a previously-verified document as fraudulent,
+    /// which also resets `is_verified` to `false`. Cleared on re-verification.
+    pub flagged_by: Option<Address>,
+    pub flagged_at: u64,
+    pub flag_reason: Option<String>,
 }
 
 #[contracttype]

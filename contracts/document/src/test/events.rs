@@ -4,7 +4,7 @@
 //! The test `Env` only keeps the events of the most recent top-level
 //! invocation, so each assertion sits directly after the call it covers.
 
-use soroban_sdk::{testutils::Address as _, Address, TryFromVal};
+use soroban_sdk::{testutils::Address as _, Address, String, TryFromVal};
 
 use super::{emitted, emitted_key, no_events, setup, Ctx};
 use crate::types::{DocumentRecord, DocumentType};
@@ -49,6 +49,27 @@ fn test_verify_emits_verified() {
     assert_eq!(payload.verified_by, Some(ctx.admin.clone()));
 
     let key: u64 = emitted_key(&ctx.env, &ctx.client.address, "verified");
+    assert_eq!(key, id);
+
+    // Querying the contract clears the event buffer, so do it last.
+    assert_eq!(payload, ctx.client.get_document(&id));
+}
+
+#[test]
+fn test_flag_emits_flagged() {
+    let ctx = setup();
+    let (id, _) = ctx.register(&ctx.shipper, ctx.shipment_id);
+    ctx.client.verify_document(&ctx.admin, &id);
+
+    let reason = String::from_str(&ctx.env, "forged signature");
+    ctx.client.flag_document(&ctx.admin, &id, &reason);
+
+    let payload = only_event(&ctx, "flagged");
+    assert!(!payload.is_verified);
+    assert_eq!(payload.flagged_by, Some(ctx.admin.clone()));
+    assert_eq!(payload.flag_reason, Some(reason));
+
+    let key: u64 = emitted_key(&ctx.env, &ctx.client.address, "flagged");
     assert_eq!(key, id);
 
     // Querying the contract clears the event buffer, so do it last.

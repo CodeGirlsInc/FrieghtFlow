@@ -44,6 +44,9 @@ pub fn register(
         is_verified: false,
         verified_by: None,
         verified_at: 0,
+        flagged_by: None,
+        flagged_at: 0,
+        flag_reason: None,
     };
 
     storage::store(env, &doc);

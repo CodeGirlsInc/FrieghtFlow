@@ -82,6 +82,27 @@ impl ShipmentContract {
         )
     }
 
+    /// Shipper edits shipment terms while still `Created`. See [`shipper::update`].
+    pub fn update_shipment(
+        env: Env,
+        shipper: Address,
+        shipment_id: u64,
+        destination: String,
+        cargo_description: String,
+        weight_kg: u32,
+        price: i128,
+    ) -> Result<(), ShipmentError> {
+        shipper::update(
+            &env,
+            shipper,
+            shipment_id,
+            destination,
+            cargo_description,
+            weight_kg,
+            price,
+        )
+    }
+
     /// Shipper confirms delivery. See [`shipper::confirm_delivery`].
     pub fn confirm_delivery(
         env: Env,
