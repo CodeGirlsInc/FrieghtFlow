@@ -1,0 +1,19 @@
+# Pinned toolchain for the `contracts/` workspace.
+#
+# Why pin: CI runs `cargo clippy -- -D warnings`, so a new upstream stable
+# release can introduce a lint that fails a PR which changed nothing here.
+# Pinning also keeps local contributor builds on the same compiler as CI.
+#
+# Compatibility: soroban-sdk 22.0.0 declares an MSRV of 1.79; 1.82.0 is a
+# later stable release in the same edition-2021 series, so it satisfies all
+# five crates (identity, shipment, escrow, document, reputation).
+#
+# Upgrade process: bump `channel` in its own PR, isolated from feature work,
+# so a clippy fallout from the new release is reviewed on its own and can be
+# reverted without touching anything else.
+
+[toolchain]
+channel = "1.82.0"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"
