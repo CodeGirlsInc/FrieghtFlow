@@ -8,7 +8,7 @@ use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 
 use crate::errors::ReputationError;
 use crate::types::{DataKey, RatingRecord, Reputation, UserType};
-use crate::{rating, stats, storage, users};
+use crate::{authorized, rating, stats, storage, users};
 
 #[contract]
 pub struct ReputationContract;
@@ -49,6 +49,23 @@ impl ReputationContract {
         }
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         Ok(())
+    }
+
+    /// Admin-only: repoint `update_stats` at a new authorized contract.
+    ///
+    /// Needed because `initialize` sets the address once; without this the
+    /// link breaks permanently if the shipment contract is redeployed.
+    pub fn set_authorized_contract(
+        env: Env,
+        admin: Address,
+        new_contract: Address,
+    ) -> Result<(), ReputationError> {
+        authorized::set(&env, admin, new_contract)
+    }
+
+    /// The contract address currently allowed to call `update_stats`.
+    pub fn get_authorized_contract(env: Env) -> Result<Address, ReputationError> {
+        storage::authorized_contract(&env)
     }
 
     /// Admin-only: pause all state-mutating entrypoints.

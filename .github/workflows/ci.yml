@@ -138,10 +138,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Setup Rust toolchain (pinned by contracts/rust-toolchain.toml)
+        # `rustup show` in a directory containing rust-toolchain.toml installs
+        # exactly the channel, components and targets that file names, so the
+        # pin is the single source of truth for CI and local builds alike.
+        run: rustup show
 
       - name: Cache Cargo registry
         uses: actions/cache@v4
@@ -171,3 +172,6 @@ jobs:
 
       - name: Tests
         run: cargo test --all
+
+      - name: WASM size budget
+        run: ./scripts/check-wasm-size.sh
