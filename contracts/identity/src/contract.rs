@@ -1,4 +1,4 @@
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 use crate::errors::IdentityError;
 use crate::events;
@@ -12,7 +12,7 @@ impl IdentityContract {
     /// One-time initialization — sets the admin.
     pub fn initialize(env: Env, admin: Address) -> Result<(), IdentityError> {
         if env.storage().instance().has(&DataKey::Admin) {
-            return Err(IdentityError::AlreadyRegistered);
+            return Err(IdentityError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
@@ -95,7 +95,46 @@ impl IdentityContract {
             TTL_LEDGERS,
         );
 
+        Self::index_wallet(&env, &user_id_hash, &wallet);
+
         events::registered(&env, &wallet, &user_id_hash);
+        Ok(())
+    }
+
+    /// Replace the `user_id_hash` of an already-registered wallet, in one
+    /// wallet-signed transaction — no admin `revoke_identity` required first,
+    /// and no window in which the wallet has no registered identity.
+    ///
+    /// Fails with `NotRegistered` if `wallet` has no existing identity; use
+    /// `register_identity` for a fresh registration instead.
+    pub fn update_identity(
+        env: Env,
+        wallet: Address,
+        new_user_id_hash: BytesN<32>,
+    ) -> Result<(), IdentityError> {
+        wallet.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let old_user_id_hash: BytesN<32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Identity(wallet.clone()))
+            .ok_or(IdentityError::NotRegistered)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Identity(wallet.clone()), &new_user_id_hash);
+
+        env.storage().persistent().extend_ttl(
+            &DataKey::Identity(wallet.clone()),
+            TTL_LEDGERS,
+            TTL_LEDGERS,
+        );
+
+        Self::unindex_wallet(&env, &old_user_id_hash, &wallet);
+        Self::index_wallet(&env, &new_user_id_hash, &wallet);
+
+        events::updated(&env, &wallet, &new_user_id_hash);
         Ok(())
     }
 
@@ -110,6 +149,15 @@ impl IdentityContract {
             .persistent()
             .get(&DataKey::Identity(wallet))
             .ok_or(IdentityError::NotRegistered)
+    }
+
+    /// Reverse lookup: every wallet currently registered against
+    /// `user_id_hash`. Empty if none are.
+    pub fn get_wallets_by_identity(env: Env, user_id_hash: BytesN<32>) -> Vec<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::HashToWallets(user_id_hash))
+            .unwrap_or_else(|| Vec::new(&env))
     }
 
     /// Admin-only: remove a wallet's identity record.
@@ -133,8 +181,53 @@ impl IdentityContract {
             .persistent()
             .remove(&DataKey::Identity(wallet.clone()));
 
+        Self::unindex_wallet(&env, &user_id_hash, &wallet);
+
         events::revoked(&env, &wallet, &user_id_hash);
         Ok(())
+    }
+
+    /// Add `wallet` to the reverse index for `user_id_hash`.
+    fn index_wallet(env: &Env, user_id_hash: &BytesN<32>, wallet: &Address) {
+        let key = DataKey::HashToWallets(user_id_hash.clone());
+        let mut wallets: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
+
+        wallets.push_back(wallet.clone());
+        env.storage().persistent().set(&key, &wallets);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+    }
+
+    /// Remove `wallet` from the reverse index for `user_id_hash`, dropping
+    /// the index entry entirely once it is empty.
+    fn unindex_wallet(env: &Env, user_id_hash: &BytesN<32>, wallet: &Address) {
+        let key = DataKey::HashToWallets(user_id_hash.clone());
+        let wallets: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
+
+        let mut remaining = Vec::new(env);
+        for w in wallets.iter() {
+            if w != *wallet {
+                remaining.push_back(w);
+            }
+        }
+
+        if remaining.is_empty() {
+            env.storage().persistent().remove(&key);
+        } else {
+            env.storage().persistent().set(&key, &remaining);
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+        }
     }
 
     fn require_not_paused(env: &Env) -> Result<(), IdentityError> {

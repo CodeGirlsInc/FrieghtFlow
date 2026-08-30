@@ -43,6 +43,26 @@ fn test_revoke_emits_revoked() {
 }
 
 #[test]
+fn test_update_emits_updated() {
+    let ctx = setup();
+    let wallet = Address::generate(&ctx.env);
+    let hash = BytesN::random(&ctx.env);
+    let new_hash = BytesN::random(&ctx.env);
+
+    ctx.client.register_identity(&hash, &wallet);
+    ctx.client.update_identity(&wallet, &new_hash);
+
+    let payloads = emitted(&ctx.env, &ctx.client.address, "updated");
+    assert_eq!(payloads.len(), 1);
+
+    let payload = BytesN::<32>::try_from_val(&ctx.env, &payloads.get_unchecked(0)).unwrap();
+    assert_eq!(payload, new_hash);
+
+    let key: Address = emitted_key(&ctx.env, &ctx.client.address, "updated");
+    assert_eq!(key, wallet);
+}
+
+#[test]
 fn test_failed_register_emits_nothing() {
     let ctx = setup();
     let wallet = Address::generate(&ctx.env);

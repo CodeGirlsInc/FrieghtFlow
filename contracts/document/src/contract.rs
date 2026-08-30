@@ -7,7 +7,7 @@
 use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, String, Vec};
 
 use crate::errors::DocumentError;
-use crate::types::{DataKey, DocumentRecord, DocumentType};
+use crate::types::{DataKey, DocumentRecord, DocumentType, HashAlgorithm};
 use crate::{registry, storage, verification};
 
 #[contract]
@@ -90,6 +90,7 @@ impl DocumentContract {
         shipment_id: u64,
         doc_type: DocumentType,
         content_hash: BytesN<32>,
+        hash_algorithm: HashAlgorithm,
         ipfs_cid: Bytes,
     ) -> Result<u64, DocumentError> {
         registry::register(
@@ -98,6 +99,7 @@ impl DocumentContract {
             shipment_id,
             doc_type,
             content_hash,
+            hash_algorithm,
             ipfs_cid,
         )
     }

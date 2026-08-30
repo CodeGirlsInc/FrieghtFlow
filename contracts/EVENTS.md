@@ -44,7 +44,7 @@ Where a transition can go two ways it is still one event, and the payload's
 | `shipment`   | `created`, `updated`, `accepted`, `intransit`, `delivered`, `completed`, `disputed`, `resolved`, `cancelled` |
 | `escrow`     | `funded`, `released`, `refunded`, `disputed`, `resolved` |
 | `document`   | `registered`, `verified`, `flagged` |
-| `identity`   | `registered`, `revoked` |
+| `identity`   | `registered`, `revoked`, `updated` |
 | `reputation` | `registered`, `submitted`, `updated` |
 
 `reputation` is the one contract with two payload shapes: `submitted` carries

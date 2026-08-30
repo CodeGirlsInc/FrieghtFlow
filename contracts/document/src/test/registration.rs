@@ -1,6 +1,6 @@
 use super::setup;
 use crate::errors::DocumentError;
-use crate::types::DocumentType;
+use crate::types::{DocumentType, HashAlgorithm};
 
 #[test]
 fn test_register_document() {
@@ -17,6 +17,7 @@ fn test_register_document() {
     assert_eq!(doc.uploader, ctx.shipper);
     assert_eq!(doc.doc_type, DocumentType::BillOfLading);
     assert_eq!(doc.content_hash, hash);
+    assert_eq!(doc.hash_algorithm, HashAlgorithm::Sha256);
     assert!(!doc.is_verified);
     assert!(doc.verified_by.is_none());
 }
@@ -31,6 +32,7 @@ fn test_multiple_docs_per_shipment() {
         &ctx.shipment_id,
         &DocumentType::ProofOfDelivery,
         &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
         &ctx.fake_cid(),
     );
 
@@ -110,6 +112,7 @@ fn test_all_document_types() {
             &ctx.shipment_id,
             &doc_type,
             &ctx.fake_hash(),
+            &HashAlgorithm::Sha256,
             &ctx.fake_cid(),
         );
         assert_eq!(ctx.client.get_document(&id).doc_type, doc_type);

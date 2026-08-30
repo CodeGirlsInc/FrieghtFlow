@@ -25,3 +25,11 @@ pub fn revoked(env: &Env, wallet: &Address, user_id_hash: &BytesN<32>) {
         user_id_hash.clone(),
     );
 }
+
+/// `(identity, updated, wallet)` → the new user id hash.
+pub fn updated(env: &Env, wallet: &Address, user_id_hash: &BytesN<32>) {
+    env.events().publish(
+        (SUBJECT, symbol_short!("updated"), wallet.clone()),
+        user_id_hash.clone(),
+    );
+}
