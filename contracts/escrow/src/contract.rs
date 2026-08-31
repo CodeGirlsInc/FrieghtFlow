@@ -127,8 +127,8 @@ impl EscrowContract {
         storage::admin(&env)
     }
 
-    pub fn get_balance(env: Env) -> i128 {
-        let token = storage::token(&env).unwrap_or_else(|_| panic!());
-        token.balance(&env.current_contract_address())
+    pub fn get_balance(env: Env) -> Result<i128, EscrowError> {
+        let token = storage::token(&env)?;
+        Ok(token.balance(&env.current_contract_address()))
     }
 }

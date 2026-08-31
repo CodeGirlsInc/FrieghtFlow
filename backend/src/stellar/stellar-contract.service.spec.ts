@@ -453,5 +453,17 @@ describe('StellarContractService', () => {
       const balance = await service.getBalance();
       expect(balance).toBe(1_234_567_890n);
     });
+
+    it('maps NotInitialized from getBalance into EscrowContractError', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        errorSim('HostError: Error(Contract, #1)'),
+      );
+
+      await expect(service.getBalance()).rejects.toThrow(EscrowContractError);
+      const error = (await service.getBalance().catch((e: unknown) => e)) as EscrowContractError;
+      expect(error.code).toBe(EscrowErrorCode.NotInitialized);
+    });
   });
 });
