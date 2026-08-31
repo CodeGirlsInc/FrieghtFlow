@@ -33,8 +33,12 @@ pub fn fund(
         .has(&DataKey::Escrow(shipment_id))
     {
         let existing = storage::load(env, shipment_id)?;
-        if existing.status == EscrowStatus::Funded {
-            return Err(EscrowError::AlreadyFunded);
+        match existing.status {
+            EscrowStatus::Funded => return Err(EscrowError::AlreadyFunded),
+            EscrowStatus::Released | EscrowStatus::Refunded => {
+                return Err(EscrowError::InvalidStatus);
+            }
+            _ => {}
         }
     }
 
