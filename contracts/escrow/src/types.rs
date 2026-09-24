@@ -6,7 +6,15 @@ pub const TTL_LEDGERS: u32 = 6_307_200;
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EscrowStatus {
-    /// Escrow record created, waiting for shipper to deposit funds.
+    /// Declared for a potential future two-step create-then-fund flow.
+    ///
+    /// **Currently unused:** `funding::fund` is the only place an
+    /// `EscrowRecord` is ever constructed, and it sets `status: Funded`
+    /// immediately — there is no `create_escrow` entrypoint that would
+    /// produce a `Pending` record. This variant is retained for ABI
+    /// stability (removing it would change the on-chain encoding of the
+    /// enum) but must not be matched as a valid live state anywhere in
+    /// the contract logic until a two-step flow is intentionally added.
     Pending,
     /// Funds are held in the contract.
     Funded,

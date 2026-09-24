@@ -78,6 +78,25 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Admin-only: update the SEP-41 token contract address.
+    ///
+    /// `initialize` sets `DataKey::TokenContract` once; without this entrypoint
+    /// there is no in-place recovery path if the token is redeployed (e.g. a
+    /// migrated SEP-41 wrapper or a redeployed asset contract). Mirrors the
+    /// pattern already shipped for `set_authorized_contract` in the reputation
+    /// crate (closed issue [CONTRACT-64]).
+    ///
+    /// Requires admin auth and the contract to be unpaused, consistent with
+    /// `set_shipment_contract` in this same crate.
+    pub fn set_token_contract(env: Env, new_token: Address) -> Result<(), EscrowError> {
+        storage::admin(&env)?.require_auth();
+        storage::require_not_paused(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenContract, &new_token);
+        Ok(())
+    }
+
     /// Shipper locks funds for a shipment. See [`funding::fund`].
     pub fn fund_escrow(
         env: Env,
