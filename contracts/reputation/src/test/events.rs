@@ -95,3 +95,19 @@ fn test_rejected_call_emits_nothing() {
         .try_update_stats(&random, &carrier, &true, &false);
     assert!(no_events(&ctx.env));
 }
+
+#[test]
+fn test_update_user_type_emits_updated() {
+    let ctx = setup();
+    let user = Address::generate(&ctx.env);
+    ctx.client.register_user(&user, &UserType::Shipper);
+
+    ctx.client.update_user_type(&user, &UserType::Carrier);
+
+    let payload = only_reputation(&ctx, "updated");
+    assert_eq!(payload.user, user);
+    assert_eq!(payload.user_type, UserType::Carrier);
+
+    let key: Address = emitted_key(&ctx.env, &ctx.client.address, "updated");
+    assert_eq!(key, user);
+}
