@@ -113,3 +113,43 @@ fn test_calculate_score_new_user() {
 
     assert_eq!(ctx.client.calculate_score(&user), 0); // no data yet
 }
+
+#[test]
+fn test_calculate_score_rate_component_keeps_fractional_precision() {
+    let ctx = setup();
+    let carrier = Address::generate(&ctx.env);
+    ctx.client.register_user(&carrier, &UserType::Carrier);
+
+    // 1 on-time out of 3 completed: 1/3 is not an integer percentage, so the
+    // ×3 factor must be applied before the division to avoid truncation.
+    ctx.client
+        .update_stats(&ctx.auth_contract, &carrier, &true, &false); // on-time
+    ctx.client
+        .update_stats(&ctx.auth_contract, &carrier, &false, &false); // late
+    ctx.client
+        .update_stats(&ctx.auth_contract, &carrier, &false, &false); // late
+
+    // rating_component = 0 (no ratings), completion_component = 0.
+    // rate_component must be (1 × 100 × 3) / 3 = 100, not 99.
+    assert_eq!(ctx.client.calculate_score(&carrier), 100);
+}
+
+#[test]
+fn test_calculate_score_rate_component_loses_nothing_when_evenly_divisible() {
+    let ctx = setup();
+    let carrier = Address::generate(&ctx.env);
+    ctx.client.register_user(&carrier, &UserType::Carrier);
+
+    // 2 on-time out of 4 completed: even division, so the reordered formula
+    // must produce the same value the old ordering did (150).
+    for _ in 0..2 {
+        ctx.client
+            .update_stats(&ctx.auth_contract, &carrier, &true, &false);
+    }
+    for _ in 0..2 {
+        ctx.client
+            .update_stats(&ctx.auth_contract, &carrier, &false, &false);
+    }
+
+    assert_eq!(ctx.client.calculate_score(&carrier), 150);
+}
