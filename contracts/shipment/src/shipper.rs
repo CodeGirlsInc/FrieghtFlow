@@ -23,7 +23,15 @@ pub fn create(
         return Err(ShipmentError::InvalidInput);
     }
 
-    if origin.len() > 255 || destination.len() > 255 || cargo_description.len() > 1024 {
+    // Blank or oversized free-text fields are rejected: origin and destination
+    // must be 1-255 chars, cargo_description 1-1024 chars.
+    if origin.len() == 0
+        || destination.len() == 0
+        || cargo_description.len() == 0
+        || origin.len() > 255
+        || destination.len() > 255
+        || cargo_description.len() > 1024
+    {
         return Err(ShipmentError::InvalidInput);
     }
 
@@ -82,7 +90,13 @@ pub fn update(
     if weight_kg == 0 || weight_kg > 1_000_000 || price <= 0 {
         return Err(ShipmentError::InvalidInput);
     }
-    if destination.len() > 255 || cargo_description.len() > 1024 {
+    // Same free-text bounds as `create`: destination must be 1-255 chars,
+    // cargo_description 1-1024 chars.
+    if destination.len() == 0
+        || cargo_description.len() == 0
+        || destination.len() > 255
+        || cargo_description.len() > 1024
+    {
         return Err(ShipmentError::InvalidInput);
     }
 
