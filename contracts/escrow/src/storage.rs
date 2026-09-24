@@ -1,9 +1,10 @@
 //! Storage accessors shared by the contract's entrypoint modules.
 
+use common::TTL_LEDGERS;
 use soroban_sdk::{token, Address, Env};
 
 use crate::errors::EscrowError;
-use crate::types::{DataKey, EscrowRecord, TTL_LEDGERS};
+use crate::types::{DataKey, EscrowRecord};
 
 pub fn admin(env: &Env) -> Result<Address, EscrowError> {
     env.storage()

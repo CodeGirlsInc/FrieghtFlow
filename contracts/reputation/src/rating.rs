@@ -1,9 +1,10 @@
 //! Submitting 1-5 star ratings for completed shipments.
 
+use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Env, Vec};
 
 use crate::errors::ReputationError;
-use crate::types::{DataKey, RatingRecord, TTL_LEDGERS};
+use crate::types::{DataKey, RatingRecord};
 use crate::{events, storage};
 
 /// Submit a 1-5 star rating for a completed shipment.
