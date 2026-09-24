@@ -146,3 +146,67 @@ fn test_integrity_check_uses_recorded_algorithm() {
     // The comparison branches on `doc.hash_algorithm`, not a hardcoded rule.
     assert!(ctx.client.check_integrity(&id, &hash));
 }
+
+// --- Issue #1451: field length bounds ---
+
+/// register_document rejects an ipfs_cid longer than 512 bytes.
+#[test]
+fn test_register_document_rejects_oversized_ipfs_cid() {
+    use soroban_sdk::Bytes;
+    let ctx = setup();
+    // 513 bytes — one over the limit.
+    let oversized_cid = Bytes::from_slice(&ctx.env, &[b'Q'; 513]);
+    let result = ctx.client.try_register_document(
+        &ctx.shipper,
+        &ctx.shipment_id,
+        &crate::types::DocumentType::BillOfLading,
+        &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
+        &oversized_cid,
+    );
+    assert_eq!(result, Err(Ok(crate::errors::DocumentError::FieldTooLong)));
+}
+
+/// register_document accepts an ipfs_cid exactly at the 512-byte limit.
+#[test]
+fn test_register_document_accepts_cid_at_limit() {
+    use soroban_sdk::Bytes;
+    let ctx = setup();
+    let max_cid = Bytes::from_slice(&ctx.env, &[b'Q'; 512]);
+    // Must not return FieldTooLong.
+    ctx.client.register_document(
+        &ctx.shipper,
+        &ctx.shipment_id,
+        &crate::types::DocumentType::BillOfLading,
+        &ctx.fake_hash(),
+        &HashAlgorithm::Sha256,
+        &max_cid,
+    );
+}
+
+/// flag_document rejects a reason string longer than 1 024 bytes.
+#[test]
+fn test_flag_document_rejects_oversized_reason() {
+    let ctx = setup();
+    let (id, _) = ctx.register(&ctx.shipper, ctx.shipment_id);
+    ctx.client.verify_document(&ctx.admin, &id);
+
+    // 1025-character reason string — one over the limit.
+    let oversized: std::string::String = "X".repeat(1025);
+    let reason = String::from_str(&ctx.env, &oversized);
+    let result = ctx.client.try_flag_document(&ctx.admin, &id, &reason);
+    assert_eq!(result, Err(Ok(crate::errors::DocumentError::FieldTooLong)));
+}
+
+/// flag_document accepts a reason string exactly at the 1 024-byte limit.
+#[test]
+fn test_flag_document_accepts_reason_at_limit() {
+    let ctx = setup();
+    let (id, _) = ctx.register(&ctx.shipper, ctx.shipment_id);
+    ctx.client.verify_document(&ctx.admin, &id);
+
+    let max_reason: std::string::String = "X".repeat(1024);
+    let reason = String::from_str(&ctx.env, &max_reason);
+    // Must not return FieldTooLong.
+    ctx.client.flag_document(&ctx.admin, &id, &reason);
+}
