@@ -98,6 +98,17 @@ impl ReputationContract {
         users::register(&env, user, user_type)
     }
 
+    /// Correct a mis-registered `UserType` in one user-signed call — the
+    /// reputation analogue of identity's `update_identity`. See
+    /// [`users::update`].
+    pub fn update_user_type(
+        env: Env,
+        user: Address,
+        user_type: UserType,
+    ) -> Result<(), ReputationError> {
+        users::update(&env, user, user_type)
+    }
+
     /// Submit a 1-5 star rating. See [`rating::submit`].
     pub fn submit_rating(
         env: Env,
