@@ -59,14 +59,10 @@ describe('DocumentsController', () => {
     });
 
     await controller.upload(file, dto, user);
-    controller.listByShipment('shipment-1', user);
-    controller.findOne('doc-1', user);
-    await controller.download(
-      'doc-1',
-      user,
-      { download: jest.fn() } as never,
-    );
-    controller.remove('doc-1', user);
+    void controller.listByShipment('shipment-1', user);
+    void controller.findOne('doc-1', user);
+    await controller.download('doc-1', user, { download: jest.fn() } as never);
+    void controller.remove('doc-1', user);
 
     expect(service.upload).toHaveBeenCalledWith(file, dto, user);
     expect(service.listByShipment).toHaveBeenCalledWith('shipment-1', user);

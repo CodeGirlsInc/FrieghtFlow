@@ -41,6 +41,40 @@ export interface EscrowReconciliationResult {
   mismatches: string[];
 }
 
+export interface PaginatedUsers {
+  data: User[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PaginatedAdminShipments {
+  data: Shipment[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PlatformStats {
+  users: {
+    total: number;
+    byRole: Record<UserRole, number>;
+    active: number;
+    inactive: number;
+  };
+  shipments: {
+    total: number;
+    byStatus: Record<ShipmentStatus, number>;
+    disputesPending: number;
+  };
+  revenue: {
+    totalCompleted: number;
+    currency: string;
+  };
+}
+
 const PAYMENT_TO_ESCROW_STATUS: Record<PaymentStatus, EscrowRecord['status'] | null> = {
   [PaymentStatus.PENDING]: 'Pending',
   [PaymentStatus.FUNDING]: 'Pending',
