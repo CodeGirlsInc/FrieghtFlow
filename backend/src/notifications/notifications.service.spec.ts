@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsService } from './notifications.service';
 import { MailerService } from '@nestjs-modules/mailer';
+import { NotificationPreferencesService } from '../notification-preferences/notification-preferences.service';
 import { ShipmentEvent } from '../shipments/events/shipment.events';
 import { Shipment } from '../shipments/entities/shipment.entity';
 import { User } from '../users/entities/user.entity';
@@ -48,14 +49,17 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
 describe('NotificationsService', () => {
   let service: NotificationsService;
   let mailer: { sendMail: jest.Mock };
+  let prefs: { isEnabled: jest.Mock };
 
   beforeEach(async () => {
     mailer = { sendMail: jest.fn().mockResolvedValue(undefined) };
+    prefs = { isEnabled: jest.fn().mockResolvedValue(true) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
         { provide: MailerService, useValue: mailer },
+        { provide: NotificationPreferencesService, useValue: prefs },
       ],
     }).compile();
 
@@ -87,6 +91,39 @@ describe('NotificationsService', () => {
     );
 
     await service.onShipmentAccepted(evt);
+
+    expect(mailer.sendMail).not.toHaveBeenCalled();
+  });
+
+  it('respects per-user notification preferences (BE-148)', async () => {
+    // Shipper disabled 'shipmentAccepted', carrier kept it enabled.
+    prefs.isEnabled.mockImplementation((userId: string, key: string) =>
+      Promise.resolve(!(userId === 'shipper-1' && key === 'shipmentAccepted')),
+    );
+
+    await service.onShipmentAccepted(new ShipmentEvent(makeShipment(), 'a-1'));
+
+    expect(mailer.sendMail).toHaveBeenCalledTimes(1);
+    expect(mailer.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'carrier@example.com' }),
+    );
+    expect(mailer.sendMail).not.toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'shipper@example.com' }),
+    );
+  });
+
+  it('still sends when preference lookup fails (fail-open)', async () => {
+    prefs.isEnabled.mockRejectedValue(new Error('db down'));
+
+    await service.onShipmentAccepted(new ShipmentEvent(makeShipment(), 'a-1'));
+
+    expect(mailer.sendMail).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips the in-transit email entirely when the shipper opted out', async () => {
+    prefs.isEnabled.mockResolvedValue(false);
+
+    await service.onShipmentInTransit(new ShipmentEvent(makeShipment(), 'a-1'));
 
     expect(mailer.sendMail).not.toHaveBeenCalled();
   });
