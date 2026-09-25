@@ -23,7 +23,9 @@ export const AppDataSource = new DataSource({
   database: process.env.DATABASE_NAME ?? 'freightflow',
   // Glob patterns — CLI resolves these at runtime via ts-node
   entities: ['src/**/*.entity.ts'],
-  migrations: ['src/migrations/*.ts'],
+  // Migration filenames begin with a numeric timestamp. Exclude the colocated
+  // Jest migration specs from the TypeORM CLI migration list.
+  migrations: ['src/migrations/[0-9]*.ts'],
   // Never synchronize in migration mode
   synchronize: false,
   logging: ['migration'],

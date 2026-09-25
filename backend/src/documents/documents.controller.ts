@@ -12,6 +12,7 @@ import {
   HttpStatus,
   Res,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -27,18 +28,10 @@ import { DocumentsService } from './documents.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
-
-const ALLOWED_MIMETYPES = new Set([
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-]);
+import { UserRole } from '../common/enums/role.enum';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { isSupportedDocumentMimeType } from './document-file.util';
 
 @ApiTags('documents')
 @ApiBearerAuth()
@@ -71,15 +64,60 @@ export class DocumentsController {
     @Body() dto: UploadDocumentDto,
     @CurrentUser() user: User,
   ) {
+    try {
+      this.assertAllowedFile(file);
+      return await this.documentsService.upload(file, dto, user);
+    } catch (error: unknown) {
+      this.documentsService.cleanupUpload(file);
+      throw error;
+    }
+  }
+
+  @Post('certification')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.CARRIER)
+  @ApiOperation({
+    summary: 'Upload a platform-owned carrier certification document',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Certification document uploaded' })
+  @ApiResponse({ status: 400, description: 'Invalid file' })
+  @ApiResponse({ status: 403, description: 'Carrier role required' })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadCertification(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: User,
+  ) {
+    try {
+      this.assertAllowedFile(file);
+      return await this.documentsService.uploadCertificationDocument(
+        file,
+        user,
+      );
+    } catch (error: unknown) {
+      this.documentsService.cleanupUpload(file);
+      throw error;
+    }
+  }
+
+  private assertAllowedFile(file: Express.Multer.File | undefined): void {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
-    if (!ALLOWED_MIMETYPES.has(file.mimetype)) {
+    if (!isSupportedDocumentMimeType(file.mimetype)) {
       throw new BadRequestException(
         `Unsupported file type: ${file.mimetype}. Allowed: PDF, images, Word, Excel`,
       );
     }
-    return this.documentsService.upload(file, dto, user);
   }
 
   @Get('shipment/:shipmentId')

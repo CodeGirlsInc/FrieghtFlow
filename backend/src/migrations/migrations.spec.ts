@@ -1,5 +1,7 @@
 import { CreatePaymentsTable1724140800000 } from './1724140800000-CreatePaymentsTable';
 import { AddPaymentFundingFields1724227200000 } from './1724227200000-AddPaymentFundingFields';
+import { AddCertificationDocumentProvenance1724313600000 } from './1724313600000-AddCertificationDocumentProvenance';
+import { AppDataSource } from '../data-source';
 
 function mockQueryRunner() {
   return {
@@ -33,6 +35,45 @@ describe('migrations', () => {
 
     expect(queryRunner.query).toHaveBeenCalledWith(
       expect.stringContaining('ALTER TABLE "payments"'),
+    );
+  });
+
+  it('uses a CLI migration glob that excludes colocated specs', () => {
+    expect(AppDataSource.options.migrations).toEqual([
+      'src/migrations/[0-9]*.ts',
+    ]);
+  });
+
+  it('adds platform document provenance and expiry-safe certification fields', async () => {
+    const queryRunner = mockQueryRunner();
+    const migration = new AddCertificationDocumentProvenance1724313600000();
+
+    await migration.up(queryRunner as never);
+    await migration.down(queryRunner as never);
+
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('ADD COLUMN IF NOT EXISTS "document_id"'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('is_platform_hosted'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('verification_revoked_at'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('"documents_document_type_enum"'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('ON DELETE RESTRICT'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('SET "is_verified" = false'),
+    );
+    expect(queryRunner.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM "documents"'),
+    );
+    expect(queryRunner.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('platform://document/'),
     );
   });
 });
