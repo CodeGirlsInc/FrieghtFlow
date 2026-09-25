@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 testutils = ["soroban-sdk/testutils"]
 
 [dependencies]
+common = { path = "../common" }
 soroban-sdk = { version = "22.0.0", features = ["alloc"] }
 
 [dev-dependencies]
