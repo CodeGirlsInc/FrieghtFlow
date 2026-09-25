@@ -1,8 +1,9 @@
+use common::TTL_LEDGERS;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 use crate::errors::IdentityError;
 use crate::events;
-use crate::types::{DataKey, TTL_LEDGERS};
+use crate::types::DataKey;
 
 #[contract]
 pub struct IdentityContract;

@@ -1,10 +1,11 @@
 //! Registering a document against a shipment.
 
+use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Bytes, BytesN, Env, Vec};
 
 use crate::errors::DocumentError;
 use crate::shipment::{Shipment, ShipmentClient};
-use crate::types::{DataKey, DocumentRecord, DocumentType, HashAlgorithm, TTL_LEDGERS};
+use crate::types::{DataKey, DocumentRecord, DocumentType, HashAlgorithm};
 use crate::{events, storage};
 
 /// Register a new document for a shipment.
