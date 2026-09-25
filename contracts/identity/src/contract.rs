@@ -5,6 +5,13 @@ use crate::errors::IdentityError;
 use crate::events;
 use crate::types::DataKey;
 
+/// Maximum number of wallets that may be registered against one `user_id_hash`
+/// at any given time. This bounds `unindex_wallet`'\''s O(n) read-modify-write
+/// cost and `get_wallets_by_identity`'\''s read cost. Legitimate use cases
+/// (a KYC'\''d user adding a second device, a corporate entity with a handful
+/// of authorised wallets) are well below this ceiling.
+pub const MAX_WALLETS_PER_HASH: u32 = 64;
+
 #[contract]
 pub struct IdentityContract;
 
@@ -70,6 +77,12 @@ impl IdentityContract {
     }
 
     /// Register a wallet → user_id_hash mapping.
+    ///
+    /// At most `MAX_WALLETS_PER_HASH` (64) wallets may be registered against
+    /// one `user_id_hash` at a time. This bounds `unindex_wallet`'\''s O(n)
+    /// rebuild cost (issue #1455) and the read cost of `get_wallets_by_identity`.
+    /// Legitimate use cases (e.g. a KYC'\''d user registering multiple devices)
+    /// are well below this ceiling.
     pub fn register_identity(
         env: Env,
         user_id_hash: BytesN<32>,
@@ -84,6 +97,16 @@ impl IdentityContract {
             .has(&DataKey::Identity(wallet.clone()))
         {
             return Err(IdentityError::AlreadyRegistered);
+        }
+
+        // Enforce the per-hash wallet cap before appending to the index.
+        let existing: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::HashToWallets(user_id_hash.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+        if existing.len() >= MAX_WALLETS_PER_HASH {
+            return Err(IdentityError::WalletLimitReached);
         }
 
         env.storage()
