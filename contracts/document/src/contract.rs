@@ -72,11 +72,15 @@ impl DocumentContract {
 
     /// Admin-only: repoint this registry at a different shipment contract
     /// (e.g. after the shipment contract is redeployed).
+    ///
+    /// Consistent with `EscrowContract::set_shipment_contract`, this now
+    /// additionally guards against mutation while the contract is paused.
     pub fn set_shipment_contract(
         env: Env,
         shipment_contract: Address,
     ) -> Result<(), DocumentError> {
         storage::admin(&env)?.require_auth();
+        storage::require_not_paused(&env)?;
         env.storage()
             .instance()
             .set(&DataKey::ShipmentContract, &shipment_contract);
