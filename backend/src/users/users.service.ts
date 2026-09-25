@@ -68,7 +68,7 @@ export class UsersService {
 
   async update(
     id: string,
-    updateUserDto: UpdateUserDto & { walletAddress?: string },
+    updateUserDto: UpdateUserDto & { walletAddress?: string | null },
   ): Promise<User> {
     const user = await this.findOne(id);
     if (updateUserDto.password) {

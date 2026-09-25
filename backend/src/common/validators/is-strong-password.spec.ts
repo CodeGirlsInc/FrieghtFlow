@@ -1,5 +1,6 @@
 import { validate } from 'class-validator';
 import { RegisterDto } from '../../auth/dto/register.dto';
+import { CreateUserDto } from '../../users/dto/create-user.dto';
 import { ChangePasswordDto } from '../../auth/dto/change-password.dto';
 import { ResetPasswordDto } from '../../auth/dto/reset-password.dto';
 import { IsStrongPassword } from './is-strong-password.decorator';
@@ -24,7 +25,7 @@ const WEAK_PASSWORDS: { password: string; missing: string }[] = [
 
 /** Return the list of validation error messages for a given DTO instance. */
 async function getValidationErrors(dto: object): Promise<string[]> {
-  const errors = await validate(dto as any, {
+  const errors = await validate(dto, {
     whitelist: true,
     forbidNonWhitelisted: false,
   });
@@ -79,6 +80,34 @@ describe('IsStrongPassword decorator', () => {
 describe('RegisterDto – password policy', () => {
   function makeDto(password: string): RegisterDto {
     const dto = new RegisterDto();
+    dto.email = 'test@example.com';
+    dto.password = password;
+    dto.firstName = 'Jane';
+    dto.lastName = 'Doe';
+    return dto;
+  }
+
+  it('accepts a valid strong password', async () => {
+    const messages = await getValidationErrors(makeDto(VALID_PASSWORD));
+    expect(messages).toHaveLength(0);
+  });
+
+  it.each(WEAK_PASSWORDS)(
+    'rejects weak password: $missing',
+    async ({ password }) => {
+      const messages = await getValidationErrors(makeDto(password));
+      expect(messages).toEqual(
+        expect.arrayContaining([expect.stringContaining('uppercase')]),
+      );
+    },
+  );
+});
+
+// ── CreateUserDto ─────────────────────────────────────────────────────────────
+
+describe('CreateUserDto – password policy', () => {
+  function makeDto(password: string): CreateUserDto {
+    const dto = new CreateUserDto();
     dto.email = 'test@example.com';
     dto.password = password;
     dto.firstName = 'Jane';
