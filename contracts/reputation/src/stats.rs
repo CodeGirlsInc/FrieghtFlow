@@ -87,7 +87,14 @@ pub fn score(env: &Env, user: Address) -> Result<u32, ReputationError> {
         UserType::Shipper => rep.success_count,
     };
     // On-time / success percentage × 3 → 0-300
-    let rate_component = ((hits as u64 * 100) / rep.total_completed as u64 * 3) as u32;
+    //
+    // Multiply by the (× 3) factor *before* dividing: evaluating left-to-right
+    // as `(hits × 100 / total) × 3` truncates the percentage whenever
+    // `hits × 100` isn't evenly divisible by `total` (e.g. 1/3 → 99 instead
+    // of the exact `(1 × 100 × 3) / 3 = 100`). Keeping all three factors in
+    // the numerator first loses nothing, since the intermediate
+    // `hits × 100 × 3` maxes out at ~1.3 × 10^12, far inside `u64`.
+    let rate_component = ((hits as u64 * 100 * 3) / rep.total_completed as u64) as u32;
 
     // How many completed shipments were actually rated × 2 → 0-200
     let rated_pct = (rep.rating_count as u64 * 100) / rep.total_completed as u64;
