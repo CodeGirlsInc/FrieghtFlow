@@ -1,8 +1,5 @@
 use soroban_sdk::{contracttype, Address, String};
 
-/// ~1 year in ledgers at ~5 s/ledger.
-pub const TTL_LEDGERS: u32 = 6_307_200;
-
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ShipmentStatus {

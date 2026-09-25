@@ -1,9 +1,10 @@
 //! Storage accessors shared by the contract's entrypoint modules.
 
+use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Env};
 
 use crate::errors::ReputationError;
-use crate::types::{DataKey, Reputation, TTL_LEDGERS};
+use crate::types::{DataKey, Reputation};
 
 pub fn admin(env: &Env) -> Result<Address, ReputationError> {
     env.storage()
