@@ -23,7 +23,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DATABASE_NAME ?? 'freightflow',
   // Glob patterns — CLI resolves these at runtime via ts-node
   entities: ['src/**/*.entity.ts'],
-  migrations: ['src/migrations/*.ts'],
+  migrations: ['src/migrations/!(*.spec).ts'],
   // Never synchronize in migration mode
   synchronize: false,
   logging: ['migration'],
