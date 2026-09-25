@@ -17,12 +17,12 @@ export class Document {
   id: string;
 
   @Index()
-  @ManyToOne(() => Shipment, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => Shipment, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'shipment_id' })
-  shipment: Shipment;
+  shipment: Shipment | null;
 
-  @Column({ name: 'shipment_id' })
-  shipmentId: string;
+  @Column({ name: 'shipment_id', type: 'uuid', nullable: true })
+  shipmentId: string | null;
 
   @ManyToOne(() => User, { nullable: false })
   @JoinColumn({ name: 'uploader_id' })

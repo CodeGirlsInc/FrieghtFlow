@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import type { StringValue } from 'ms';
 import { NotificationsService } from './notifications.service';
 import { NotificationsGateway } from './notifications.gateway';
+import { NotificationPreferencesModule } from '../notification-preferences/notification-preferences.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationsGateway } from './notifications.gateway';
         },
       }),
     }),
+    NotificationPreferencesModule,
   ],
   providers: [NotificationsService, NotificationsGateway],
 })

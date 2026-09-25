@@ -1,10 +1,31 @@
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { NotificationsGateway } from './notifications.gateway';
+import { isOriginAllowed } from './notifications.gateway';
 import { ShipmentEvent } from '../shipments/events/shipment.events';
 import { Shipment } from '../shipments/entities/shipment.entity';
 import { User } from '../users/entities/user.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
+
+const ALLOW_LIST = ['http://localhost:3000', 'https://app.freightflow.io'];
+
+describe('isOriginAllowed', () => {
+  it('rejects a third-party origin despite credentials: true (BE-149)', () => {
+    expect(isOriginAllowed('https://evil.example.com', ALLOW_LIST)).toBe(false);
+  });
+
+  it('allows origins on the configured allow-list', () => {
+    expect(isOriginAllowed('https://app.freightflow.io', ALLOW_LIST)).toBe(
+      true,
+    );
+  });
+
+  it('matches exact origins only', () => {
+    expect(
+      isOriginAllowed('https://app.freightflow.io.evil.example', ALLOW_LIST),
+    ).toBe(false);
+  });
+});
 
 describe('NotificationsGateway', () => {
   let gateway: NotificationsGateway;
@@ -65,7 +86,9 @@ describe('NotificationsGateway', () => {
     expect(jwtService.verify).toHaveBeenCalledWith('jwt-token', {
       secret: 'secret',
     });
-    expect((client as { join: jest.Mock }).join).toHaveBeenCalledWith('user:user-1');
+    expect((client as { join: jest.Mock }).join).toHaveBeenCalledWith(
+      'user:user-1',
+    );
   });
 
   it('disconnects when the token is missing', async () => {
@@ -84,7 +107,9 @@ describe('NotificationsGateway', () => {
       'error',
       expect.objectContaining({ message: 'No token provided' }),
     );
-    expect((client as { disconnect: jest.Mock }).disconnect).toHaveBeenCalledWith(true);
+    expect(
+      (client as { disconnect: jest.Mock }).disconnect,
+    ).toHaveBeenCalledWith(true);
   });
 
   it('disconnects when the token is invalid or expired', async () => {
@@ -110,13 +135,15 @@ describe('NotificationsGateway', () => {
       'error',
       expect.objectContaining({ message: 'Invalid or expired token' }),
     );
-    expect((client as { disconnect: jest.Mock }).disconnect).toHaveBeenCalledWith(true);
+    expect(
+      (client as { disconnect: jest.Mock }).disconnect,
+    ).toHaveBeenCalledWith(true);
     expect((client as { join: jest.Mock }).join).not.toHaveBeenCalled();
   });
 
   it('emits shipment updates to the intended user room', () => {
     const emit = jest.fn();
-    (server.to as jest.Mock).mockReturnValue({ emit });
+    server.to.mockReturnValue({ emit });
 
     gateway.onCreated(new ShipmentEvent(shipment, 'actor-1'));
 
@@ -135,7 +162,7 @@ describe('NotificationsGateway', () => {
     const carrierEmit = jest.fn();
     const unrelatedEmit = jest.fn();
 
-    (server.to as jest.Mock).mockImplementation((room: string) => {
+    server.to.mockImplementation((room: string) => {
       if (room === 'user:shipper-1') return { emit: shipperEmit };
       if (room === 'user:carrier-1') return { emit: carrierEmit };
       return { emit: unrelatedEmit };
@@ -160,7 +187,7 @@ describe('NotificationsGateway', () => {
     const shipperEmit = jest.fn();
     const carrierEmit = jest.fn();
 
-    (server.to as jest.Mock).mockImplementation((room: string) => {
+    server.to.mockImplementation((room: string) => {
       if (room === 'user:shipper-1') return { emit: shipperEmit };
       if (room === 'user:carrier-1') return { emit: carrierEmit };
       return { emit: jest.fn() };

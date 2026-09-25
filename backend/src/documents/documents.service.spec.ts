@@ -1,4 +1,9 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as crypto from 'crypto';
@@ -7,9 +12,25 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentsService } from './documents.service';
 import { Document } from './entities/document.entity';
 import { Shipment } from '../shipments/entities/shipment.entity';
+import { CarrierCertification } from '../carriers/entities/carrier-certification.entity';
 import { DocumentType } from './enums/document-type.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
+
+const PDF_BYTES = Buffer.from('%PDF-1.7\nvalid test document\n%%EOF');
+
+function makeFile(
+  overrides: Partial<Express.Multer.File> = {},
+): Express.Multer.File {
+  return {
+    buffer: PDF_BYTES,
+    originalname: 'invoice.pdf',
+    filename: 'untrusted-client-name.exe',
+    mimetype: 'application/pdf',
+    size: PDF_BYTES.length,
+    ...overrides,
+  } as Express.Multer.File;
+}
 
 type RenameSpy = jest.SpyInstance<void, [fs.PathLike, fs.PathLike]>;
 
@@ -29,6 +50,7 @@ describe('DocumentsService', () => {
     remove: jest.Mock;
   };
   let shipmentRepo: { findOne: jest.Mock };
+  let certificationRepo: { findOne: jest.Mock };
 
   const user = {
     id: 'user-1',
@@ -50,12 +72,17 @@ describe('DocumentsService', () => {
       remove: jest.fn(),
     };
     shipmentRepo = { findOne: jest.fn() };
+    certificationRepo = { findOne: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DocumentsService,
         { provide: getRepositoryToken(Document), useValue: documentRepo },
         { provide: getRepositoryToken(Shipment), useValue: shipmentRepo },
+        {
+          provide: getRepositoryToken(CarrierCertification),
+          useValue: certificationRepo,
+        },
         {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('/uploads') },
@@ -64,156 +91,127 @@ describe('DocumentsService', () => {
     }).compile();
 
     service = module.get(DocumentsService);
+    jest.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined);
+    jest.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
+    jest.spyOn(fs, 'unlinkSync').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  it('uploads and hashes a document for a shipment party', async () => {
+  it('verifies content, hashes bytes, and derives a safe extension', async () => {
     shipmentRepo.findOne.mockResolvedValue(shipment);
-    jest.spyOn(fs, 'readFileSync').mockReturnValue(Buffer.from('hello'));
     const expectedHash = crypto
       .createHash('sha256')
-      .update('hello')
+      .update(PDF_BYTES)
       .digest('hex');
-    documentRepo.save.mockResolvedValue({
-      id: 'doc-1',
-      shipmentId: shipment.id,
-      uploaderId: user.id,
-      documentType: DocumentType.INVOICE,
-      originalName: 'invoice.pdf',
-      storedName: 'stored.pdf',
-      mimetype: 'application/pdf',
-      sizeBytes: 5,
-      sha256Hash: expectedHash,
-      ipfsCid: null,
-      onChainDocumentId: null,
-      notes: null,
-    });
+    documentRepo.save.mockImplementation((value: unknown) => value);
 
     const result = await service.upload(
-      {
-        path: '/tmp/file.pdf',
-        originalname: 'invoice.pdf',
-        filename: 'stored.pdf',
-        mimetype: 'application/pdf',
-        size: 5,
-      } as Express.Multer.File,
+      makeFile({ originalname: '../../invoice.exe' }),
       { shipmentId: shipment.id, documentType: DocumentType.INVOICE },
       user,
     );
 
-    expect(documentRepo.save).toHaveBeenCalledWith(
+    expect(result.sha256Hash).toBe(expectedHash);
+    expect(result.mimetype).toBe('application/pdf');
+    expect(result.sizeBytes).toBe(PDF_BYTES.length);
+    expect(result.storedName).toMatch(/^[0-9a-f-]{36}\.pdf$/);
+    expect(result.originalName).toBe('invoice.exe');
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      `/uploads/${result.storedName}`,
+      PDF_BYTES,
+      { flag: 'wx' },
+    );
+  });
+
+  it('rejects a MIME/content mismatch before writing a file', async () => {
+    shipmentRepo.findOne.mockResolvedValue(shipment);
+
+    await expect(
+      service.upload(
+        makeFile({ buffer: Buffer.from('not a pdf') }),
+        { shipmentId: shipment.id, documentType: DocumentType.INVOICE },
+        user,
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+    expect(documentRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('uploads a platform-owned certification document without a shipment', async () => {
+    const carrier = { id: 'carrier-1', role: UserRole.CARRIER } as User;
+    documentRepo.save.mockImplementation((value: unknown) => value);
+
+    await service.uploadCertificationDocument(makeFile(), carrier);
+
+    expect(documentRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        shipmentId: shipment.id,
-        uploaderId: user.id,
-        sha256Hash: expectedHash,
+        shipmentId: null,
+        uploaderId: carrier.id,
+        documentType: DocumentType.CARRIER_CERTIFICATION,
+        mimetype: 'application/pdf',
       }),
     );
-    expect(result.sha256Hash).toBe(expectedHash);
   });
 
-  it('removes the Multer-written file when document persistence fails', async () => {
+  it('removes a written file when persistence fails', async () => {
     shipmentRepo.findOne.mockResolvedValue(shipment);
-    jest.spyOn(fs, 'readFileSync').mockReturnValue(Buffer.from('hello'));
-    const persistenceError = new Error('database unavailable');
-    documentRepo.save.mockRejectedValue(persistenceError);
-    const unlinkSpy = jest
-      .spyOn(fs, 'unlinkSync')
-      .mockImplementation(() => undefined);
+    documentRepo.save.mockRejectedValue(new Error('database unavailable'));
 
     await expect(
       service.upload(
-        {
-          path: '/tmp/file.pdf',
-          originalname: 'invoice.pdf',
-          filename: 'stored.pdf',
-          mimetype: 'application/pdf',
-          size: 5,
-        } as Express.Multer.File,
+        makeFile(),
         { shipmentId: shipment.id, documentType: DocumentType.INVOICE },
         user,
       ),
-    ).rejects.toBe(persistenceError);
-
-    expect(unlinkSpy).toHaveBeenCalledWith('/tmp/file.pdf');
+    ).rejects.toThrow('database unavailable');
+    expect(fs.unlinkSync).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/uploads\/[0-9a-f-]{36}\.pdf$/),
+    );
   });
 
-  it('removes the input when upload authorization fails', async () => {
-    shipmentRepo.findOne.mockResolvedValue({
-      ...shipment,
-      shipperId: 'another-user',
+  it('only resolves certification documents owned by the requesting carrier', async () => {
+    documentRepo.findOne.mockResolvedValue({
+      id: 'cert-document-1',
+      shipmentId: null,
+      uploaderId: 'carrier-2',
+      documentType: DocumentType.CARRIER_CERTIFICATION,
     });
-    const unlinkSpy = jest
-      .spyOn(fs, 'unlinkSync')
-      .mockImplementation(() => undefined);
 
     await expect(
-      service.upload(
-        {
-          path: '/tmp/file.pdf',
-          originalname: 'invoice.pdf',
-          filename: 'stored.pdf',
-          mimetype: 'application/pdf',
-          size: 5,
-        } as Express.Multer.File,
-        { shipmentId: shipment.id, documentType: DocumentType.INVOICE },
-        user,
-      ),
+      service.getOwnedCertificationDocument('cert-document-1', 'carrier-1'),
     ).rejects.toThrow(ForbiddenException);
-
-    expect(unlinkSpy).toHaveBeenCalledWith('/tmp/file.pdf');
   });
 
-  it('removes the input when shipment lookup fails', async () => {
-    shipmentRepo.findOne.mockResolvedValue(null);
-    const unlinkSpy = jest
-      .spyOn(fs, 'unlinkSync')
-      .mockImplementation(() => undefined);
-
-    await expect(
-      service.upload(
-        {
-          path: '/tmp/file.pdf',
-          originalname: 'invoice.pdf',
-          filename: 'stored.pdf',
-          mimetype: 'application/pdf',
-          size: 5,
-        } as Express.Multer.File,
-        { shipmentId: shipment.id, documentType: DocumentType.INVOICE },
-        user,
-      ),
-    ).rejects.toThrow(NotFoundException);
-
-    expect(unlinkSpy).toHaveBeenCalledWith('/tmp/file.pdf');
-  });
-
-  it('removes the input when hashing fails', async () => {
-    shipmentRepo.findOne.mockResolvedValue(shipment);
-    const hashError = new Error('read failed');
-    jest.spyOn(fs, 'readFileSync').mockImplementation(() => {
-      throw hashError;
+  it('rejects a shipment document as a certification document', async () => {
+    documentRepo.findOne.mockResolvedValue({
+      id: 'shipment-document-1',
+      shipmentId: shipment.id,
+      uploaderId: user.id,
+      documentType: DocumentType.INVOICE,
     });
-    const unlinkSpy = jest
-      .spyOn(fs, 'unlinkSync')
-      .mockImplementation(() => undefined);
 
     await expect(
-      service.upload(
-        {
-          path: '/tmp/file.pdf',
-          originalname: 'invoice.pdf',
-          filename: 'stored.pdf',
-          mimetype: 'application/pdf',
-          size: 5,
-        } as Express.Multer.File,
-        { shipmentId: shipment.id, documentType: DocumentType.INVOICE },
-        user,
-      ),
-    ).rejects.toBe(hashError);
+      service.getOwnedCertificationDocument('shipment-document-1', user.id),
+    ).rejects.toThrow('platform-hosted certification document');
+  });
 
-    expect(unlinkSpy).toHaveBeenCalledWith('/tmp/file.pdf');
+  it('allows the uploader to access an unbound certification document', async () => {
+    documentRepo.findOne.mockResolvedValue({
+      id: 'cert-document-1',
+      shipmentId: null,
+      uploaderId: user.id,
+      documentType: DocumentType.CARRIER_CERTIFICATION,
+      storedName: 'stored-certificate.pdf',
+      originalName: 'certificate.pdf',
+    });
+
+    await expect(service.findOne('cert-document-1', user)).resolves.toEqual(
+      expect.objectContaining({ id: 'cert-document-1' }),
+    );
+    expect(shipmentRepo.findOne).not.toHaveBeenCalled();
   });
 
   it('forbids non-parties from accessing a document', async () => {
@@ -234,6 +232,21 @@ describe('DocumentsService', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
+  it('contains stored paths when returning a file path', async () => {
+    shipmentRepo.findOne.mockResolvedValue(shipment);
+    documentRepo.findOne.mockResolvedValue({
+      id: 'doc-1',
+      shipmentId: shipment.id,
+      uploaderId: user.id,
+      originalName: 'invoice.pdf',
+      storedName: '../outside.pdf',
+    });
+
+    await expect(service.getFilePath('doc-1', user)).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
   it('returns a file path when the file exists', async () => {
     shipmentRepo.findOne.mockResolvedValue(shipment);
     documentRepo.findOne.mockResolvedValue({
@@ -251,7 +264,7 @@ describe('DocumentsService', () => {
     });
   });
 
-  it('removes the document and underlying file for the uploader', async () => {
+  it('removes the database row before unlinking an unreferenced document', async () => {
     shipmentRepo.findOne.mockResolvedValue(shipment);
     documentRepo.findOne.mockResolvedValue({
       id: 'doc-1',
@@ -260,6 +273,7 @@ describe('DocumentsService', () => {
       originalName: 'invoice.pdf',
       storedName: 'stored.pdf',
     });
+    certificationRepo.findOne.mockResolvedValue(null);
     const renameSpy = mockFileRename();
     const unlinkSpy = jest
       .spyOn(fs, 'unlinkSync')
@@ -277,6 +291,47 @@ describe('DocumentsService', () => {
     expect(unlinkSpy).toHaveBeenCalledWith(tombstonePath);
   });
 
+  it('refuses to delete a document referenced by a certification', async () => {
+    shipmentRepo.findOne.mockResolvedValue(shipment);
+    documentRepo.findOne.mockResolvedValue({
+      id: 'doc-1',
+      shipmentId: null,
+      uploaderId: user.id,
+      originalName: 'certificate.pdf',
+      storedName: 'stored-certificate.pdf',
+    });
+    certificationRepo.findOne.mockResolvedValue({
+      id: 'cert-1',
+      isVerified: true,
+    });
+
+    await expect(service.delete('doc-1', user)).rejects.toThrow(
+      ConflictException,
+    );
+    expect(documentRepo.remove).not.toHaveBeenCalled();
+    expect(fs.unlinkSync).not.toHaveBeenCalled();
+  });
+
+  it('keeps the file when the database FK wins a deletion race', async () => {
+    shipmentRepo.findOne.mockResolvedValue(shipment);
+    documentRepo.findOne.mockResolvedValue({
+      id: 'doc-1',
+      shipmentId: shipment.id,
+      uploaderId: user.id,
+      originalName: 'invoice.pdf',
+      storedName: 'stored.pdf',
+    });
+    certificationRepo.findOne.mockResolvedValue(null);
+    documentRepo.remove.mockRejectedValue({
+      driverError: { code: '23503' },
+    });
+
+    await expect(service.delete('doc-1', user)).rejects.toThrow(
+      ConflictException,
+    );
+    expect(fs.unlinkSync).not.toHaveBeenCalled();
+  });
+
   it('does not unlink the file when deleting the database row fails', async () => {
     shipmentRepo.findOne.mockResolvedValue(shipment);
     documentRepo.findOne.mockResolvedValue({
@@ -286,6 +341,7 @@ describe('DocumentsService', () => {
       originalName: 'invoice.pdf',
       storedName: 'stored.pdf',
     });
+    certificationRepo.findOne.mockResolvedValue(null);
     const databaseError = new Error('database unavailable');
     documentRepo.remove.mockRejectedValue(databaseError);
     const renameSpy = mockFileRename();
@@ -316,6 +372,7 @@ describe('DocumentsService', () => {
       originalName: 'invoice.pdf',
       storedName: 'stored.pdf',
     });
+    certificationRepo.findOne.mockResolvedValue(null);
     const renameError = Object.assign(new Error('permission denied'), {
       code: 'EACCES',
     });
@@ -337,6 +394,7 @@ describe('DocumentsService', () => {
       originalName: 'invoice.pdf',
       storedName: 'stored.pdf',
     });
+    certificationRepo.findOne.mockResolvedValue(null);
     const missingFileError = Object.assign(new Error('not found'), {
       code: 'ENOENT',
     });
@@ -364,6 +422,7 @@ describe('DocumentsService', () => {
       originalName: 'invoice.pdf',
       storedName: 'stored.pdf',
     });
+    certificationRepo.findOne.mockResolvedValue(null);
     const missingFileError = Object.assign(new Error('not found'), {
       code: 'ENOENT',
     });
@@ -389,6 +448,7 @@ describe('DocumentsService', () => {
       storedName: 'stored.pdf',
     };
     documentRepo.findOne.mockResolvedValue(document);
+    certificationRepo.findOne.mockResolvedValue(null);
     const fileError = Object.assign(new Error('permission denied'), {
       code: 'EACCES',
     });

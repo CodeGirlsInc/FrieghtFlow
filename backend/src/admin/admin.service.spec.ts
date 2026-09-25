@@ -1,3 +1,4 @@
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AdminService } from './admin.service';
@@ -7,20 +8,30 @@ import { Payment } from '../payments/entities/payment.entity';
 import { PaymentStatus } from '../common/enums/payment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
-import { QueryUsersDto } from './dto/query-users.dto';
-import { QueryAdminShipmentsDto } from './dto/query-admin-shipments.dto';
 import { StellarContractService } from '../stellar/stellar-contract.service';
-import { AuditLogService } from '../audit-log/audit-log.service';
 import { EscrowRecord } from '../stellar/escrow-record.interface';
 import { ContractCallResult } from '../stellar/escrow-record.interface';
 
 describe('AdminService', () => {
   let service: AdminService;
-  let userRepo: { findAndCount: jest.Mock; findOne: jest.Mock; update: jest.Mock; count: jest.Mock; createQueryBuilder: jest.Mock };
-  let shipmentRepo: { findOne: jest.Mock; createQueryBuilder: jest.Mock; count: jest.Mock };
+  let userRepo: {
+    findAndCount: jest.Mock;
+    findOne: jest.Mock;
+    update: jest.Mock;
+    count: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
+  let shipmentRepo: {
+    findOne: jest.Mock;
+    createQueryBuilder: jest.Mock;
+    count: jest.Mock;
+  };
   let paymentRepo: { findOne: jest.Mock; update: jest.Mock };
-  let stellarContractService: { getEscrow: jest.Mock; releasePayment: jest.Mock; refundPayment: jest.Mock };
-  let auditLogService: { log: jest.Mock };
+  let stellarContractService: {
+    getEscrow: jest.Mock;
+    releasePayment: jest.Mock;
+    refundPayment: jest.Mock;
+  };
 
   beforeEach(async () => {
     userRepo = {
@@ -44,10 +55,6 @@ describe('AdminService', () => {
       releasePayment: jest.fn(),
       refundPayment: jest.fn(),
     };
-    auditLogService = {
-      log: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
@@ -55,7 +62,6 @@ describe('AdminService', () => {
         { provide: getRepositoryToken(Shipment), useValue: shipmentRepo },
         { provide: getRepositoryToken(Payment), useValue: paymentRepo },
         { provide: StellarContractService, useValue: stellarContractService },
-        { provide: AuditLogService, useValue: auditLogService },
       ],
     }).compile();
 
@@ -63,9 +69,7 @@ describe('AdminService', () => {
   });
 
   it('returns platform stats', async () => {
-    userRepo.count
-      .mockResolvedValueOnce(3)
-      .mockResolvedValueOnce(2);
+    userRepo.count.mockResolvedValueOnce(3).mockResolvedValueOnce(2);
     userRepo.createQueryBuilder.mockReturnValue({
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
@@ -74,9 +78,7 @@ describe('AdminService', () => {
         .fn()
         .mockResolvedValue([{ role: UserRole.ADMIN, count: '1' }]),
     });
-    shipmentRepo.count
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(1);
+    shipmentRepo.count.mockResolvedValueOnce(5).mockResolvedValueOnce(1);
     shipmentRepo.createQueryBuilder.mockReturnValue({
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
@@ -101,7 +103,56 @@ describe('AdminService', () => {
 
     await expect(
       service.changeUserRole('admin-1', UserRole.CARRIER, 'admin-1'),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('captures the previous role alongside a successful role update', async () => {
+    const auditRequest: { auditMetadata?: Record<string, unknown> } = {};
+    userRepo.findOne
+      .mockResolvedValueOnce({
+        id: 'user-1',
+        role: UserRole.SHIPPER,
+      } as User)
+      .mockResolvedValueOnce({
+        id: 'user-1',
+        role: UserRole.CARRIER,
+      } as User);
+    userRepo.update.mockResolvedValue({ affected: 1 });
+
+    const result = await service.changeUserRole(
+      'user-1',
+      UserRole.CARRIER,
+      'admin-1',
+      auditRequest,
+    );
+
+    expect(result.role).toBe(UserRole.CARRIER);
+    expect(userRepo.update).toHaveBeenCalledWith(
+      { id: 'user-1', role: UserRole.SHIPPER },
+      { role: UserRole.CARRIER },
+    );
+    expect(auditRequest.auditMetadata).toEqual({
+      previousRole: UserRole.SHIPPER,
+    });
+  });
+
+  it('does not attach audit metadata when the role update loses a race', async () => {
+    const auditRequest: { auditMetadata?: Record<string, unknown> } = {};
+    userRepo.findOne.mockResolvedValue({
+      id: 'user-1',
+      role: UserRole.SHIPPER,
+    } as User);
+    userRepo.update.mockResolvedValue({ affected: 0 });
+
+    await expect(
+      service.changeUserRole(
+        'user-1',
+        UserRole.CARRIER,
+        'admin-1',
+        auditRequest,
+      ),
     ).rejects.toThrow();
+    expect(auditRequest.auditMetadata).toBeUndefined();
   });
 
   describe('reconcileEscrow', () => {
@@ -174,10 +225,9 @@ describe('AdminService', () => {
         amount: 100,
         assetCode: 'USDC',
       } as Payment);
-      const contractError = new (await import('../stellar/errors/stellar-integration.errors')).EscrowContractError(
-        3,
-        'HostError: Error(Contract, #3)',
-      );
+      const contractError = new (
+        await import('../stellar/errors/stellar-integration.errors')
+      ).EscrowContractError(3, 'HostError: Error(Contract, #3)');
       stellarContractService.getEscrow.mockRejectedValue(contractError);
 
       const result = await service.reconcileEscrow('shipment-1');
@@ -220,7 +270,16 @@ describe('AdminService', () => {
         status: 'PENDING',
       } as ContractCallResult);
 
-      const result = await service.adminReleaseEscrow('shipment-1', 'admin-1');
+      const auditRequest: {
+        auditMetadata?: Record<string, unknown>;
+        auditTargetType?: string;
+        auditTargetId?: string;
+      } = {};
+      const result = await service.adminReleaseEscrow(
+        'shipment-1',
+        'admin-1',
+        auditRequest,
+      );
 
       expect(result.txHash).toBe('release-hash');
       expect(paymentRepo.update).toHaveBeenCalledWith('payment-1', {
@@ -229,14 +288,18 @@ describe('AdminService', () => {
         stellarTxHash: 'release-hash',
         failureReason: null,
       });
-      expect(auditLogService.log).toHaveBeenCalledWith(
-        expect.objectContaining({
-          adminId: 'admin-1',
-          action: 'POST /admin/escrow/:shipmentId/release',
-          targetType: 'payment',
-          targetId: 'payment-1',
-        }),
-      );
+      expect(auditRequest).toEqual({
+        auditMetadata: {
+          paymentId: 'payment-1',
+          shipmentId: 'shipment-1',
+          onChainShipmentId: 1,
+          txHash: 'release-hash',
+        },
+        auditTargetType: 'payment',
+        auditTargetId: 'payment-1',
+      });
+      // The global AdminAuditInterceptor owns the audit entry for this
+      // endpoint; the service must not create a second one.
     });
 
     it('throws NotFoundException when the payment does not exist', async () => {
@@ -264,7 +327,16 @@ describe('AdminService', () => {
         status: 'PENDING',
       } as ContractCallResult);
 
-      const result = await service.adminRefundEscrow('shipment-1', 'admin-1');
+      const auditRequest: {
+        auditMetadata?: Record<string, unknown>;
+        auditTargetType?: string;
+        auditTargetId?: string;
+      } = {};
+      const result = await service.adminRefundEscrow(
+        'shipment-1',
+        'admin-1',
+        auditRequest,
+      );
 
       expect(result.txHash).toBe('refund-hash');
       expect(paymentRepo.update).toHaveBeenCalledWith('payment-1', {
@@ -273,14 +345,18 @@ describe('AdminService', () => {
         stellarTxHash: 'refund-hash',
         failureReason: null,
       });
-      expect(auditLogService.log).toHaveBeenCalledWith(
-        expect.objectContaining({
-          adminId: 'admin-1',
-          action: 'POST /admin/escrow/:shipmentId/refund',
-          targetType: 'payment',
-          targetId: 'payment-1',
-        }),
-      );
+      expect(auditRequest).toEqual({
+        auditMetadata: {
+          paymentId: 'payment-1',
+          shipmentId: 'shipment-1',
+          onChainShipmentId: 1,
+          txHash: 'refund-hash',
+        },
+        auditTargetType: 'payment',
+        auditTargetId: 'payment-1',
+      });
+      // The global AdminAuditInterceptor owns the audit entry for this
+      // endpoint; the service must not create a second one.
     });
 
     it('throws NotFoundException when the payment does not exist', async () => {

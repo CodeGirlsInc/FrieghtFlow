@@ -12,6 +12,7 @@ import {
   HttpStatus,
   Res,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -32,6 +33,9 @@ import { UploadCleanupInterceptor } from './upload-cleanup.interceptor';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
+import { UserRole } from '../common/enums/role.enum';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @ApiTags('documents')
 @ApiBearerAuth()
@@ -65,6 +69,52 @@ export class DocumentsController {
     @Body() dto: UploadDocumentDto,
     @CurrentUser() user: User,
   ) {
+    try {
+      this.assertAllowedFile(file);
+      return await this.documentsService.upload(file, dto, user);
+    } catch (error: unknown) {
+      this.documentsService.cleanupUpload(file);
+      throw error;
+    }
+  }
+
+  @Post('certification')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.CARRIER)
+  @ApiOperation({
+    summary: 'Upload a platform-owned carrier certification document',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Certification document uploaded' })
+  @ApiResponse({ status: 400, description: 'Invalid file' })
+  @ApiResponse({ status: 403, description: 'Carrier role required' })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadCertification(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: User,
+  ) {
+    try {
+      this.assertAllowedFile(file);
+      return await this.documentsService.uploadCertificationDocument(
+        file,
+        user,
+      );
+    } catch (error: unknown) {
+      this.documentsService.cleanupUpload(file);
+      throw error;
+    }
+  }
+
+  private assertAllowedFile(file: Express.Multer.File | undefined): void {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
@@ -73,7 +123,6 @@ export class DocumentsController {
         unsupportedDocumentMimeTypeMessage(file.mimetype),
       );
     }
-    return this.documentsService.upload(file, dto, user);
   }
 
   @Get('shipment/:shipmentId')

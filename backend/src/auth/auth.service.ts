@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { User } from '../users/entities/user.entity';
 import { JwtPayload } from './strategies/jwt.strategy';
 
@@ -200,7 +201,7 @@ export class AuthService {
 
   async updateProfile(
     userId: string,
-    dto: { firstName?: string; lastName?: string; walletAddress?: string },
+    dto: UpdateProfileDto,
   ): Promise<Omit<User, 'passwordHash' | 'refreshToken'>> {
     await this.usersService.update(userId, dto);
     const updated = await this.usersService.findOne(userId);
