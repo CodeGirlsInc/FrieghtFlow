@@ -1,9 +1,10 @@
 //! Storage accessors shared by the contract's entrypoint modules.
 
+use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Env, Vec};
 
 use crate::errors::ShipmentError;
-use crate::types::{DataKey, Shipment, TTL_LEDGERS};
+use crate::types::{DataKey, Shipment};
 
 pub fn admin(env: &Env) -> Result<Address, ShipmentError> {
     env.storage()
