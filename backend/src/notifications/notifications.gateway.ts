@@ -26,14 +26,49 @@ import { JwtPayload } from '../auth/strategies/jwt.strategy';
 /** Room prefix for per-user rooms */
 const userRoom = (userId: string) => `user:${userId}`;
 
+/**
+ * Origins allowed to open a WebSocket connection to this gateway, in addition
+ * to same-origin requests. Mirrors the HTTP CORS allow-list in `main.ts`
+ * (`FRONTEND_URL` may be a comma-separated list).
+ */
+const allowedOrigins = process.env.FRONTEND_URL?.split(',') || [
+  'http://localhost:3000',
+];
+
+/**
+ * CORS allow-list check for the Socket.IO `cors.origin` callback.
+ *
+ * `origin` is the `Origin` header sent by the browser. Requests that carry no
+ * `Origin` header (same-origin frames, non-browser clients such as mobile apps
+ * or curl) are allowed. Only origins present in the allow-list are permitted —
+ * anything else is rejected.
+ */
+export function isOriginAllowed(
+  origin: string,
+  allowList: readonly string[],
+): boolean {
+  return allowList.includes(origin);
+}
+
 @WebSocketGateway({
   cors: {
     origin: (
       origin: string,
       cb: (err: Error | null, allow: boolean) => void,
     ) => {
-      // Allow same-origin and configured frontend URL
-      cb(null, true);
+      // Reject any origin that isn't in the configured allow-list so a
+      // third-party page can't piggyback on authenticated (cookie-bearing)
+      // WebSocket connections despite credentials: true.
+      if (!origin) {
+        // Same-origin / non-browser client
+        cb(null, true);
+        return;
+      }
+      if (isOriginAllowed(origin, allowedOrigins)) {
+        cb(null, true);
+        return;
+      }
+      cb(new Error(`Origin ${origin} is not allowed by CORS`), false);
     },
     credentials: true,
   },
