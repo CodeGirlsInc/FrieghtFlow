@@ -25,13 +25,17 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { DocumentsService } from './documents.service';
+import {
+  isAllowedDocumentMimeType,
+  unsupportedDocumentMimeTypeMessage,
+} from './document-upload.constants';
+import { UploadCleanupInterceptor } from './upload-cleanup.interceptor';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../common/enums/role.enum';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { isSupportedDocumentMimeType } from './document-file.util';
 
 @ApiTags('documents')
 @ApiBearerAuth()
@@ -57,8 +61,9 @@ export class DocumentsController {
   @ApiResponse({ status: 201, description: 'Document uploaded successfully' })
   @ApiResponse({ status: 400, description: 'Invalid file or payload' })
   @ApiResponse({ status: 403, description: 'Not a party to this shipment' })
-  // Multer options are configured via MulterModule in DocumentsModule
-  @UseInterceptors(FileInterceptor('file'))
+  // Multer options are configured via MulterModule in DocumentsModule. The
+  // cleanup interceptor wraps parsing so rejected requests cannot leak files.
+  @UseInterceptors(UploadCleanupInterceptor, FileInterceptor('file'))
   async upload(
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: UploadDocumentDto,
@@ -113,9 +118,9 @@ export class DocumentsController {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
-    if (!isSupportedDocumentMimeType(file.mimetype)) {
+    if (!isAllowedDocumentMimeType(file.mimetype)) {
       throw new BadRequestException(
-        `Unsupported file type: ${file.mimetype}. Allowed: PDF, images, Word, Excel`,
+        unsupportedDocumentMimeTypeMessage(file.mimetype),
       );
     }
   }

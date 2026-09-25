@@ -7,6 +7,7 @@ import { DocumentsService } from './documents.service';
 import { DocumentsController } from './documents.controller';
 import { Document } from './entities/document.entity';
 import { Shipment } from '../shipments/entities/shipment.entity';
+import { UploadCleanupInterceptor } from './upload-cleanup.interceptor';
 import { CarrierCertification } from '../carriers/entities/carrier-certification.entity';
 import { isSupportedDocumentMimeType } from './document-file.util';
 
@@ -40,7 +41,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
     }),
   ],
   controllers: [DocumentsController],
-  providers: [DocumentsService],
+  providers: [DocumentsService, UploadCleanupInterceptor],
   exports: [DocumentsService],
 })
 export class DocumentsModule {}

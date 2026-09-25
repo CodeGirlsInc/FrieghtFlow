@@ -32,6 +32,14 @@ function makeFile(
   } as Express.Multer.File;
 }
 
+type RenameSpy = jest.SpyInstance<void, [fs.PathLike, fs.PathLike]>;
+
+function mockFileRename(): RenameSpy {
+  return jest
+    .spyOn(fs, 'renameSync')
+    .mockImplementation(() => undefined) as RenameSpy;
+}
+
 describe('DocumentsService', () => {
   let service: DocumentsService;
   let documentRepo: {
@@ -266,15 +274,21 @@ describe('DocumentsService', () => {
       storedName: 'stored.pdf',
     });
     certificationRepo.findOne.mockResolvedValue(null);
+    const renameSpy = mockFileRename();
+    const unlinkSpy = jest
+      .spyOn(fs, 'unlinkSync')
+      .mockImplementation(() => undefined);
     documentRepo.remove.mockResolvedValue(undefined);
 
     await service.delete('doc-1', user);
 
-    expect(documentRepo.remove).toHaveBeenCalled();
-    expect(fs.unlinkSync).toHaveBeenCalledWith('/uploads/stored.pdf');
-    expect(documentRepo.remove.mock.invocationCallOrder[0]).toBeLessThan(
-      (fs.unlinkSync as unknown as jest.Mock).mock.invocationCallOrder[0],
+    expect(renameSpy).toHaveBeenCalledWith(
+      '/uploads/stored.pdf',
+      expect.stringContaining('/uploads/stored.pdf.'),
     );
+    const tombstonePath = String(renameSpy.mock.calls[0][1]);
+    expect(documentRepo.remove).toHaveBeenCalled();
+    expect(unlinkSpy).toHaveBeenCalledWith(tombstonePath);
   });
 
   it('refuses to delete a document referenced by a certification', async () => {
@@ -316,6 +330,145 @@ describe('DocumentsService', () => {
       ConflictException,
     );
     expect(fs.unlinkSync).not.toHaveBeenCalled();
+  });
+
+  it('does not unlink the file when deleting the database row fails', async () => {
+    shipmentRepo.findOne.mockResolvedValue(shipment);
+    documentRepo.findOne.mockResolvedValue({
+      id: 'doc-1',
+      shipmentId: shipment.id,
+      uploaderId: user.id,
+      originalName: 'invoice.pdf',
+      storedName: 'stored.pdf',
+    });
+    certificationRepo.findOne.mockResolvedValue(null);
+    const databaseError = new Error('database unavailable');
+    documentRepo.remove.mockRejectedValue(databaseError);
+    const renameSpy = mockFileRename();
+    const unlinkSpy = jest.spyOn(fs, 'unlinkSync');
+
+    await expect(service.delete('doc-1', user)).rejects.toBe(databaseError);
+
+    const tombstonePath = String(renameSpy.mock.calls[0][1]);
+    expect(renameSpy).toHaveBeenNthCalledWith(
+      1,
+      '/uploads/stored.pdf',
+      tombstonePath,
+    );
+    expect(renameSpy).toHaveBeenNthCalledWith(
+      2,
+      tombstonePath,
+      '/uploads/stored.pdf',
+    );
+    expect(unlinkSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not remove metadata when moving the file to a tombstone fails', async () => {
+    shipmentRepo.findOne.mockResolvedValue(shipment);
+    documentRepo.findOne.mockResolvedValue({
+      id: 'doc-1',
+      shipmentId: shipment.id,
+      uploaderId: user.id,
+      originalName: 'invoice.pdf',
+      storedName: 'stored.pdf',
+    });
+    certificationRepo.findOne.mockResolvedValue(null);
+    const renameError = Object.assign(new Error('permission denied'), {
+      code: 'EACCES',
+    });
+    jest.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw renameError;
+    });
+
+    await expect(service.delete('doc-1', user)).rejects.toBe(renameError);
+
+    expect(documentRepo.remove).not.toHaveBeenCalled();
+  });
+
+  it('treats an already-missing file as a successful delete', async () => {
+    shipmentRepo.findOne.mockResolvedValue(shipment);
+    documentRepo.findOne.mockResolvedValue({
+      id: 'doc-1',
+      shipmentId: shipment.id,
+      uploaderId: user.id,
+      originalName: 'invoice.pdf',
+      storedName: 'stored.pdf',
+    });
+    certificationRepo.findOne.mockResolvedValue(null);
+    const missingFileError = Object.assign(new Error('not found'), {
+      code: 'ENOENT',
+    });
+    const renameSpy = jest.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw missingFileError;
+    });
+    const unlinkSpy = jest.spyOn(fs, 'unlinkSync');
+    documentRepo.remove.mockResolvedValue(undefined);
+
+    await expect(service.delete('doc-1', user)).resolves.toBeUndefined();
+    expect(renameSpy).toHaveBeenCalledWith(
+      '/uploads/stored.pdf',
+      expect.any(String),
+    );
+    expect(unlinkSpy).not.toHaveBeenCalled();
+    expect(documentRepo.remove).toHaveBeenCalled();
+  });
+
+  it('treats a missing tombstone as a successful final cleanup', async () => {
+    shipmentRepo.findOne.mockResolvedValue(shipment);
+    documentRepo.findOne.mockResolvedValue({
+      id: 'doc-1',
+      shipmentId: shipment.id,
+      uploaderId: user.id,
+      originalName: 'invoice.pdf',
+      storedName: 'stored.pdf',
+    });
+    certificationRepo.findOne.mockResolvedValue(null);
+    const missingFileError = Object.assign(new Error('not found'), {
+      code: 'ENOENT',
+    });
+    mockFileRename();
+    jest.spyOn(fs, 'unlinkSync').mockImplementation(() => {
+      throw missingFileError;
+    });
+    documentRepo.remove.mockResolvedValue(undefined);
+
+    await expect(service.delete('doc-1', user)).resolves.toBeUndefined();
+
+    expect(documentRepo.remove).toHaveBeenCalled();
+    expect(documentRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('restores metadata when file deletion fails after the database delete', async () => {
+    shipmentRepo.findOne.mockResolvedValue(shipment);
+    const document = {
+      id: 'doc-1',
+      shipmentId: shipment.id,
+      uploaderId: user.id,
+      originalName: 'invoice.pdf',
+      storedName: 'stored.pdf',
+    };
+    documentRepo.findOne.mockResolvedValue(document);
+    certificationRepo.findOne.mockResolvedValue(null);
+    const fileError = Object.assign(new Error('permission denied'), {
+      code: 'EACCES',
+    });
+    const renameSpy = mockFileRename();
+    const unlinkSpy = jest.spyOn(fs, 'unlinkSync').mockImplementation(() => {
+      throw fileError;
+    });
+    documentRepo.remove.mockResolvedValue(undefined);
+    documentRepo.save.mockResolvedValue(document);
+
+    await expect(service.delete('doc-1', user)).rejects.toBe(fileError);
+
+    const tombstonePath = String(renameSpy.mock.calls[0][1]);
+    expect(unlinkSpy).toHaveBeenCalledWith(tombstonePath);
+    expect(documentRepo.save).toHaveBeenCalledWith(document);
+    expect(renameSpy).toHaveBeenNthCalledWith(
+      2,
+      tombstonePath,
+      '/uploads/stored.pdf',
+    );
   });
 
   it('throws when the file is missing', async () => {

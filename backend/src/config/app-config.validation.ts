@@ -21,6 +21,7 @@ export const appConfigValidationSchema = Joi.object({
   MAIL_PASS: Joi.string().required(),
   MAIL_FROM: Joi.string().default('noreply@freightflow.io'),
   UPLOAD_DIR: Joi.string().default('./uploads'),
+  WEBHOOK_MAX_PER_USER: Joi.number().integer().min(1).max(100).default(10),
   SOROBAN_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
   SOROBAN_RPC_URL: Joi.string().when('SOROBAN_ENABLED', {
     is: true,

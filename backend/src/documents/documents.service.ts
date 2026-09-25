@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Logger,
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
@@ -17,12 +18,14 @@ import { Shipment } from '../shipments/entities/shipment.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../common/enums/role.enum';
 import { UploadDocumentDto } from './dto/upload-document.dto';
-import { DocumentType } from './enums/document-type.enum';
 import {
+  isEnoentError,
+  unlinkFileIfPresent,
   isSupportedDocumentMimeType,
   verifyDocumentFileType,
   type VerifiedDocumentType,
 } from './document-file.util';
+import { DocumentType } from './enums/document-type.enum';
 import { CarrierCertification } from '../carriers/entities/carrier-certification.entity';
 
 type PersistedUpload = VerifiedDocumentType & {
@@ -34,6 +37,8 @@ type PersistedUpload = VerifiedDocumentType & {
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name);
+
   constructor(
     @InjectRepository(Document)
     private readonly documentRepo: Repository<Document>,
@@ -233,6 +238,48 @@ export class DocumentsService {
     }
   }
 
+  private moveFileToTombstone(filePath: string): string | null {
+    const tombstonePath = `${filePath}.${crypto.randomUUID()}.deleting`;
+    try {
+      fs.renameSync(filePath, tombstonePath);
+      return tombstonePath;
+    } catch (error) {
+      if (isEnoentError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  private restoreFileFromTombstone(
+    tombstonePath: string,
+    filePath: string,
+  ): void {
+    try {
+      fs.renameSync(tombstonePath, filePath);
+    } catch (error) {
+      this.logger.error(
+        `Failed to restore document file ${filePath} from ${tombstonePath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  private cleanupUploadedFile(filePath: string): void {
+    if (!filePath) return;
+
+    try {
+      unlinkFileIfPresent(filePath);
+    } catch (error) {
+      this.logger.error(
+        `Failed to clean up uploaded document ${filePath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   // ── Upload ───────────────────────────────────────────────────────────────────
 
   async upload(
@@ -400,11 +447,20 @@ export class DocumentsService {
     }
 
     const filePath = this.resolveStoredPath(doc.storedName);
+
+    // Move the file out of the public path first.  The tombstone prevents a
+    // concurrent download from observing a half-completed delete.  If the DB
+    // operation fails, move it back and leave the existing metadata intact.
+    const tombstonePath = this.moveFileToTombstone(filePath);
+
     try {
-      // Remove the row first. If a certification is attached concurrently, the
-      // RESTRICT FK fails and the file remains intact for the certification.
       await this.documentRepo.remove(doc);
     } catch (error: unknown) {
+      if (tombstonePath) {
+        this.restoreFileFromTombstone(tombstonePath, filePath);
+      }
+      // If a certification was attached concurrently after the check above,
+      // the RESTRICT FK fails here and the file has already been restored.
       if (this.isForeignKeyViolation(error)) {
         throw new ConflictException(
           'Cannot delete a document referenced by a carrier certification',
@@ -413,6 +469,28 @@ export class DocumentsService {
       throw error;
     }
 
-    this.removeFileIfExists(filePath);
+    // The row is gone, so the tombstone can now be permanently removed.  A
+    // missing tombstone is already the desired end state.
+    if (!tombstonePath) return;
+
+    try {
+      unlinkFileIfPresent(tombstonePath);
+    } catch (error) {
+      // If the final unlink fails, restore both sides of the logical record
+      // rather than leaving metadata pointing at a tombstone-only file.
+      try {
+        await this.documentRepo.save(doc);
+      } catch (restoreError) {
+        this.logger.error(
+          `Failed to restore document ${doc.id} after final file deletion failed: ${
+            restoreError instanceof Error
+              ? restoreError.message
+              : String(restoreError)
+          }`,
+        );
+      }
+      this.restoreFileFromTombstone(tombstonePath, filePath);
+      throw error;
+    }
   }
 }
