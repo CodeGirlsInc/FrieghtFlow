@@ -4,6 +4,8 @@ import { CreatePaymentsTable1724140800000 } from './1724140800000-CreatePayments
 import { AddPaymentFundingFields1724227200000 } from './1724227200000-AddPaymentFundingFields';
 import { CreateShipmentTemplatesTable1724313600000 } from './1724313600000-CreateShipmentTemplatesTable';
 import { AddShipmentCancellationFee1724400000000 } from './1724400000000-AddShipmentCancellationFee';
+import { AddCertificationDocumentProvenance1724313600000 } from './1724313600000-AddCertificationDocumentProvenance';
+import { CreateTwoFactorOtpTable1724313600000 } from './1724313600000-CreateTwoFactorOtpTable';
 
 function mockQueryRunner() {
   return {
@@ -102,6 +104,63 @@ describe('migrations', () => {
     );
   });
 
+  it('adds platform document provenance and expiry-safe certification fields', async () => {
+    const queryRunner = mockQueryRunner();
+    const migration = new AddCertificationDocumentProvenance1724313600000();
+
+    await migration.up(queryRunner as never);
+    await migration.down(queryRunner as never);
+
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('ADD COLUMN IF NOT EXISTS "document_id"'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('is_platform_hosted'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('verification_revoked_at'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('"documents_document_type_enum"'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('ON DELETE RESTRICT'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('SET "is_verified" = false'),
+    );
+    expect(queryRunner.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM "documents"'),
+    );
+    expect(queryRunner.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('platform://document/'),
+    );
+  });
+
+  it('creates and removes the persistent two-factor table', async () => {
+    const queryRunner = mockQueryRunner();
+    const migration = new CreateTwoFactorOtpTable1724313600000();
+
+    await migration.up(queryRunner as never);
+    await migration.down(queryRunner as never);
+
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('CREATE TABLE "two_factor_otps"'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('"otp_code_hash"  VARCHAR(64)'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('"otp_expires_at" TIMESTAMPTZ'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('CONSTRAINT "UQ_two_factor_otps_user_id" UNIQUE'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('DROP TABLE "two_factor_otps"'),
+    );
+  });
+
   describe('CLI discovery glob', () => {
     // The DataSource glob used to be `src/migrations/*.ts`, which also matched
     // this spec file. The TypeORM CLI loads every match as a migration and
@@ -125,7 +184,9 @@ describe('migrations', () => {
       for (const migration of [
         '1724140800000-CreatePaymentsTable.ts',
         '1724227200000-AddPaymentFundingFields.ts',
+        '1724313600000-AddCertificationDocumentProvenance.ts',
         '1724313600000-CreateShipmentTemplatesTable.ts',
+        '1724313600000-CreateTwoFactorOtpTable.ts',
         '1724400000000-AddShipmentCancellationFee.ts',
       ]) {
         expect(matched).toContain(`src/migrations/${migration}`);

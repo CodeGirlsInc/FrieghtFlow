@@ -21,7 +21,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
-import { WebhooksService } from './webhooks.service';
+import {
+  DEFAULT_MAX_ACTIVE_WEBHOOKS_PER_USER,
+  WebhooksService,
+} from './webhooks.service';
 
 @ApiTags('webhooks')
 @ApiBearerAuth()
@@ -34,8 +37,13 @@ export class WebhooksController {
   @Roles(UserRole.SHIPPER, UserRole.ADMIN)
   @ApiOperation({
     summary: 'Register a webhook URL for shipment status changes',
+    description: `A user may have at most ${DEFAULT_MAX_ACTIVE_WEBHOOKS_PER_USER} active webhooks by default (configure with WEBHOOK_MAX_PER_USER). Delete an existing webhook before registering another one.`,
   })
   @ApiResponse({ status: 201, description: 'Webhook created' })
+  @ApiResponse({
+    status: 409,
+    description: 'The per-user active webhook limit has been reached',
+  })
   create(@CurrentUser() user: User, @Body() dto: CreateWebhookDto) {
     return this.webhooksService.create(user.id, dto);
   }

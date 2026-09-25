@@ -39,12 +39,10 @@ export class BidsService {
       throw new BadRequestException(
         'Bids can only be placed on PENDING shipments',
       );
-
     }
 
     if (shipment.shipperId === carrierId) {
       throw new ForbiddenException('Cannot bid on your own shipment');
-
     }
 
     const existing = await this.bidRepo.findOne({
@@ -98,22 +96,37 @@ export class BidsService {
       throw new BadRequestException('Bid is no longer pending');
     }
 
-    // Accept this bid
+    // Accept this bid, reject the shipment's other pending bids, and assign
+    // the carrier — all in a single transaction so a crash between steps can
+    // never leave the shipment ACCEPTED without a carrier (or vice versa).
+    const queryRunner = this.bidRepo.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.update(
+        Bid,
+        { id: bid.id },
+        { status: BidStatus.ACCEPTED },
+      );
+      await queryRunner.manager.update(
+        Bid,
+        { shipmentId, status: BidStatus.PENDING, id: Not(bidId) },
+        { status: BidStatus.REJECTED },
+      );
+      await queryRunner.manager.update(Shipment, shipmentId, {
+        carrierId: bid.carrierId,
+        status: ShipmentStatus.ACCEPTED,
+      });
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
     bid.status = BidStatus.ACCEPTED;
-    await this.bidRepo.save(bid);
-
-    // Reject all other pending bids for this shipment
-    await this.bidRepo.update(
-      { shipmentId, status: BidStatus.PENDING, id: Not(bidId) },
-      { status: BidStatus.REJECTED },
-    );
-
-    // Assign carrier to shipment
-    await this.shipmentRepo.update(shipmentId, {
-      carrierId: bid.carrierId,
-      status: ShipmentStatus.ACCEPTED,
-    });
-
     return bid;
   }
 }
