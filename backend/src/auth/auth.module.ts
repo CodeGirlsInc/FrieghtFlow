@@ -11,10 +11,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UsersModule } from '../users/users.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { TwoFactorOtp } from './entities/two-factor-otp.entity';
+import { TwoFactorService } from './two-factor.service';
 
 @Module({
   imports: [
     UsersModule,
+    TypeOrmModule.forFeature([TwoFactorOtp]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -56,6 +60,7 @@ import { UsersModule } from '../users/users.module';
   controllers: [AuthController],
   providers: [
     AuthService,
+    TwoFactorService,
     JwtStrategy,
     LocalStrategy,
     {
@@ -63,6 +68,6 @@ import { UsersModule } from '../users/users.module';
       useClass: JwtAuthGuard,
     },
   ],
-  exports: [AuthService],
+  exports: [AuthService, TwoFactorService],
 })
 export class AuthModule {}
