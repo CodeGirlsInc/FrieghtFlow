@@ -39,6 +39,7 @@ export default function MarketplacePage() {
   const [cargoCategory, setCargoCategory] = useState('All');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [rangeError, setRangeError] = useState('');
   const [sort, setSort] = useState<SortOption>('date_desc');
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<QueryShipmentParams>({
@@ -70,6 +71,14 @@ export default function MarketplacePage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const min = minPrice ? Number(minPrice) : undefined;
+    const max = maxPrice ? Number(maxPrice) : undefined;
+    if (min !== undefined && max !== undefined && min > max) {
+      setRangeError('Min price must not be greater than max price.');
+      return;
+    }
+    setRangeError('');
     applyFilters(1);
   };
 
@@ -81,6 +90,7 @@ export default function MarketplacePage() {
     setMaxPrice('');
     setSort('date_desc');
     setPage(1);
+    setRangeError('');
     setFilters({ page: 1, limit: 12 });
   };
 
@@ -131,17 +141,25 @@ export default function MarketplacePage() {
             type="number"
             placeholder="Min price"
             value={minPrice}
-            onChange={(e) => setMinPrice(e.target.value)}
+            onChange={(e) => {
+              setMinPrice(e.target.value);
+              if (rangeError) setRangeError('');
+            }}
             className="w-28"
             min={0}
+            aria-invalid={!!rangeError}
           />
           <Input
             type="number"
             placeholder="Max price"
             value={maxPrice}
-            onChange={(e) => setMaxPrice(e.target.value)}
+            onChange={(e) => {
+              setMaxPrice(e.target.value);
+              if (rangeError) setRangeError('');
+            }}
             className="w-28"
             min={0}
+            aria-invalid={!!rangeError}
           />
           <select
             value={sort}
@@ -161,6 +179,11 @@ export default function MarketplacePage() {
             </Button>
           )}
         </div>
+        {rangeError && (
+          <p className="text-sm text-destructive" role="alert">
+            {rangeError}
+          </p>
+        )}
       </form>
 
       {/* Results */}
