@@ -1,13 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '../../../stores/auth.store';
-import { shipmentApi } from '../../../lib/api/shipment.api';
-import { ShipmentStatus, PaginatedShipments } from '../../../types/shipment.types';
-import { ShipmentCard } from '../../../components/shipment/shipment-card';
-import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
-import { EmptyShipments } from '../../../components/ui/empty-state';
+import { ShipmentStatus } from '../../../types/shipment.types';
+import ShipmentsInfiniteList from '../../../components/shipment/ShipmentsInfiniteList';
 import { Button } from '../../../components/ui/button';
 import { toast } from 'sonner';
 import { apiClient } from '../../../lib/api/client';
@@ -23,9 +20,7 @@ const STATUS_TABS: { label: string; value: ShipmentStatus | 'all' }[] = [
 
 export default function ShipmentsPage() {
   const { user } = useAuthStore();
-  const [result, setResult] = useState<PaginatedShipments | null>(null);
   const [activeTab, setActiveTab] = useState<ShipmentStatus | 'all'>('all');
-  const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
   const exportCsv = async () => {
@@ -46,15 +41,6 @@ export default function ShipmentsPage() {
       setExporting(false);
     }
   };
-
-  useEffect(() => {
-    setLoading(true);
-    shipmentApi
-      .list({ status: activeTab === 'all' ? undefined : activeTab })
-      .then(setResult)
-      .catch(() => toast.error('Failed to load shipments'))
-      .finally(() => setLoading(false));
-  }, [activeTab]);
 
   const isShipper = user?.role === 'shipper' || user?.role === 'admin';
   const pageTitle = user?.role === 'carrier' ? 'My Jobs' : 'My Shipments';
@@ -110,32 +96,10 @@ export default function ShipmentsPage() {
       </div>
 
       {/* Content */}
-      {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <ShipmentCardSkeleton key={i} />
-          ))}
-        </div>
-      ) : !result || result.data.length === 0 ? (
-        <EmptyShipments
-          title={activeTab === 'all' ? 'No shipments yet' : `No shipments with status "${activeTab}"`}
-          description={activeTab === 'all' ? 'Create your first shipment to get started.' : 'Try another status filter.'}
-          onCreate={isShipper && activeTab === 'all' ? () => window.location.assign('/shipments/new') : undefined}
-        />
-      ) : (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {result.data.map((s) => (
-              <ShipmentCard key={s.id} shipment={s} />
-            ))}
-          </div>
-
-          {/* Pagination info */}
-          <p className="text-xs text-muted-foreground text-center mt-6">
-            Showing {result.data.length} of {result.total} shipments
-          </p>
-        </>
-      )}
+      <ShipmentsInfiniteList
+        key={activeTab}
+        filters={{ status: activeTab === 'all' ? undefined : activeTab }}
+      />
     </div>
   );
 }
