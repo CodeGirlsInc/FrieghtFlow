@@ -454,6 +454,157 @@ describe('StellarContractService', () => {
       expect(balance).toBe(1_234_567_890n);
     });
 
+    it('decodes the settlement fee from getSettlementFee', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        successSim(nativeToScVal(50_000_000n, { type: 'i128' })),
+      );
+
+      await expect(service.getSettlementFee(42n)).resolves.toBe(50_000_000n);
+    });
+
+    it('reports a zero settlement fee for an escrow that never paid one', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        successSim(nativeToScVal(0n, { type: 'i128' })),
+      );
+
+      await expect(service.getSettlementFee(42n)).resolves.toBe(0n);
+    });
+
+    it('surfaces a contract error from getSettlementFee', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        errorSim('HostError: Error(Contract, #3)'),
+      );
+
+      await expect(service.getSettlementFee(42n)).rejects.toThrow(
+        EscrowContractError,
+      );
+    });
+
+    // ── Issue #1543: refund_payment_with_fee ────────────────────────────────
+
+    it('submits refund_payment_with_fee with the fee in base units', async () => {
+      const service = await readyService();
+      let builtTransaction: unknown;
+      mockAssembleTransaction.mockImplementation((rawTx: unknown) => {
+        builtTransaction = rawTx;
+        return { build: () => rawTx };
+      });
+      mockSendTransaction.mockResolvedValueOnce({
+        status: 'SUCCESS',
+        hash: 'fee-hash',
+      });
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        successSim(xdr.ScVal.scvVoid()),
+      );
+
+      const result = await service.refundPaymentWithFee(42n, 12_345_678n);
+
+      expect(result).toEqual({ txHash: 'fee-hash', status: 'SUCCESS' });
+      // The shipment id and fee must reach the contract as u64/i128 ScVals,
+      // in that order — a wrong type or order fails simulation with a decode
+      // error rather than a contract error. Read back through the SDK's own
+      // XOR parser, since the builder nests the call in its tagged union.
+      // The builder stores the call inside a tagged union; `invokeContract()`
+      // is the SDK's own accessor for that payload.
+      const operation = (
+        builtTransaction as { operations: unknown[] }
+      ).operations[0] as {
+        type: string;
+        func: {
+          invokeContract(): {
+            functionName(): string;
+            args(): xdr.ScVal[];
+          };
+        };
+      };
+      expect(operation.type).toBe('invokeHostFunction');
+      const call = operation.func.invokeContract();
+      expect(call.functionName()).toBe('refund_payment_with_fee');
+      const args = call.args();
+      // Types must be u64/i128 and in that order — a mismatch fails contract
+      // simulation with a decode error, not a contract error.
+      expect(args[0].switch().name).toBe('scvU64');
+      expect(args[1].switch().name).toBe('scvI128');
+      expect(args[0].u64().toString()).toBe('42');
+      expect(args[1].i128().hi().toString()).toBe('0');
+      expect(args[1].i128().lo().toString()).toBe('12345678');
+    });
+
+    it('permits a zero fee on refund_payment_with_fee', async () => {
+      const service = await readyService();
+      stubAssembleAndSend({ status: 'SUCCESS', hash: 'zero-fee-hash' });
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        successSim(xdr.ScVal.scvVoid()),
+      );
+
+      await expect(service.refundPaymentWithFee(42n, 0n)).resolves.toEqual({
+        txHash: 'zero-fee-hash',
+        status: 'SUCCESS',
+      });
+    });
+
+    it('rejects a negative fee locally, before any chain call', async () => {
+      const service = await readyService();
+      // readyService() itself simulates get_admin, so only calls after that
+      // count toward this assertion.
+      mockSimulateTransaction.mockClear();
+      mockGetAccount.mockClear();
+
+      await expect(service.refundPaymentWithFee(42n, -1n)).rejects.toThrow(
+        /non-negative fee/,
+      );
+      expect(mockSimulateTransaction).not.toHaveBeenCalled();
+      expect(mockGetAccount).not.toHaveBeenCalled();
+    });
+
+    it('maps a contract InvalidStatus rejection from a fee refund', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        errorSim('HostError: Error(Contract, #6)'),
+      );
+
+      const error = (await service
+        .refundPaymentWithFee(42n, 100n)
+        .catch((e: unknown) => e)) as EscrowContractError;
+
+      expect(error).toBeInstanceOf(EscrowContractError);
+      expect(error.code).toBe(EscrowErrorCode.InvalidStatus);
+    });
+
+    it('fails a fee refund whose simulation cannot be decoded', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        errorSim('HostError: Error(WasmVm, InvalidAction)'),
+      );
+
+      await expect(service.refundPaymentWithFee(42n, 100n)).rejects.toThrow(
+        SimulationError,
+      );
+    });
+
+    it('fails a fee refund rejected on submission', async () => {
+      const service = await readyService();
+
+      mockSimulateTransaction.mockResolvedValueOnce(
+        successSim(xdr.ScVal.scvVoid()),
+      );
+      stubAssembleAndSend({ status: 'ERROR', hash: 'bad-hash' });
+
+      await expect(service.refundPaymentWithFee(42n, 100n)).rejects.toThrow(
+        SubmissionError,
+      );
+    });
+
     it('maps NotInitialized from getBalance into EscrowContractError', async () => {
       const service = await readyService();
 

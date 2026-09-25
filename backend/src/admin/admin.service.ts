@@ -56,6 +56,40 @@ export interface PlatformStats {
 
 export type AdminAuditRequest = AuditMetadataCarrier;
 
+export interface PaginatedUsers {
+  data: User[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PaginatedAdminShipments {
+  data: Shipment[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PlatformStats {
+  users: {
+    total: number;
+    byRole: Record<UserRole, number>;
+    active: number;
+    inactive: number;
+  };
+  shipments: {
+    total: number;
+    byStatus: Record<ShipmentStatus, number>;
+    disputesPending: number;
+  };
+  revenue: {
+    totalCompleted: number;
+    currency: string;
+  };
+}
+
 export interface EscrowReconciliationResult {
   shipmentId: string;
   offChain: {

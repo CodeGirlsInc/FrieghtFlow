@@ -56,6 +56,7 @@ function makeShipment(): Shipment {
     insurancePremium: null,
     status: ShipmentStatus.IN_TRANSIT,
     notes: null,
+    cancellationFee: null,
     pickupDate: null,
     estimatedDeliveryDate: null,
     actualDeliveryDate: null,

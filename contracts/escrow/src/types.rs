@@ -43,5 +43,15 @@ pub enum DataKey {
     TokenContract,
     ShipmentContract,
     Escrow(u64), // shipment_id → EscrowRecord
+    /// shipment_id → the fee (in base units) that was retained by the
+    /// platform the last time this escrow was settled as a partial refund.
+    ///
+    /// Held under its own key rather than as a field on [`EscrowRecord`]
+    /// for the same reason `EscrowStatus::Pending` is retained unused:
+    /// adding a field to `EscrowRecord` would change the on-chain encoding
+    /// of the value returned by `get_escrow` and of every event payload,
+    /// breaking already-deployed clients for no gain. `DataKey` is never
+    /// part of the ABI, so a new variant here is free.
+    EscrowFee(u64),
     Paused,
 }

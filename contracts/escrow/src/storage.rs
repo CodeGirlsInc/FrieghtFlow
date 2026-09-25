@@ -52,6 +52,28 @@ pub fn store(env: &Env, record: &EscrowRecord) {
     );
 }
 
+/// The fee (in base units) retained by the platform the last time this
+/// escrow was settled as a partial refund, or `0` when it has never been
+/// settled that way (or not settled at all).
+pub fn settlement_fee(env: &Env, shipment_id: u64) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::EscrowFee(shipment_id))
+        .unwrap_or(0)
+}
+
+/// Record the fee retained by a partial refund. Called only on the
+/// settlement path that actually splits the funds, so a full refund or a
+/// release never leaves a fee behind.
+pub fn store_settlement_fee(env: &Env, shipment_id: u64, fee: i128) {
+    if fee <= 0 {
+        return;
+    }
+    let key = DataKey::EscrowFee(shipment_id);
+    env.storage().persistent().set(&key, &fee);
+    env.storage().persistent().extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+}
+
 /// Settlement is reserved for the configured shipment contract, falling back
 /// to the platform admin for the custody model the backend still uses.
 ///

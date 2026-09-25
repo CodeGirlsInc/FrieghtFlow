@@ -15,7 +15,10 @@ import { Shipment } from '../shipments/entities/shipment.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { User } from '../users/entities/user.entity';
 import { StellarContractService } from '../stellar/stellar-contract.service';
-import { ContractCallResult } from '../stellar/escrow-record.interface';
+import {
+  CancellationSettlementResult,
+  ContractCallResult,
+} from '../stellar/escrow-record.interface';
 import {
   priceToBaseUnits,
   resolveSettlementAssetDecimals,
@@ -23,6 +26,7 @@ import {
 import { mapStellarFundingError } from './errors/stellar-error-mapper';
 import {
   ForbiddenPaymentActionError,
+  InvalidCancellationFeeError,
   MissingWalletAddressError,
   PaymentAlreadyFundedError,
   PaymentAlreadyInFlightError,
@@ -170,18 +174,74 @@ export class PaymentsService {
     });
   }
 
-  async refundEscrowForShipment(shipmentId: string): Promise<void> {
+  /**
+   * Settles a `Funded` escrow back to the shipper, optionally retaining a
+   * cancellation fee for the platform (issue #1543).
+   *
+   * The chain call only happens when settlement is actually appropriate:
+   *
+   * - no payment row → nothing was ever funded, no chain call;
+   * - the payment is not `FUNDED` (pending/funding, or already released /
+   *   refunded / cancelled) → no funds are held, no chain call;
+   * - the payment is `DISPUTED` → the escrow is mid-dispute on chain and
+   *   `refund_payment_with_fee` would be rejected, so the cancellation is
+   *   deliberately **not** settled here. A disputed escrow can only be
+   *   settled through {@link resolveEscrowDisputeForShipment}, which refunds
+   *   in full. `ShipmentsService.cancel()` routes that case explicitly, so
+   *   reaching here with a DISPUTED payment means the caller used the wrong
+   *   path — a no-op leaves the escrow and the local row untouched and
+   *   coherent for the dispute flow that follows.
+   *
+   * `cancellationFee` is in fiat units (e.g. dollars); it is converted to
+   * the payment's settlement asset base units here so the contract always
+   * receives the same units it was funded with. A fee of `0` takes the plain
+   * `refund_payment` path, which is byte-for-byte the pre-#1543 behaviour.
+   */
+  async refundEscrowForShipment(
+    shipmentId: string,
+    cancellationFee = 0,
+  ): Promise<CancellationSettlementResult | undefined> {
     const payment = await this.findByShipmentId(shipmentId);
-    if (!payment) return;
+    if (!payment) return undefined;
+    if (payment.status !== PaymentStatus.FUNDED) return undefined;
 
-    const result = await this.stellarContractService.refundPayment(
-      BigInt(payment.onChainShipmentId),
+    const onChainShipmentId = BigInt(payment.onChainShipmentId);
+    const amountBaseUnits = priceToBaseUnits(
+      Number(payment.amount),
+      payment.assetCode,
     );
+    const feeBaseUnits = priceToBaseUnits(cancellationFee, payment.assetCode);
+
+    // The contract rejects a fee >= the escrowed amount. Catching it here
+    // means a bad fee surfaces as a typed 4xx and the payment row is left
+    // FUNDED rather than half-settled.
+    if (feeBaseUnits > 0n && feeBaseUnits >= amountBaseUnits) {
+      throw new InvalidCancellationFeeError(
+        Number(payment.amount),
+        cancellationFee,
+      );
+    }
+
+    const result =
+      feeBaseUnits > 0n
+        ? await this.stellarContractService.refundPaymentWithFee(
+            onChainShipmentId,
+            feeBaseUnits,
+          )
+        : await this.stellarContractService.refundPayment(onChainShipmentId);
+
     await this.paymentRepo.update(payment.id, {
       status: PaymentStatus.REFUNDED,
       settledAt: new Date(),
       stellarTxHash: result.txHash,
     });
+
+    return {
+      txHash: result.txHash,
+      status: result.status,
+      feeAmount: feeBaseUnits,
+      refundAmount: amountBaseUnits - feeBaseUnits,
+    };
   }
 
   async raiseEscrowDisputeForShipment(shipmentId: string): Promise<void> {
