@@ -222,3 +222,96 @@ fn test_invalid_input_excessive_bounds() {
     );
     assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
 }
+
+#[test]
+fn test_invalid_input_empty_strings() {
+    let ctx = setup();
+    let shipper = Address::generate(&ctx.env);
+
+    // Blank origin
+    let result = ctx.client.try_create_shipment(
+        &shipper,
+        &str(&ctx.env, ""),
+        &str(&ctx.env, "B"),
+        &str(&ctx.env, "cargo"),
+        &100u32,
+        &1_000i128,
+    );
+    assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+
+    // Blank destination
+    let result = ctx.client.try_create_shipment(
+        &shipper,
+        &str(&ctx.env, "A"),
+        &str(&ctx.env, ""),
+        &str(&ctx.env, "cargo"),
+        &100u32,
+        &1_000i128,
+    );
+    assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+
+    // Blank cargo description
+    let result = ctx.client.try_create_shipment(
+        &shipper,
+        &str(&ctx.env, "A"),
+        &str(&ctx.env, "B"),
+        &str(&ctx.env, ""),
+        &100u32,
+        &1_000i128,
+    );
+    assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+}
+
+#[test]
+fn test_single_character_fields_accepted() {
+    let ctx = setup();
+    let shipper = Address::generate(&ctx.env);
+
+    // The lower bound is 1 char: single-character fields must still pass.
+    let id = ctx.client.create_shipment(
+        &shipper,
+        &str(&ctx.env, "A"),
+        &str(&ctx.env, "B"),
+        &str(&ctx.env, "C"),
+        &100u32,
+        &1_000i128,
+    );
+
+    let s = ctx.client.get_shipment(&id);
+    assert_eq!(s.origin, str(&ctx.env, "A"));
+    assert_eq!(s.destination, str(&ctx.env, "B"));
+    assert_eq!(s.cargo_description, str(&ctx.env, "C"));
+}
+
+#[test]
+fn test_update_shipment_empty_strings_fail() {
+    let ctx = setup();
+    let shipper = Address::generate(&ctx.env);
+    let id = make_shipment(&ctx, &shipper);
+
+    // Blank destination
+    let result = ctx.client.try_update_shipment(
+        &shipper,
+        &id,
+        &str(&ctx.env, ""),
+        &str(&ctx.env, "cargo"),
+        &200u32,
+        &6_000_000_000i128,
+    );
+    assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+
+    // Blank cargo description
+    let result = ctx.client.try_update_shipment(
+        &shipper,
+        &id,
+        &str(&ctx.env, "Accra, Ghana"),
+        &str(&ctx.env, ""),
+        &200u32,
+        &6_000_000_000i128,
+    );
+    assert_eq!(result, Err(Ok(ShipmentError::InvalidInput)));
+
+    // Terms are untouched after a rejected update.
+    let s = ctx.client.get_shipment(&id);
+    assert_eq!(s.destination, str(&ctx.env, "Nairobi, Kenya"));
+}
