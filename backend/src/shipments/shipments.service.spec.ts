@@ -16,6 +16,7 @@ import { UserRole } from '../common/enums/role.enum';
 import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { User } from '../users/entities/user.entity';
 import { PaymentsService } from '../payments/payments.service';
+import { CancellationFeeService } from './cancellation-fee.service';
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
@@ -60,6 +61,7 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     insurancePremium: null,
     status: ShipmentStatus.PENDING,
     notes: null,
+    cancellationFee: null,
     pickupDate: null,
     estimatedDeliveryDate: null,
     actualDeliveryDate: null,
@@ -137,6 +139,9 @@ describe('ShipmentsService', () => {
         },
         { provide: EventEmitter2, useValue: eventEmitter },
         { provide: PaymentsService, useValue: paymentsService },
+        // The real policy is used here on purpose: cancel() must actually
+        // charge the tiered fee, not a stubbed value.
+        CancellationFeeService,
       ],
     }).compile();
 
@@ -540,6 +545,15 @@ describe('ShipmentsService', () => {
   });
 
   describe('cancel()', () => {
+    function primeCancelFlow(shipment: Shipment, saved: Shipment): void {
+      shipmentRepo.findOne
+        .mockResolvedValueOnce(shipment)
+        .mockResolvedValueOnce(saved);
+      shipmentRepo.save.mockResolvedValue(saved);
+      historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
+      historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+    }
+
     it('cancels a PENDING shipment with a reason', async () => {
       const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
       const shipment = makeShipment({
@@ -547,13 +561,7 @@ describe('ShipmentsService', () => {
         shipperId: shipper.id,
       });
       const cancelled = makeShipment({ status: ShipmentStatus.CANCELLED });
-
-      shipmentRepo.findOne
-        .mockResolvedValueOnce(shipment)
-        .mockResolvedValueOnce(cancelled);
-      shipmentRepo.save.mockResolvedValue(cancelled);
-      historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
-      historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+      primeCancelFlow(shipment, cancelled);
 
       await service.cancel('shipment-uuid-1', shipper, 'Customer request');
 
@@ -563,6 +571,180 @@ describe('ShipmentsService', () => {
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'shipment.cancelled',
         expect.anything(),
+      );
+    });
+
+    // ── Cancellation fee (issue #1543) ─────────────────────────────────────
+
+    it('records a 10% cancellation fee when cancelling an ACCEPTED shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.ACCEPTED,
+        shipperId: shipper.id,
+        price: 5000,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper, 'Changed my mind');
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: ShipmentStatus.CANCELLED,
+          cancellationFee: 500,
+          notes: 'Cancellation fee: 500 USD',
+        }),
+      );
+    });
+
+    it('records a 25% cancellation fee when cancelling an IN_TRANSIT shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.IN_TRANSIT,
+        shipperId: shipper.id,
+        price: 400,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper);
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: ShipmentStatus.CANCELLED,
+          cancellationFee: 100,
+        }),
+      );
+    });
+
+    it('records a zero fee when cancelling a PENDING shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.PENDING,
+        shipperId: shipper.id,
+        price: 5000,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper);
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ cancellationFee: 0 }),
+      );
+    });
+
+    it('preserves the shipper’s existing notes when recording the fee', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.ACCEPTED,
+        shipperId: shipper.id,
+        notes: 'Fragile — do not stack',
+        price: 1000,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper);
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notes: 'Fragile — do not stack\nCancellation fee: 100 USD',
+        }),
+      );
+    });
+
+    it('preserves refund behaviour and refunds before persisting', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.ACCEPTED,
+        shipperId: shipper.id,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper);
+
+      expect(paymentsService.refundEscrowForShipment).toHaveBeenCalledWith(
+        'shipment-uuid-1',
+        500,
+      );
+      expect(
+        paymentsService.refundEscrowForShipment.mock.invocationCallOrder[0],
+      ).toBeLessThan(shipmentRepo.save.mock.invocationCallOrder[0]);
+    });
+
+    it('does not cancel or record a fee when the escrow refund fails', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      shipmentRepo.findOne.mockResolvedValue(
+        makeShipment({
+          status: ShipmentStatus.ACCEPTED,
+          shipperId: shipper.id,
+        }),
+      );
+      paymentsService.refundEscrowForShipment.mockRejectedValue(
+        new Error('escrow unavailable'),
+      );
+
+      await expect(service.cancel('shipment-uuid-1', shipper)).rejects.toThrow(
+        'escrow unavailable',
+      );
+      expect(shipmentRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('records no fee when an admin cancels a disputed shipment', async () => {
+      const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
+      const shipment = makeShipment({ status: ShipmentStatus.DISPUTED });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', admin, 'Carrier breached');
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ cancellationFee: 0 }),
+      );
+    });
+
+    it('still refuses to cancel a DELIVERED shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      shipmentRepo.findOne.mockResolvedValue(
+        makeShipment({
+          status: ShipmentStatus.DELIVERED,
+          shipperId: shipper.id,
+        }),
+      );
+
+      await expect(service.cancel('shipment-uuid-1', shipper)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(paymentsService.refundEscrowForShipment).not.toHaveBeenCalled();
+    });
+
+    it('rejects users who are not a party to the shipment', async () => {
+      const outsider = makeUser({ id: 'outsider', role: UserRole.SHIPPER });
+      shipmentRepo.findOne.mockResolvedValue(
+        makeShipment({
+          status: ShipmentStatus.PENDING,
+          shipperId: 'somebody-else',
+        }),
+      );
+
+      await expect(service.cancel('shipment-uuid-1', outsider)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(shipmentRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('lets the assigned carrier cancel an in-transit shipment', async () => {
+      const carrier = makeUser({
+        id: 'carrier-uuid-1',
+        role: UserRole.CARRIER,
+      });
+      const shipment = makeShipment({
+        status: ShipmentStatus.IN_TRANSIT,
+        carrierId: carrier.id,
+        price: 800,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', carrier);
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ cancellationFee: 200 }),
       );
     });
   });

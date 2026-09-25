@@ -205,6 +205,49 @@ export class StellarContractService implements OnModuleInit {
     );
   }
 
+  /**
+   * Cancel a shipment, retaining `feeAmount` (in the token's base unit) for
+   * the platform and returning the remainder to the shipper.
+   *
+   * A `feeAmount` of `0n` is a full refund and is equivalent to
+   * {@link refundPayment} — the caller may pass it either way. The contract
+   * rejects a fee greater than or equal to the escrowed amount, and rejects
+   * any escrow that is not `Funded` (so a disputed escrow must go through
+   * {@link resolveDispute} instead).
+   */
+  async refundPaymentWithFee(
+    shipmentId: bigint,
+    feeAmount: bigint,
+  ): Promise<ContractCallResult> {
+    this.assertEnabled();
+    if (feeAmount < 0n) {
+      throw new Error(
+        'StellarContractService: refundPaymentWithFee requires a non-negative fee',
+      );
+    }
+    return this.invoke(
+      this.adminKeypair,
+      'refund_payment_with_fee',
+      nativeToScVal(shipmentId, { type: 'u64' }),
+      nativeToScVal(feeAmount, { type: 'i128' }),
+    );
+  }
+
+  /**
+   * The platform fee (in base units) the contract retained the last time this
+   * escrow was settled as a partial refund, or `0n` if it has not been.
+   *
+   * Used by escrow reconciliation to confirm the fee recorded off-chain
+   * matches what actually went to the platform admin.
+   */
+  async getSettlementFee(shipmentId: bigint): Promise<bigint> {
+    const retval = await this.simulateRead(
+      'get_settlement_fee',
+      nativeToScVal(shipmentId, { type: 'u64' }),
+    );
+    return BigInt(scValToNative(retval) as bigint | number);
+  }
+
   async resolveDispute(
     shipmentId: bigint,
     releaseToCarrier: boolean,

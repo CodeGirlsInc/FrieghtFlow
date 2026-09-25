@@ -118,6 +118,18 @@ impl EscrowContract {
         settlement::refund(&env, shipment_id)
     }
 
+    /// Cancel a shipment, retaining `fee_amount` (in the token's base unit)
+    /// for the platform and returning the remainder to the shipper. A
+    /// `fee_amount` of `0` is a full refund. See
+    /// [`settlement::refund_with_fee`].
+    pub fn refund_payment_with_fee(
+        env: Env,
+        shipment_id: u64,
+        fee_amount: i128,
+    ) -> Result<(), EscrowError> {
+        settlement::refund_with_fee(&env, shipment_id, fee_amount)
+    }
+
     /// Either party disputes the escrow. See [`settlement::raise_dispute`].
     pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), EscrowError> {
         settlement::raise_dispute(&env, caller, shipment_id)
@@ -134,6 +146,15 @@ impl EscrowContract {
 
     pub fn get_escrow(env: Env, shipment_id: u64) -> Result<EscrowRecord, EscrowError> {
         storage::load(&env, shipment_id)
+    }
+
+    /// The platform fee (in base units) retained the last time this escrow
+    /// was settled as a partial refund, or `0` if it has not been.
+    ///
+    /// Lets the backend's escrow reconciliation confirm that the fee it
+    /// recorded off-chain matches what the contract actually paid out.
+    pub fn get_settlement_fee(env: Env, shipment_id: u64) -> i128 {
+        storage::settlement_fee(&env, shipment_id)
     }
 
     /// Read the configured admin address.

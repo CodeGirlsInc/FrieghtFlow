@@ -12,6 +12,7 @@ export type PaymentFlowErrorCode =
   | 'PAYMENT_ALREADY_FUNDED'
   | 'PAYMENT_ALREADY_IN_FLIGHT'
   | 'MISSING_WALLET_ADDRESS'
+  | 'INVALID_CANCELLATION_FEE'
   | 'ESCROW_SIMULATION_FAILED'
   | 'ESCROW_SUBMISSION_FAILED'
   | 'ESCROW_CONTRACT_REJECTED';
@@ -82,6 +83,26 @@ export class MissingWalletAddressError extends PaymentFlowError {
       `The ${party} has not configured a Stellar wallet address`,
       HttpStatus.UNPROCESSABLE_ENTITY,
       { party },
+    );
+  }
+}
+
+/**
+ * The computed cancellation fee would leave the shipper with nothing, which
+ * the escrow contract refuses (`fee >= amount`). Raised before any chain call
+ * so the payment row stays `FUNDED` and the shipment is not cancelled into an
+ * inconsistent state.
+ */
+export class InvalidCancellationFeeError extends PaymentFlowError {
+  constructor(
+    readonly escrowedAmount: number,
+    readonly requestedFee: number,
+  ) {
+    super(
+      'INVALID_CANCELLATION_FEE',
+      `A cancellation fee of ${requestedFee} cannot be charged against an escrowed amount of ${escrowedAmount}`,
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      { escrowedAmount, requestedFee },
     );
   }
 }

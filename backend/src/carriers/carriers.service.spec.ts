@@ -26,6 +26,7 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     insurancePremium: null,
     status: ShipmentStatus.COMPLETED,
     notes: null,
+    cancellationFee: null,
     pickupDate: null,
     estimatedDeliveryDate: new Date('2024-01-10'),
     actualDeliveryDate: new Date('2024-01-09'),

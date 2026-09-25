@@ -31,6 +31,7 @@ describe('NotificationsGateway', () => {
     onChainShipmentId: null,
     insurancePremium: null,
     notes: null,
+    cancellationFee: null,
     pickupDate: null,
     estimatedDeliveryDate: null,
     actualDeliveryDate: null,

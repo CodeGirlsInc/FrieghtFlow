@@ -30,6 +30,7 @@ import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { PaymentsService } from '../payments/payments.service';
+import { CancellationFeeService } from './cancellation-fee.service';
 import {
   SHIPMENT_CREATED,
   SHIPMENT_ACCEPTED,
@@ -109,6 +110,7 @@ export class ShipmentsService {
     private readonly historyRepo: Repository<ShipmentStatusHistory>,
     private readonly eventEmitter: EventEmitter2,
     private readonly paymentsService: PaymentsService,
+    private readonly cancellationFeeService: CancellationFeeService,
   ) {}
 
   // ── Tracking number ──────────────────────────────────────────────────────────
@@ -127,33 +129,66 @@ export class ShipmentsService {
     to: ShipmentStatus,
     actorRole: UserRole,
   ): void {
-    const allowed: Partial<
-      Record<ShipmentStatus, { next: ShipmentStatus[]; roles: UserRole[] }>
-    > = {
-      [ShipmentStatus.PENDING]: {
-        next: [ShipmentStatus.ACCEPTED, ShipmentStatus.CANCELLED],
-        roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
-      },
-      [ShipmentStatus.ACCEPTED]: {
-        next: [ShipmentStatus.IN_TRANSIT, ShipmentStatus.CANCELLED],
-        roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
-      },
-      [ShipmentStatus.IN_TRANSIT]: {
-        next: [ShipmentStatus.DELIVERED, ShipmentStatus.DISPUTED],
-        roles: [UserRole.CARRIER, UserRole.ADMIN],
-      },
-      [ShipmentStatus.DELIVERED]: {
-        next: [ShipmentStatus.COMPLETED, ShipmentStatus.DISPUTED],
-        roles: [UserRole.SHIPPER, UserRole.ADMIN],
-      },
-      [ShipmentStatus.DISPUTED]: {
-        next: [ShipmentStatus.COMPLETED, ShipmentStatus.CANCELLED],
-        roles: [UserRole.ADMIN],
-      },
+    // Roles are declared per (from → to) edge rather than per `from` state:
+    // cancelling is open to the shipper at every cancellable stage, while
+    // moving a shipment in transit is still carrier-only.
+    type TransitionRule = { to: ShipmentStatus; roles: UserRole[] };
+
+    const allowed: Partial<Record<ShipmentStatus, TransitionRule[]>> = {
+      [ShipmentStatus.PENDING]: [
+        {
+          to: ShipmentStatus.ACCEPTED,
+          roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
+        },
+        {
+          to: ShipmentStatus.CANCELLED,
+          roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
+        },
+      ],
+      [ShipmentStatus.ACCEPTED]: [
+        {
+          to: ShipmentStatus.IN_TRANSIT,
+          roles: [UserRole.CARRIER, UserRole.ADMIN],
+        },
+        {
+          to: ShipmentStatus.CANCELLED,
+          roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
+        },
+      ],
+      [ShipmentStatus.IN_TRANSIT]: [
+        {
+          to: ShipmentStatus.DELIVERED,
+          roles: [UserRole.CARRIER, UserRole.ADMIN],
+        },
+        {
+          to: ShipmentStatus.DISPUTED,
+          roles: [UserRole.CARRIER, UserRole.ADMIN],
+        },
+        // A shipment can still be called off while the cargo is moving;
+        // it is charged the IN_TRANSIT cancellation tier.
+        {
+          to: ShipmentStatus.CANCELLED,
+          roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
+        },
+      ],
+      [ShipmentStatus.DELIVERED]: [
+        {
+          to: ShipmentStatus.COMPLETED,
+          roles: [UserRole.SHIPPER, UserRole.ADMIN],
+        },
+        {
+          to: ShipmentStatus.DISPUTED,
+          roles: [UserRole.SHIPPER, UserRole.ADMIN],
+        },
+      ],
+      [ShipmentStatus.DISPUTED]: [
+        { to: ShipmentStatus.COMPLETED, roles: [UserRole.ADMIN] },
+        { to: ShipmentStatus.CANCELLED, roles: [UserRole.ADMIN] },
+      ],
     };
 
-    const rule = allowed[from];
-    if (!rule || !rule.next.includes(to)) {
+    const rule = allowed[from]?.find((candidate) => candidate.to === to);
+    if (!rule) {
       throw new BadRequestException(
         `Cannot transition shipment from "${from}" to "${to}"`,
       );
@@ -231,22 +266,14 @@ export class ShipmentsService {
     return saved;
   }
 
+  /**
+   * Creates each shipment in its own transaction so one invalid item cannot
+   * roll back the whole batch. Every item is reported back with its own
+   * success flag and either the new shipment id or the failure reason.
+   */
   async batchCreate(
     shipperId: string,
     dto: BatchCreateShipmentsDto,
-
-  ): Promise<string[]> {
-    const createdIds: string[] = [];
-
-    // Use TypeORM transaction
-    const queryRunner =
-      this.shipmentRepo.manager.connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      for (const shipmentDto of dto.shipments) {
-
   ): Promise<BatchCreateResultDto> {
     const results: BatchItemResultDto[] = [];
 
@@ -259,7 +286,6 @@ export class ShipmentsService {
       await queryRunner.startTransaction();
 
       try {
-
         const insurancePremium = shipmentDto.isInsured
           ? Math.round(shipmentDto.price * 0.015 * 100) / 100
           : null;
@@ -587,6 +613,25 @@ export class ShipmentsService {
     return saved;
   }
 
+  /**
+   * Cancels a shipment, refunding escrow and retaining a tiered
+   * cancellation fee.
+   *
+   * The fee rate is a function of the status being cancelled *from*
+   * (see `CancellationFeeService`): free while PENDING, 10% once a carrier
+   * has accepted, 25% while the cargo is IN_TRANSIT, and free for an
+   * admin cancelling a disputed shipment. The fee is stamped on the
+   * shipment and surfaced on every shipment read via
+   * `shipment.cancellationFee`.
+   *
+   * Ordering matters: the fee is computed before the settlement so a failing
+   * chain call leaves the shipment — and its recorded fee — untouched.
+   *
+   * A `DISPUTED` shipment is settled through the dispute path, which refunds
+   * in full; `refundEscrowForShipment` would be rejected by the contract for
+   * a non-`Funded` escrow. Its fee tier is 0 (see `CancellationFeeService`),
+   * so the shipper is made whole either way.
+   */
   async cancel(
     shipmentId: string,
     user: User,
@@ -607,8 +652,24 @@ export class ShipmentsService {
       user.role,
     );
 
-    await this.paymentsService.refundEscrowForShipment(shipmentId);
     const previousStatus = shipment.status;
+    const cancellationFee = this.cancellationFeeService.applyTo(
+      shipment,
+      previousStatus,
+    );
+
+    if (previousStatus === ShipmentStatus.DISPUTED) {
+      await this.paymentsService.resolveEscrowDisputeForShipment(
+        shipmentId,
+        false,
+      );
+    } else {
+      await this.paymentsService.refundEscrowForShipment(
+        shipmentId,
+        cancellationFee,
+      );
+    }
+
     shipment.status = ShipmentStatus.CANCELLED;
     const saved = await this.shipmentRepo.save(shipment);
     await this.recordHistory(

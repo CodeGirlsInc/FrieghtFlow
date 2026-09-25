@@ -22,3 +22,13 @@ export interface ContractCallResult {
   txHash: string;
   status: string;
 }
+
+/** Result of a cancellation that retained a platform fee (issue #1543). */
+export interface CancellationSettlementResult {
+  txHash: string;
+  status: string;
+  /** Fee retained by the platform, in the token's base unit. */
+  feeAmount: bigint;
+  /** Amount actually returned to the shipper, in the token's base unit. */
+  refundAmount: bigint;
+}
