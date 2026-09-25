@@ -28,6 +28,7 @@ export function DisputeForm({ shipmentId, onSuccess, onClose }: Props) {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
@@ -57,6 +58,10 @@ export function DisputeForm({ shipmentId, onSuccess, onClose }: Props) {
       });
 
       toast.success('Dispute filed successfully.');
+      if (fileRef.current) {
+        fileRef.current.value = '';
+      }
+      reset();
       onSuccess?.();
     } catch (err: unknown) {
       const error = err as { message?: string };

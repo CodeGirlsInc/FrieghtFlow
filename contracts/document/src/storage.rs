@@ -1,9 +1,10 @@
 //! Storage accessors shared by the contract's entrypoint modules.
 
+use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Env, Vec};
 
 use crate::errors::DocumentError;
-use crate::types::{DataKey, DocumentRecord, TTL_LEDGERS};
+use crate::types::{DataKey, DocumentRecord};
 
 pub fn admin(env: &Env) -> Result<Address, DocumentError> {
     env.storage()

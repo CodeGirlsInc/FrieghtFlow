@@ -2,6 +2,7 @@ use soroban_sdk::{testutils::Address as _, Address};
 
 use super::setup;
 use crate::errors::ReputationError;
+use crate::outcome::Outcome;
 use crate::types::UserType;
 
 #[test]
@@ -11,11 +12,11 @@ fn test_update_stats_carrier() {
     ctx.client.register_user(&carrier, &UserType::Carrier);
 
     ctx.client
-        .update_stats(&ctx.auth_contract, &carrier, &true, &false); // on-time
+        .update_stats(&ctx.auth_contract, &carrier, &Outcome::OnTime);
     ctx.client
-        .update_stats(&ctx.auth_contract, &carrier, &true, &false); // on-time
+        .update_stats(&ctx.auth_contract, &carrier, &Outcome::OnTime);
     ctx.client
-        .update_stats(&ctx.auth_contract, &carrier, &false, &false); // late
+        .update_stats(&ctx.auth_contract, &carrier, &Outcome::Late);
 
     let rep = ctx.client.get_reputation(&carrier);
     assert_eq!(rep.total_completed, 3);
@@ -30,9 +31,9 @@ fn test_update_stats_shipper() {
     ctx.client.register_user(&shipper, &UserType::Shipper);
 
     ctx.client
-        .update_stats(&ctx.auth_contract, &shipper, &false, &true); // success
+        .update_stats(&ctx.auth_contract, &shipper, &Outcome::Success);
     ctx.client
-        .update_stats(&ctx.auth_contract, &shipper, &false, &false); // cancelled
+        .update_stats(&ctx.auth_contract, &shipper, &Outcome::Cancelled);
 
     let rep = ctx.client.get_reputation(&shipper);
     assert_eq!(rep.total_completed, 2);
@@ -46,7 +47,7 @@ fn test_admin_may_update_stats() {
     let carrier = Address::generate(&ctx.env);
     ctx.client.register_user(&carrier, &UserType::Carrier);
 
-    ctx.client.update_stats(&ctx.admin, &carrier, &true, &false);
+    ctx.client.update_stats(&ctx.admin, &carrier, &Outcome::OnTime);
 
     assert_eq!(ctx.client.get_reputation(&carrier).total_completed, 1);
 }
@@ -60,8 +61,42 @@ fn test_unauthorized_update_stats_fails() {
 
     let result = ctx
         .client
-        .try_update_stats(&random, &carrier, &true, &false);
+        .try_update_stats(&random, &carrier, &Outcome::OnTime);
     assert_eq!(result, Err(Ok(ReputationError::Unauthorized)));
+}
+
+/// Passing a carrier-only Outcome for a Shipper must return UserTypeMismatch.
+#[test]
+fn test_update_stats_user_type_mismatch() {
+    let ctx = setup();
+    let shipper = Address::generate(&ctx.env);
+    ctx.client.register_user(&shipper, &UserType::Shipper);
+
+    // OnTime is carrier-only.
+    let result = ctx
+        .client
+        .try_update_stats(&ctx.auth_contract, &shipper, &Outcome::OnTime);
+    assert_eq!(result, Err(Ok(ReputationError::UserTypeMismatch)));
+
+    // Late is also carrier-only.
+    let result = ctx
+        .client
+        .try_update_stats(&ctx.auth_contract, &shipper, &Outcome::Late);
+    assert_eq!(result, Err(Ok(ReputationError::UserTypeMismatch)));
+}
+
+/// Passing a shipper-only Outcome for a Carrier must return UserTypeMismatch.
+#[test]
+fn test_update_stats_user_type_mismatch_carrier_gets_shipper_outcome() {
+    let ctx = setup();
+    let carrier = Address::generate(&ctx.env);
+    ctx.client.register_user(&carrier, &UserType::Carrier);
+
+    // Success is shipper-only.
+    let result = ctx
+        .client
+        .try_update_stats(&ctx.auth_contract, &carrier, &Outcome::Success);
+    assert_eq!(result, Err(Ok(ReputationError::UserTypeMismatch)));
 }
 
 #[test]
@@ -76,7 +111,7 @@ fn test_calculate_score_perfect_carrier() {
     ctx.client.submit_rating(&rater, &1u64, &carrier, &5u32);
     // Perfect on-time record
     ctx.client
-        .update_stats(&ctx.auth_contract, &carrier, &true, &false);
+        .update_stats(&ctx.auth_contract, &carrier, &Outcome::OnTime);
 
     // avg_rating = 500 (5 stars × 100), on_time_pct = 100%, rating/completed = 100%
     // rating_component = 500, rate_component = 300, completion_component = 200
@@ -92,11 +127,11 @@ fn test_calculate_score_shipper() {
     ctx.client.register_user(&shipper, &UserType::Shipper);
 
     ctx.client.submit_rating(&rater, &1u64, &shipper, &4u32); // 4 stars
-                                                              // 1 successful out of 2 completed.
+    // 1 successful out of 2 completed.
     ctx.client
-        .update_stats(&ctx.auth_contract, &shipper, &false, &true);
+        .update_stats(&ctx.auth_contract, &shipper, &Outcome::Success);
     ctx.client
-        .update_stats(&ctx.auth_contract, &shipper, &false, &false);
+        .update_stats(&ctx.auth_contract, &shipper, &Outcome::Cancelled);
 
     // rating_component = 400 (4 stars × 100)
     // rate_component = 1/2 success × 3 = 150
@@ -112,4 +147,44 @@ fn test_calculate_score_new_user() {
     ctx.client.register_user(&user, &UserType::Carrier);
 
     assert_eq!(ctx.client.calculate_score(&user), 0); // no data yet
+}
+
+#[test]
+fn test_calculate_score_rate_component_keeps_fractional_precision() {
+    let ctx = setup();
+    let carrier = Address::generate(&ctx.env);
+    ctx.client.register_user(&carrier, &UserType::Carrier);
+
+    // 1 on-time out of 3 completed: 1/3 is not an integer percentage, so the
+    // ×3 factor must be applied before the division to avoid truncation.
+    ctx.client
+        .update_stats(&ctx.auth_contract, &carrier, &Outcome::OnTime);
+    ctx.client
+        .update_stats(&ctx.auth_contract, &carrier, &Outcome::Late);
+    ctx.client
+        .update_stats(&ctx.auth_contract, &carrier, &Outcome::Late);
+
+    // rating_component = 0 (no ratings), completion_component = 0.
+    // rate_component must be (1 × 100 × 3) / 3 = 100, not 99.
+    assert_eq!(ctx.client.calculate_score(&carrier), 100);
+}
+
+#[test]
+fn test_calculate_score_rate_component_loses_nothing_when_evenly_divisible() {
+    let ctx = setup();
+    let carrier = Address::generate(&ctx.env);
+    ctx.client.register_user(&carrier, &UserType::Carrier);
+
+    // 2 on-time out of 4 completed: even division, so the reordered formula
+    // must produce the same value the old ordering did (150).
+    for _ in 0..2 {
+        ctx.client
+            .update_stats(&ctx.auth_contract, &carrier, &Outcome::OnTime);
+    }
+    for _ in 0..2 {
+        ctx.client
+            .update_stats(&ctx.auth_contract, &carrier, &Outcome::Late);
+    }
+
+    assert_eq!(ctx.client.calculate_score(&carrier), 150);
 }

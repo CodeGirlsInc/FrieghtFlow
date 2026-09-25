@@ -7,6 +7,7 @@
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 
 use crate::errors::ReputationError;
+use crate::outcome::Outcome;
 use crate::types::{DataKey, RatingRecord, Reputation, UserType};
 use crate::{authorized, rating, stats, storage, users};
 
@@ -125,14 +126,19 @@ impl ReputationContract {
     }
 
     /// Record a completed shipment. See [`stats::update`].
+    ///
+    /// The `was_on_time`/`was_successful` boolean pair is replaced by the
+    /// typed [`Outcome`] value, which names exactly one result and enforces
+    /// that it is appropriate for the user'\''s type. Callers that pass a
+    /// carrier-only outcome for a shipper (or vice versa) receive
+    /// [`ReputationError::UserTypeMismatch`] instead of silent discard.
     pub fn update_stats(
         env: Env,
         caller: Address,
         user: Address,
-        was_on_time: bool,
-        was_successful: bool,
+        outcome: Outcome,
     ) -> Result<(), ReputationError> {
-        stats::update(&env, caller, user, was_on_time, was_successful)
+        stats::update(&env, caller, user, outcome)
     }
 
     /// Composite 0-1000 reputation score. See [`stats::score`].

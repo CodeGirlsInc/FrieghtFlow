@@ -18,4 +18,12 @@ pub enum DocumentError {
     /// `flag_document` was called on a document that isn't currently verified
     /// — there is nothing to flag/reverse.
     NotVerified = 10,
+    /// A string or byte field exceeds its maximum allowed length.
+    ///
+    /// `ipfs_cid` in `register_document` is capped at 512 bytes (a CIDv1
+    /// Base58/Base32 string is at most ~100 chars; 512 is a generous ceiling
+    /// that still prevents unbounded persistent-storage growth).
+    /// `reason` in `flag_document` is capped at 1024 bytes, matching
+    /// `cargo_description` in the shipment contract.
+    FieldTooLong = 11,
 }

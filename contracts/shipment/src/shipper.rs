@@ -1,9 +1,10 @@
 //! Transitions only the shipper may drive.
 
+use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Env, String};
 
 use crate::errors::ShipmentError;
-use crate::types::{DataKey, Shipment, ShipmentStatus, TTL_LEDGERS};
+use crate::types::{DataKey, Shipment, ShipmentStatus};
 use crate::{events, storage};
 
 /// Shipper creates a new shipment posting.

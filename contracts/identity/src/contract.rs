@@ -1,8 +1,16 @@
+use common::TTL_LEDGERS;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 use crate::errors::IdentityError;
 use crate::events;
-use crate::types::{DataKey, TTL_LEDGERS};
+use crate::types::DataKey;
+
+/// Maximum number of wallets that may be registered against one `user_id_hash`
+/// at any given time. This bounds `unindex_wallet`'\''s O(n) read-modify-write
+/// cost and `get_wallets_by_identity`'\''s read cost. Legitimate use cases
+/// (a KYC'\''d user adding a second device, a corporate entity with a handful
+/// of authorised wallets) are well below this ceiling.
+pub const MAX_WALLETS_PER_HASH: u32 = 64;
 
 #[contract]
 pub struct IdentityContract;
@@ -69,6 +77,12 @@ impl IdentityContract {
     }
 
     /// Register a wallet → user_id_hash mapping.
+    ///
+    /// At most `MAX_WALLETS_PER_HASH` (64) wallets may be registered against
+    /// one `user_id_hash` at a time. This bounds `unindex_wallet`'\''s O(n)
+    /// rebuild cost (issue #1455) and the read cost of `get_wallets_by_identity`.
+    /// Legitimate use cases (e.g. a KYC'\''d user registering multiple devices)
+    /// are well below this ceiling.
     pub fn register_identity(
         env: Env,
         user_id_hash: BytesN<32>,
@@ -83,6 +97,16 @@ impl IdentityContract {
             .has(&DataKey::Identity(wallet.clone()))
         {
             return Err(IdentityError::AlreadyRegistered);
+        }
+
+        // Enforce the per-hash wallet cap before appending to the index.
+        let existing: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::HashToWallets(user_id_hash.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+        if existing.len() >= MAX_WALLETS_PER_HASH {
+            return Err(IdentityError::WalletLimitReached);
         }
 
         env.storage()
@@ -152,12 +176,45 @@ impl IdentityContract {
     }
 
     /// Reverse lookup: every wallet currently registered against
-    /// `user_id_hash`. Empty if none are.
-    pub fn get_wallets_by_identity(env: Env, user_id_hash: BytesN<32>) -> Vec<Address> {
-        env.storage()
+    /// `user_id_hash`, paged by `offset`/`limit`.
+    ///
+    /// Returns at most `limit` wallet addresses starting at position `offset`
+    /// in the registration-order list, clamped to the list'\''s bounds. An empty
+    /// `Vec` is returned when no wallets are registered or `offset` is past the
+    /// end.
+    ///
+    /// Every other Vec-returning getter in this workspace (`get_documents_by_shipment`,
+    /// `get_shipments_by_shipper`, `get_shipments_by_carrier`) already takes
+    /// `offset`/`limit` and calls a `paginate` helper. This entrypoint now
+    /// matches that convention, bounding its read cost regardless of how many
+    /// wallets a single `user_id_hash` accumulates.
+    pub fn get_wallets_by_identity(
+        env: Env,
+        user_id_hash: BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<Address> {
+        let all: Vec<Address> = env
+            .storage()
             .persistent()
             .get(&DataKey::HashToWallets(user_id_hash))
-            .unwrap_or_else(|| Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        // Slice [offset .. offset+limit], clamped to the list'\''s actual length.
+        let mut paged = Vec::new(&env);
+        let len = all.len();
+
+        if offset >= len {
+            return paged;
+        }
+
+        let end = (offset + limit).min(len);
+        for i in offset..end {
+            if let Some(w) = all.get(i) {
+                paged.push_back(w);
+            }
+        }
+        paged
     }
 
     /// Admin-only: remove a wallet's identity record.
