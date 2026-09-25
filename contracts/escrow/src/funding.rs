@@ -35,10 +35,12 @@ pub fn fund(
         let existing = storage::load(env, shipment_id)?;
         match existing.status {
             EscrowStatus::Funded => return Err(EscrowError::AlreadyFunded),
-            EscrowStatus::Released | EscrowStatus::Refunded => {
+            EscrowStatus::Released | EscrowStatus::Refunded | EscrowStatus::Disputed => {
                 return Err(EscrowError::InvalidStatus);
             }
-            _ => {}
+            // `Pending` records are never created today; keep the arm so a
+            // future `Pending -> Funded` transition stays a valid one.
+            EscrowStatus::Pending => {}
         }
     }
 
