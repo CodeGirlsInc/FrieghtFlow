@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -51,12 +51,47 @@ const STEPS = [
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function NewShipmentPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewShipmentForm />
+    </Suspense>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary above it (see the
+// wrapper above) to avoid opting the whole route out of static
+// rendering.
+function NewShipmentForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState(0);
+
+  // Two flows hand off a prefilled draft via query params: the price
+  // calculator (origin, destination, weightKg, volumeCbm, price — it
+  // also sends cargoCategory, which has no corresponding field on this
+  // form/CreateShipmentPayload, so it's not read here) and a carrier's
+  // "Contact / Hire" button (carrierId, carrierName — surfaced below as
+  // an informational banner, since shipment creation itself has no
+  // carrier-assignment field to submit them into).
+  const numericParam = (key: string) => {
+    const raw = searchParams.get(key);
+    if (!raw) return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const carrierId = searchParams.get('carrierId') ?? undefined;
+  const carrierName = searchParams.get('carrierName') ?? undefined;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(fullSchema) as Resolver<FormValues>,
-    defaultValues: { currency: 'USD' },
+    defaultValues: {
+      currency: 'USD',
+      origin: searchParams.get('origin') ?? undefined,
+      destination: searchParams.get('destination') ?? undefined,
+      weightKg: numericParam('weightKg'),
+      volumeCbm: numericParam('volumeCbm'),
+      price: numericParam('price'),
+    },
     mode: 'onTouched',
   });
 
@@ -133,6 +168,14 @@ export default function NewShipmentPage() {
               <CardTitle className="text-base">Route Details</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
+              {carrierId && (
+                <p className="sm:col-span-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  Creating this shipment to hand off to{' '}
+                  <span className="font-medium text-foreground">{carrierName ?? 'this carrier'}</span>.
+                  Carrier assignment isn&apos;t part of shipment creation yet — you&apos;ll need to
+                  assign them separately after the shipment is created.
+                </p>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="origin">Origin *</Label>
                 <Input id="origin" placeholder="Lagos, Nigeria" {...register('origin')} />
