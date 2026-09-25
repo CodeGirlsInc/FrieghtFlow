@@ -2,6 +2,7 @@ use soroban_sdk::{testutils::Address as _, Address};
 
 use super::setup;
 use crate::errors::ReputationError;
+use crate::outcome::Outcome;
 use crate::types::UserType;
 
 #[test]
@@ -69,7 +70,7 @@ fn test_update_user_type_preserves_counters() {
     // that history.
     let user = Address::generate(&ctx.env);
     ctx.client.register_user(&user, &UserType::Shipper);
-    ctx.client.update_stats(&ctx.auth_contract, &user, &false, &true); // success
+    ctx.client.update_stats(&ctx.auth_contract, &user, &Outcome::Success);
 
     ctx.client.update_user_type(&user, &UserType::Carrier);
 
