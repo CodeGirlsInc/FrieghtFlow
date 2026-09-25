@@ -54,12 +54,25 @@ pub fn store(env: &Env, record: &EscrowRecord) {
 
 /// Settlement is reserved for the configured shipment contract, falling back
 /// to the platform admin for the custody model the backend still uses.
+///
+/// If a shipment contract address has been configured via
+/// `set_shipment_contract`, the *caller of the enclosing entrypoint* must be
+/// that address — checked with `require_auth()` on it. Otherwise the platform
+/// admin is required to authorise the call instead.
+///
+/// Previously this compared `DataKey::ShipmentContract` against
+/// `env.current_contract_address()` (the escrow contract's own address), a
+/// comparison that can never be true in practice, effectively making
+/// `set_shipment_contract` a no-op and always falling through to the admin
+/// check. The fix compares against the *configured* shipment-contract address
+/// and calls `require_auth()` on whichever authority is active.
 pub fn require_settlement_authority(env: &Env) -> Result<(), EscrowError> {
     let admin = admin(env)?;
     let shipment_contract: Option<Address> =
         env.storage().instance().get(&DataKey::ShipmentContract);
 
-    if shipment_contract.as_ref() == Some(&env.current_contract_address()) {
+    if let Some(sc) = shipment_contract {
+        sc.require_auth();
         return Ok(());
     }
 
