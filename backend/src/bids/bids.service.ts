@@ -63,16 +63,33 @@ export class BidsService {
     return this.bidRepo.save(bid);
   }
 
-  async getBids(shipmentId: string, requesterId: string): Promise<Bid[]> {
+  async getBids(
+    shipmentId: string,
+    requesterId: string,
+    page = 1,
+    limit = 20,
+  ): Promise<{ data: Bid[]; total: number; page: number; limit: number; totalPages: number }> {
     const shipment = await this.getShipment(shipmentId);
     if (shipment.shipperId !== requesterId) {
       throw new ForbiddenException('Only the shipment owner can view bids');
     }
-    return this.bidRepo.find({
+
+    const skip = (page - 1) * limit;
+    const [data, total] = await this.bidRepo.findAndCount({
       where: { shipmentId },
       relations: ['carrier'],
       order: { proposedPrice: 'ASC' },
+      skip,
+      take: limit,
     });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async acceptBid(

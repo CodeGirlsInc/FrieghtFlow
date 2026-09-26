@@ -424,23 +424,39 @@ export class ShipmentsService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(id: string): Promise<Shipment> {
+  private assertShipmentAccess(shipment: Shipment, user?: User): void {
+    if (!user || user.role === UserRole.ADMIN) return;
+
+    const isRelatedUser =
+      shipment.shipperId === user.id || shipment.carrierId === user.id;
+
+    if (!isRelatedUser) {
+      throw new ForbiddenException(
+        'Not authorised to access this shipment',
+      );
+    }
+  }
+
+  async findOne(id: string, user?: User): Promise<Shipment> {
     const shipment = await this.shipmentRepo.findOne({
       where: { id },
       relations: ['shipper', 'carrier'],
     });
     if (!shipment) throw new NotFoundException(`Shipment ${id} not found`);
+    this.assertShipmentAccess(shipment, user);
     return shipment;
   }
 
-  async findByTracking(trackingNumber: string): Promise<Shipment> {
-    const shipment = await this.shipmentRepo.findOne({
-      where: { trackingNumber },
-      relations: ['shipper', 'carrier'],
+  async getHistory(
+    shipmentId: string,
+    user?: User,
+  ): Promise<ShipmentStatusHistory[]> {
+    await this.findOne(shipmentId, user);
+    return this.historyRepo.find({
+      where: { shipmentId },
+      relations: ['changedBy'],
+      order: { changedAt: 'ASC' },
     });
-    if (!shipment)
-      throw new NotFoundException(`Shipment ${trackingNumber} not found`);
-    return shipment;
   }
 
   async exportShipments(
@@ -690,7 +706,7 @@ export class ShipmentsService {
   async raiseDispute(
     shipmentId: string,
     user: User,
-    reason: string,
+    reason?: string,
   ): Promise<Shipment> {
     const shipment = await this.findOne(shipmentId);
 
@@ -729,9 +745,13 @@ export class ShipmentsService {
   async resolveDispute(
     shipmentId: string,
     admin: User,
-    resolution: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED,
-    reason: string,
+    resolution?: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED,
+    reason?: string,
   ): Promise<Shipment> {
+    if (!resolution) {
+      throw new BadRequestException('Dispute resolution is required');
+    }
+
     const shipment = await this.findOne(shipmentId);
     this.assertTransitionAllowed(shipment.status, resolution, admin.role);
 
@@ -818,17 +838,6 @@ export class ShipmentsService {
     }));
 
     return { statusCounts, totalRevenue, dailyTrends };
-  }
-
-  // ── History ──────────────────────────────────────────────────────────────────
-
-  async getHistory(shipmentId: string): Promise<ShipmentStatusHistory[]> {
-    await this.findOne(shipmentId); // ensure it exists
-    return this.historyRepo.find({
-      where: { shipmentId },
-      relations: ['changedBy'],
-      order: { changedAt: 'ASC' },
-    });
   }
 
   private buildExportQuery(user: User): SelectQueryBuilder<Shipment> {

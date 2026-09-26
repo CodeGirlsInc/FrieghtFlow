@@ -15,6 +15,7 @@ const mockBidRepo = () => ({
   create: jest.fn(),
   save: jest.fn(),
   find: jest.fn(),
+  findAndCount: jest.fn(),
   findOne: jest.fn(),
   update: jest.fn(),
   manager: {
@@ -120,9 +121,15 @@ describe('BidsService', () => {
 
     it('returns bids for the shipment owner', async () => {
       shipmentRepo.findOne.mockResolvedValue(pendingShipment());
-      bidRepo.find.mockResolvedValue([]);
+      bidRepo.findAndCount.mockResolvedValue([[], 0]);
       const result = await service.getBids('ship1', 'shipper1');
-      expect(result).toEqual([]);
+      expect(result).toEqual({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+      });
     });
   });
 
