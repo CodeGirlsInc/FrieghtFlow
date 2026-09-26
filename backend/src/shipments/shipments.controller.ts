@@ -38,18 +38,21 @@ import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 
 class DisputeBody {
   @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  reason: string;
+  reason?: string;
 }
 
 class ResolveDisputeBody {
   @ApiPropertyOptional()
+  @IsOptional()
   @IsEnum([ShipmentStatus.COMPLETED, ShipmentStatus.CANCELLED])
-  resolution: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED;
+  resolution?: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED;
 
   @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  reason: string;
+  reason?: string;
 }
 
 class CancelBody {
@@ -219,9 +222,11 @@ export class ShipmentsController {
   }
 
   @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get shipment by ID' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.shipmentsService.findOne(id);
+  findOne(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.shipmentsService.findOne(id, user);
   }
 
   @Patch(':id')
@@ -274,8 +279,10 @@ export class ShipmentsController {
   }
 
   @Get(':id/history')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get status history for a shipment' })
-  getHistory(@Param('id', ParseUUIDPipe) id: string) {
-    return this.shipmentsService.getHistory(id);
+  getHistory(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.shipmentsService.getHistory(id, user);
   }
 }
