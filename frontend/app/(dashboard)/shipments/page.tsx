@@ -1,13 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/auth.store';
 import { ShipmentStatus } from '../../../types/shipment.types';
-import ShipmentsInfiniteList from '../../../components/shipment/ShipmentsInfiniteList';
+import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { Button } from '../../../components/ui/button';
 import { toast } from 'sonner';
 import { apiClient } from '../../../lib/api/client';
+import { shipmentApi } from '../../../lib/api/shipment.api';
+
+const SHIPMENTS_PAGE_SIZE = 10;
 
 const STATUS_TABS: { label: string; value: ShipmentStatus | 'all' }[] = [
   { label: 'All', value: 'all' },
@@ -21,7 +26,35 @@ const STATUS_TABS: { label: string; value: ShipmentStatus | 'all' }[] = [
 export default function ShipmentsPage() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<ShipmentStatus | 'all'>('all');
+  const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+
+  const status = activeTab === 'all' ? undefined : activeTab;
+
+  const { data: result, isLoading, error } = useQuery({
+    queryKey: ['shipments', 'list', status, page],
+    queryFn: () =>
+      shipmentApi.list({ status, page, limit: SHIPMENTS_PAGE_SIZE }),
+  });
+
+  useEffect(() => {
+    if (error) toast.error('Failed to load shipments');
+  }, [error]);
+
+  const totalPages = result?.totalPages ?? 0;
+
+  // A deletion (or a status change) can shrink the result set so the current
+  // page no longer exists; fall back to the last page instead of rendering an
+  // empty list while `total` is still non-zero.
+  useEffect(() => {
+    if (totalPages > 0 && page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [totalPages, page]);
+
+  const currentPage = totalPages > 0 ? Math.min(page, totalPages) : page;
+  const from = result ? (currentPage - 1) * SHIPMENTS_PAGE_SIZE + 1 : 0;
+  const to = result ? Math.min(currentPage * SHIPMENTS_PAGE_SIZE, result.total) : 0;
 
   const exportCsv = async () => {
     setExporting(true);
@@ -83,7 +116,7 @@ export default function ShipmentsPage() {
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
-            onClick={() => setActiveTab(tab.value)}
+            onClick={() => { setActiveTab(tab.value); setPage(1); }}
             className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.value
                 ? 'border-primary text-primary'
@@ -96,10 +129,53 @@ export default function ShipmentsPage() {
       </div>
 
       {/* Content */}
-      <ShipmentsInfiniteList
-        key={activeTab}
-        filters={{ status: activeTab === 'all' ? undefined : activeTab }}
-      />
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : !result || result.data.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">No shipments found.</p>
+      ) : (
+        <div className="space-y-4">
+          {result.data.map((shipment) => (
+            <ShipmentCard key={shipment.id} shipment={shipment} />
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {result && result.total > 0 && (
+        <nav
+          aria-label="Shipments pagination"
+          className="flex items-center justify-between text-sm mt-6"
+        >
+          <p className="text-muted-foreground">
+            Showing {from}-{to} of {result.total} shipments
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-muted-foreground">
+              Page{' '}
+              <span aria-current="page">{currentPage}</span> of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </nav>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Download, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { documentsApi } from '../../lib/api/documents.api';
@@ -39,19 +39,62 @@ export function DocumentViewer({
 
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    },
-    [onClose],
-  );
-
+  // Trap focus inside the dialog while it is open (the same approach
+  // MobileNav uses for the mobile drawer) so aria-modal="true" is honest:
+  // Tab/Shift+Tab cycle between the Download and Close controls instead of
+  // escaping into the page behind the overlay, Escape still closes, and focus
+  // is handed back to the element that opened the viewer on close.
   useEffect(() => {
     if (!open) return;
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, handleKeyDown]);
+
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    const focusable = dialog.querySelectorAll<HTMLElement>(
+      'a, button, [tabindex]:not([tabindex="-1"])',
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    first?.focus();
+    // The Download anchor has no href until its blob resolves, so it cannot
+    // take focus yet; park focus on the dialog itself in that case rather
+    // than leaving it on the page behind the overlay. tabIndex={-1} keeps it
+    // out of the trap's own focusable list.
+    if (first && document.activeElement !== first) {
+      dialog.focus();
+    }
+
+    const handleDialogKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab') {
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last?.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first?.focus();
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleDialogKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [open, onClose]);
 
   // Fetch the file as an authenticated blob rather than pointing <img>/
   // <iframe>/<a> at `url` directly — those tags can't attach the
@@ -97,9 +140,11 @@ export function DocumentViewer({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={`Viewing ${fileName}`}
+      tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
