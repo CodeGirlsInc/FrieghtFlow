@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Shipment } from '../../types/shipment.types';
+import { formatMoney } from '../../lib/format/currency';
 import { StatusBadge } from './status-badge';
 import { Card, CardContent, CardHeader } from '../ui/card';
 
@@ -11,10 +12,8 @@ interface ShipmentCardProps {
 }
 
 export function ShipmentCard({ shipment }: ShipmentCardProps) {
-  const formattedPrice = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: shipment.currency || 'USD',
-  }).format(Number(shipment.price));
+  // Never throws on an unrecognised `currency` — see lib/format/currency.ts.
+  const formattedPrice = formatMoney(shipment.price, shipment.currency);
 
   return (
     <Link href={`/shipments/${shipment.id}`} className="block group">
