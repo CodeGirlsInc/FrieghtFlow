@@ -255,18 +255,43 @@ export class AdminService {
   // ── Stats ────────────────────────────────────────────────────────────────────
 
   async getStats(): Promise<PlatformStats> {
-    // User counts
-    const totalUsers = await this.userRepo.count();
-    const activeUsers = await this.userRepo.count({
-      where: { isActive: true },
-    });
-
-    const usersByRole = await this.userRepo
-      .createQueryBuilder('user')
-      .select('user.role', 'role')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('user.role')
-      .getRawMany<{ role: UserRole; count: string }>();
+    const [
+      totalUsers,
+      activeUsers,
+      usersByRole,
+      totalShipments,
+      disputesPending,
+      shipmentsByStatus,
+      revenueResult,
+    ] = await Promise.all([
+      this.userRepo.count(),
+      this.userRepo.count({
+        where: { isActive: true },
+      }),
+      this.userRepo
+        .createQueryBuilder('user')
+        .select('user.role', 'role')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('user.role')
+        .getRawMany<{ role: UserRole; count: string }>(),
+      this.shipmentRepo.count(),
+      this.shipmentRepo.count({
+        where: { status: ShipmentStatus.DISPUTED },
+      }),
+      this.shipmentRepo
+        .createQueryBuilder('shipment')
+        .select('shipment.status', 'status')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('shipment.status')
+        .getRawMany<{ status: ShipmentStatus; count: string }>(),
+      this.shipmentRepo
+        .createQueryBuilder('shipment')
+        .select('SUM(shipment.price)', 'total')
+        .where('shipment.status = :status', {
+          status: ShipmentStatus.COMPLETED,
+        })
+        .getRawOne<{ total: string | null }>(),
+    ]);
 
     const byRole = Object.values(UserRole).reduce(
       (acc, r) => ({ ...acc, [r]: 0 }),
@@ -276,19 +301,6 @@ export class AdminService {
       byRole[row.role] = parseInt(row.count, 10);
     }
 
-    // Shipment counts
-    const totalShipments = await this.shipmentRepo.count();
-    const disputesPending = await this.shipmentRepo.count({
-      where: { status: ShipmentStatus.DISPUTED },
-    });
-
-    const shipmentsByStatus = await this.shipmentRepo
-      .createQueryBuilder('shipment')
-      .select('shipment.status', 'status')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('shipment.status')
-      .getRawMany<{ status: ShipmentStatus; count: string }>();
-
     const byStatus = Object.values(ShipmentStatus).reduce(
       (acc, s) => ({ ...acc, [s]: 0 }),
       {} as Record<ShipmentStatus, number>,
@@ -296,13 +308,6 @@ export class AdminService {
     for (const row of shipmentsByStatus) {
       byStatus[row.status] = parseInt(row.count, 10);
     }
-
-    // Revenue from completed shipments
-    const revenueResult = await this.shipmentRepo
-      .createQueryBuilder('shipment')
-      .select('SUM(shipment.price)', 'total')
-      .where('shipment.status = :status', { status: ShipmentStatus.COMPLETED })
-      .getRawOne<{ total: string | null }>();
 
     const totalRevenue = parseFloat(revenueResult?.total ?? '0');
 
