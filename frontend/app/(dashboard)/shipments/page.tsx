@@ -98,6 +98,7 @@ export default function ShipmentsPage() {
       {/* Content */}
       <ShipmentsInfiniteList
         key={activeTab}
+        label={pageTitle}
         filters={{ status: activeTab === 'all' ? undefined : activeTab }}
       />
     </div>

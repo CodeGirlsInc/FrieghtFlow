@@ -4,16 +4,18 @@ import { useEffect, useRef } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { shipmentApi } from '../../lib/api/shipment.api';
-import { ShipmentCard } from './shipment-card';
+import { ShipmentCardGrid } from './shipment-card-grid';
 import type { QueryShipmentParams } from '../../types/shipment.types';
 
 const PAGE_LIMIT = 10;
 
 interface ShipmentsInfiniteListProps {
   filters?: Omit<QueryShipmentParams, 'page' | 'limit'>;
+  /** Accessible name for the list. */
+  label?: string;
 }
 
-export default function ShipmentsInfiniteList({ filters = {} }: ShipmentsInfiniteListProps) {
+export default function ShipmentsInfiniteList({ filters = {}, label = 'Shipments' }: ShipmentsInfiniteListProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -83,9 +85,7 @@ export default function ShipmentsInfiniteList({ filters = {} }: ShipmentsInfinit
 
   return (
     <div className="space-y-4">
-      {shipments.map((shipment) => (
-        <ShipmentCard key={shipment.id} shipment={shipment} />
-      ))}
+      <ShipmentCardGrid shipments={shipments} label={label} />
 
       {/* Sentinel element for IntersectionObserver */}
       <div ref={sentinelRef} />

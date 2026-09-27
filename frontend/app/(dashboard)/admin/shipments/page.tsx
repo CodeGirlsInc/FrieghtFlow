@@ -8,12 +8,12 @@ import { useAuthStore } from '../../../../stores/auth.store';
 import { adminApi, PaginatedAdminShipments } from '../../../../lib/api/admin.api';
 import { ShipmentStatus } from '../../../../types/shipment.types';
 import { Button } from '../../../../components/ui/button';
+import { Pagination } from '../../../../components/ui/pagination';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '../../../../components/ui/card';
 import { cn } from '../../../../lib/utils';
 
@@ -115,9 +115,6 @@ export default function AdminShipmentsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Shipments</CardTitle>
-            <CardDescription>
-              Page {result.page} of {result.totalPages}
-            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -201,29 +198,15 @@ export default function AdminShipmentsPage() {
 
       {/* Pagination */}
       {result && result.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            Showing {result.data.length} of {result.total} shipments
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === result.totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={result.totalPages}
+          currentCount={result.data.length}
+          total={result.total}
+          itemLabel="shipments"
+          onPageChange={setPage}
+          label="Shipments pagination"
+        />
       )}
     </div>
   );
