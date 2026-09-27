@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DisputeForm } from './DisputeForm';
 import { apiClient } from '../../lib/api/client';
+import { ALLOWED_FILE_EXTENSIONS, buildFileAcceptAttribute } from '../../lib/validation/file-upload';
 
 jest.mock('../../lib/api/client');
 const mockApiClient = apiClient as jest.MockedFunction<typeof apiClient>;
@@ -121,5 +122,84 @@ describe('DisputeForm', () => {
     fireEvent.click(screen.getByLabelText('Close'));
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  describe('evidence file picker accept list', () => {
+    it('advertises exactly the validator allow-list', () => {
+      render(<DisputeForm shipmentId="s1" />);
+
+      const input = screen.getByLabelText('Upload evidence files');
+      // Same shared builder the validator's allow-list feeds, so the two
+      // cannot drift apart.
+      expect(input).toHaveAttribute('accept', buildFileAcceptAttribute());
+    });
+
+    it('offers every extension the validator allows, and no others', () => {
+      render(<DisputeForm shipmentId="s1" />);
+
+      const tokens = screen
+        .getByLabelText('Upload evidence files')
+        .getAttribute('accept')!
+        .split(',');
+
+      for (const ext of ALLOWED_FILE_EXTENSIONS) {
+        expect(tokens).toContain(ext);
+      }
+      for (const token of tokens) {
+        if (token.startsWith('.')) {
+          expect(ALLOWED_FILE_EXTENSIONS).toContain(token);
+        }
+      }
+    });
+
+    it('no longer offers image types the validator rejects', () => {
+      render(<DisputeForm shipmentId="s1" />);
+
+      const accept = screen.getByLabelText('Upload evidence files').getAttribute('accept')!;
+
+      // The old value was "image/*,.pdf,.doc,.docx", which offered every image
+      // type (.gif, .bmp, .tiff, …) that partitionValidFiles then rejected.
+      expect(accept).not.toContain('image/*');
+      expect(accept).not.toContain('*');
+    });
+
+    it('no longer offers .gif or .bmp, the two types the OS dialog used to allow', () => {
+      render(<DisputeForm shipmentId="s1" />);
+
+      const accept = screen.getByLabelText('Upload evidence files').getAttribute('accept')!;
+
+      expect(accept).not.toMatch(/\.gif|\.bmp/);
+    });
+
+    it('still lets an allowed file through, and still rejects a disallowed one', async () => {
+      const user = userEvent.setup();
+      render(<DisputeForm shipmentId="s1" />);
+      const input = screen.getByLabelText('Upload evidence files') as HTMLInputElement;
+
+      // userEvent.upload() honours `accept`, so an allowed file reaches the input…
+      await user.upload(input, makeFile('photo.png', 1024, 'image/png'));
+      expect(input.files).toHaveLength(1);
+
+      // …while a .gif is now filtered out by the OS-picker simulation itself,
+      // which is exactly the friction the shared allow-list removes.
+      await user.upload(input, makeFile('animation.gif', 1024, 'image/gif'));
+      expect(input.files).toHaveLength(0);
+    });
+
+    it('still surfaces a client-side rejection for a bad type that bypasses the picker', async () => {
+      const user = userEvent.setup();
+      render(<DisputeForm shipmentId="s1" />);
+
+      await user.type(screen.getByLabelText('Reason'), 'The shipment arrived damaged.');
+      // dropFiles bypasses `accept` the way a drag-and-drop does, so this is
+      // still the guard that catches a type the picker would have hidden.
+      dropFiles(screen.getByLabelText('Upload evidence files'), [
+        makeFile('animation.gif', 1024, 'image/gif'),
+      ]);
+      await user.click(screen.getByText('Submit Dispute'));
+
+      expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('unsupported file type'));
+      expect(mockApiClient).not.toHaveBeenCalled();
+    });
   });
 });

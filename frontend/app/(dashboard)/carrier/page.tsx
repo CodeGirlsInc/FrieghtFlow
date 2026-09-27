@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -13,6 +13,23 @@ import { EmptyState } from '../../../components/ui/empty-state';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { Shipment, ShipmentStatus } from '../../../types/shipment.types';
 
+/**
+ * How long to wait for `fetchCurrentUser()` before giving up and offering a
+ * retry. 10s is comfortably longer than a slow connection needs for
+ * GET /auth/me (including a token-refresh round trip, since a 401 triggers a
+ * POST /auth/refresh and a retry before the request settles), while still
+ * being short enough that a user on a dropped connection isn't left staring at
+ * "Loading…" with no way forward.
+ */
+const AUTH_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * Where the auth bootstrap is. 'loading' is still in flight, 'error' means it
+ * timed out or threw (retryable), 'unauthenticated' means it settled with no
+ * user, and 'ready' means a user arrived.
+ */
+type AuthPhase = 'loading' | 'error' | 'unauthenticated' | 'ready';
+
 export default function CarrierDashboardPage() {
   const router = useRouter();
   const { user, fetchCurrentUser, isLoading } = useAuthStore();
@@ -20,10 +37,67 @@ export default function CarrierDashboardPage() {
   const [stats, setStats] = useState({ active: 0, completedMonth: 0, totalEarnings: 0, avgRating: 4.8 });
   const [dataLoading, setDataLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [authPhase, setAuthPhase] = useState<AuthPhase>('loading');
+  // Bumped per attempt so a late-settling request from a superseded attempt
+  // (e.g. one that lost the race to a retry) can't overwrite the current phase.
+  const attemptRef = useRef(0);
+  // Clears the in-flight attempt's timeout, whichever attempt is current —
+  // including one started from the retry button, which has no effect to own it.
+  const clearAuthTimerRef = useRef<(() => void) | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+      clearAuthTimerRef.current?.();
+    },
+    [],
+  );
+
+  const beginAuthFetch = useCallback((): (() => void) => {
+    clearAuthTimerRef.current?.();
+
+    const attempt = (attemptRef.current += 1);
+    setAuthPhase('loading');
+
+    // Nothing may setState once this component is gone, whichever branch
+    // (timeout or settle) gets there — otherwise the user loses the race
+    // against unmount and React warns about updating an unmounted component.
+    const isCurrent = () => mountedRef.current && attempt === attemptRef.current;
+
+    const timer = setTimeout(() => {
+      if (isCurrent()) setAuthPhase('error');
+    }, AUTH_FETCH_TIMEOUT_MS);
+    clearAuthTimerRef.current = () => clearTimeout(timer);
+
+    fetchCurrentUser().then(
+      () => {
+        clearTimeout(timer);
+        if (!isCurrent()) return;
+        // fetchCurrentUser() swallows its own errors, so a null user here means
+        // the session is gone (401, refresh failure) rather than "still trying".
+        setAuthPhase(useAuthStore.getState().user ? 'ready' : 'unauthenticated');
+      },
+      () => {
+        clearTimeout(timer);
+        if (!isCurrent()) return;
+        setAuthPhase('error');
+      },
+    );
+
+    return () => clearTimeout(timer);
+  }, [fetchCurrentUser]);
 
   useEffect(() => {
-    if (!user) fetchCurrentUser();
-  }, [user, fetchCurrentUser]);
+    if (user) return;
+    return beginAuthFetch();
+  }, [user, beginAuthFetch]);
+
+  // Signed-out visitor: send them to login rather than showing an error or an
+  // endless "Loading…". /carrier isn't in middleware's protectedRoutes.
+  useEffect(() => {
+    if (authPhase === 'unauthenticated') router.replace('/login');
+  }, [authPhase, router]);
 
   // Role guard – redirect non-carriers
   useEffect(() => {
@@ -91,10 +165,33 @@ export default function CarrierDashboardPage() {
     }
   };
 
-  if (isLoading || !user) {
+  if (!user) {
+    if (authPhase === 'error') {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 h-full p-8 text-center">
+          <p role="alert" className="text-destructive text-sm">
+            We couldn&apos;t load your account. Check your connection and try again.
+          </p>
+          <Button onClick={() => beginAuthFetch()}>Retry loading account</Button>
+        </div>
+      );
+    }
+
+    if (authPhase === 'unauthenticated') {
+      return (
+        <div className="flex items-center justify-center h-full p-8">
+          <p role="status" aria-live="polite" className="text-muted-foreground">
+            Redirecting to sign in&hellip;
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center justify-center h-full p-8">
-        <p className="text-muted-foreground">Loading…</p>
+        <p role="status" aria-live="polite" className="text-muted-foreground">
+          Loading&hellip;
+        </p>
       </div>
     );
   }
