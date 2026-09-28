@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { shipmentApi } from '../../../lib/api/shipment.api';
-import { ShipmentCard } from '../../../components/shipment/shipment-card';
+import { ShipmentCardGrid, shipmentListGridClasses } from '../../../components/shipment/shipment-card-grid';
 import { ShipmentCardSkeleton } from '../../../components/ui/skeleton';
 import { EmptyMarketplace } from '../../../components/ui/empty-state';
 import { Input } from '../../../components/ui/input';
@@ -188,20 +188,18 @@ export default function MarketplacePage() {
 
       {/* Results */}
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul aria-label="Available shipments" className={shipmentListGridClasses}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <ShipmentCardSkeleton key={i} />
+            <li key={i}>
+              <ShipmentCardSkeleton />
+            </li>
           ))}
-        </div>
+        </ul>
       ) : !result || sorted.length === 0 ? (
         <EmptyMarketplace />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sorted.map((s) => (
-              <ShipmentCard key={s.id} shipment={s} />
-            ))}
-          </div>
+          <ShipmentCardGrid shipments={sorted} label="Available shipments" />
 
           {result.totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-6">

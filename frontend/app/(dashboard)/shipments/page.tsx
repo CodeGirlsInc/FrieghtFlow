@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/auth.store';
 import { ShipmentStatus } from '../../../types/shipment.types';
-import { ShipmentCard } from '../../../components/shipment/shipment-card';
+import { ShipmentCardGrid } from '../../../components/shipment/shipment-card-grid';
 import { Button } from '../../../components/ui/button';
 import { toast } from 'sonner';
 import { apiClient } from '../../../lib/api/client';
@@ -136,11 +136,7 @@ export default function ShipmentsPage() {
       ) : !result || result.data.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">No shipments found.</p>
       ) : (
-        <div className="space-y-4">
-          {result.data.map((shipment) => (
-            <ShipmentCard key={shipment.id} shipment={shipment} />
-          ))}
-        </div>
+        <ShipmentCardGrid shipments={result.data} label={pageTitle} />
       )}
 
       {/* Pagination */}

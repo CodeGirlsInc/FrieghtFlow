@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -55,6 +55,43 @@ const STEPS = [
   { label: 'Review', description: 'Confirm and submit' },
 ];
 
+// ── Discard guard (#1512) ─────────────────────────────────────────────────────
+
+// Every field of the form, across all four steps. A step that is currently
+// unmounted still reports its value here — react-hook-form only drops values
+// when `shouldUnregister` is set, which this form doesn't do.
+const ALL_FIELDS: (keyof FormValues)[] = [
+  'origin',
+  'destination',
+  'cargoDescription',
+  'weightKg',
+  'volumeCbm',
+  'price',
+  'currency',
+  'pickupDate',
+  'estimatedDeliveryDate',
+  'notes',
+];
+
+// The only field that starts out with a value; everything else begins empty.
+// A draft handed over through query params (price calculator, "Contact/Hire")
+// therefore counts as unsaved work that would be lost on cancel.
+const FIELD_DEFAULTS: Partial<Record<keyof FormValues, string>> = { currency: 'USD' };
+
+/**
+ * "Dirty" means: at least one field holds something other than empty or its
+ * default. Deliberately not react-hook-form's own `isDirty`, which compares
+ * against `defaultValues` and would therefore report a prefilled draft as
+ * pristine even though the shipper would lose it.
+ */
+function isFormDirty(values: Partial<FormValues>): boolean {
+  return ALL_FIELDS.some((field) => {
+    const value = values[field];
+    if (value === undefined || value === null || value === '') return false;
+    return String(value) !== (FIELD_DEFAULTS[field] ?? '');
+  });
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function NewShipmentPage() {
@@ -65,6 +102,58 @@ export default function NewShipmentPage() {
   );
 }
 
+// Confirmation idiom copied from the admin disputes page's ConfirmDialog
+// (same overlay, panel and Cancel/Confirm button pairing), with the
+// role="dialog" / aria-modal / Escape / focus handling ACCESSIBILITY.md asks
+// for and the disputes dialog is still missing.
+function DiscardChangesDialog({
+  onKeepEditing,
+  onDiscard,
+}: {
+  onKeepEditing: () => void;
+  onDiscard: () => void;
+}) {
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  const headingId = 'discard-shipment-heading';
+
+  useEffect(() => {
+    keepEditingRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onKeepEditing();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onKeepEditing]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        className="bg-card rounded-lg border border-border shadow-xl w-full max-w-md p-6 space-y-4"
+      >
+        <h3 id={headingId} className="font-semibold text-foreground">
+          Discard this shipment?
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          The route, cargo, pricing and schedule details you&apos;ve entered will be lost.
+          This can&apos;t be undone.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button ref={keepEditingRef} variant="outline" size="sm" onClick={onKeepEditing}>
+            Keep editing
+          </Button>
+          <Button variant="destructive" size="sm" onClick={onDiscard}>
+            Discard and leave
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // useSearchParams() requires a Suspense boundary above it (see the
 // wrapper above) to avoid opting the whole route out of static
 // rendering.
@@ -72,6 +161,16 @@ function NewShipmentForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(0);
+
+  // The furthest step reached so far. The form only advances through
+  // `advance()`, which validates the current step's fields first, so every
+  // step below this index is known-good and safe to jump back to. Anything at
+  // or above it stays gated behind the Next button.
+  const [furthestStep, setFurthestStep] = useState(0);
+
+  const [isDirty, setIsDirty] = useState(false);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   // Two flows hand off a prefilled draft via query params: the price
   // calculator (origin, destination, weightKg, volumeCbm, price — it
@@ -104,6 +203,31 @@ function NewShipmentForm() {
 
   const { register, handleSubmit, trigger, getValues, formState: { errors, isSubmitting } } = form;
 
+  // Track whether anything has been typed, across every step, so cancelling
+  // only nags when there is genuinely something to lose. Evaluated once on
+  // mount too: a draft handed over through query params is already filled in
+  // before the first edit.
+  useEffect(() => {
+    setIsDirty(isFormDirty(form.getValues()));
+    const subscription = form.watch((values) => {
+      setIsDirty(isFormDirty(values));
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  // A refresh or tab close is the one exit a dialog cannot intercept. The
+  // browser shows its own generic wording here — `beforeunload` custom
+  // messages are not allowed.
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
   // Validate only the fields belonging to the current step before advancing
   const stepFields: (keyof FormValues)[][] = [
     ['origin', 'destination'],
@@ -114,7 +238,30 @@ function NewShipmentForm() {
 
   const advance = async () => {
     const valid = await trigger(stepFields[step]);
-    if (valid) setStep((s) => s + 1);
+    if (valid) {
+      const next = step + 1;
+      setStep(next);
+      setFurthestStep((f) => Math.max(f, next));
+    }
+  };
+
+  const requestLeave = () => {
+    if (!isDirty) {
+      router.back();
+      return;
+    }
+    setConfirmingDiscard(true);
+  };
+
+  // Dismissing the dialog puts focus back on the control that opened it.
+  const keepEditing = () => {
+    setConfirmingDiscard(false);
+    cancelButtonRef.current?.focus();
+  };
+
+  const discard = () => {
+    setConfirmingDiscard(false);
+    router.back();
   };
 
   const onSubmit = async (data: FormValues) => {
@@ -141,31 +288,58 @@ function NewShipmentForm() {
       </div>
 
       {/* Step progress indicator */}
-      <div className="flex items-center gap-0 mb-8">
-        {STEPS.map((s, i) => (
-          <div key={i} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center">
-              <div
-                className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-colors ${
-                  i < step
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : i === step
-                    ? 'border-primary text-primary bg-background'
-                    : 'border-muted text-muted-foreground bg-background'
-                }`}
-              >
-                {i < step ? '✓' : i + 1}
-              </div>
-              <span className={`text-xs mt-1 font-medium ${i === step ? 'text-primary' : 'text-muted-foreground'}`}>
-                {s.label}
-              </span>
-            </div>
-            {i < STEPS.length - 1 && (
-              <div className={`flex-1 h-0.5 mx-2 mb-5 ${i < step ? 'bg-primary' : 'bg-muted'}`} />
-            )}
-          </div>
-        ))}
-      </div>
+      <nav aria-label="Shipment creation steps">
+        <ol className="flex items-center gap-0 mb-8">
+          {STEPS.map((s, i) => {
+            const isCurrent = i === step;
+            const isCompleted = i < step;
+            // Only steps the form has already passed — and therefore already
+            // validated — can be jumped back to. The current step is a
+            // disabled marker rather than a control pretending to be one.
+            const canJumpBack = !isCurrent && i < furthestStep;
+            const state = isCurrent
+              ? 'current step'
+              : isCompleted
+              ? 'completed'
+              : 'not yet available';
+
+            return (
+              <li key={s.label} className="flex items-center flex-1 last:flex-none">
+                <div className="flex flex-col items-center">
+                  <button
+                    type="button"
+                    onClick={() => setStep(i)}
+                    disabled={!canJumpBack}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    aria-label={`Step ${i + 1} of ${STEPS.length}: ${s.label} — ${state}`}
+                    className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default ${
+                      i < step
+                        ? 'bg-primary border-primary text-primary-foreground'
+                        : i === step
+                        ? 'border-primary text-primary bg-background'
+                        : 'border-muted text-muted-foreground bg-background'
+                    }`}
+                  >
+                    {i < step ? '✓' : i + 1}
+                  </button>
+                  <span
+                    aria-hidden="true"
+                    className={`text-xs mt-1 font-medium ${i === step ? 'text-primary' : 'text-muted-foreground'}`}
+                  >
+                    {s.label}
+                  </span>
+                </div>
+                {i < STEPS.length - 1 && (
+                  <div
+                    aria-hidden="true"
+                    className={`flex-1 h-0.5 mx-2 mb-5 ${i < step ? 'bg-primary' : 'bg-muted'}`}
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
       <form onSubmit={handleSubmit(onSubmit)}>
         {/* Step 1 – Route */}
@@ -340,9 +514,10 @@ function NewShipmentForm() {
         {/* Navigation */}
         <div className="flex gap-3 justify-between mt-6">
           <Button
+            ref={cancelButtonRef}
             type="button"
             variant="outline"
-            onClick={() => (step === 0 ? router.back() : setStep((s) => s - 1))}
+            onClick={() => (step === 0 ? requestLeave() : setStep((s) => s - 1))}
           >
             {step === 0 ? 'Cancel' : '← Back'}
           </Button>
@@ -358,6 +533,10 @@ function NewShipmentForm() {
           )}
         </div>
       </form>
+
+      {confirmingDiscard && (
+        <DiscardChangesDialog onKeepEditing={keepEditing} onDiscard={discard} />
+      )}
     </div>
   );
 }
