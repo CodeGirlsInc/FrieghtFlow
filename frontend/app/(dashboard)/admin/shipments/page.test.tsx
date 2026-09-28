@@ -159,6 +159,24 @@ describe('AdminShipmentsPage', () => {
     );
   });
 
+  it('formats a price delivered as a decimal string instead of a number', async () => {
+    // Shipment.price is a Postgres `decimal` column with no TypeORM
+    // transformer, so despite the `number` TS type the API can return it as
+    // a string — the page must coerce before calling toLocaleString().
+    resetAuthStore(makeUser());
+    mockListShipments.mockResolvedValue({
+      data: [makeShipment({ price: '1234.50' as unknown as number })],
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+    render(<AdminShipmentsPage />);
+
+    expect(await screen.findByText('USD 1,234.5')).toBeInTheDocument();
+    expect(screen.queryByText(/1234\.50/)).not.toBeInTheDocument();
+  });
+
   it('shows an error toast when loading shipments fails', async () => {
     resetAuthStore(makeUser());
     mockListShipments.mockRejectedValue(new Error('boom'));

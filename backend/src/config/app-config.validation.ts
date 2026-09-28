@@ -72,4 +72,12 @@ export const appConfigValidationSchema = Joi.object({
     .truthy('true')
     .falsy('false')
     .default(false),
+}).custom((value, helpers) => {
+  if (value.JWT_SECRET && value.JWT_REFRESH_SECRET && value.JWT_SECRET === value.JWT_REFRESH_SECRET) {
+    return helpers.message({
+      custom: 'JWT_SECRET and JWT_REFRESH_SECRET must be different values',
+    });
+  }
+
+  return value;
 });

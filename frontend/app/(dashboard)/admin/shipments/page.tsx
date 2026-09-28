@@ -177,7 +177,11 @@ export default function AdminShipmentsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        {shipment.currency} {shipment.price.toLocaleString()}
+                        {/* price is a Postgres decimal with no TypeORM
+                            transformer, so the API can hand it back as a
+                            string — coerce before formatting, as every other
+                            shipment call site does. */}
+                        {shipment.currency} {Number(shipment.price).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {new Date(shipment.createdAt).toLocaleDateString()}

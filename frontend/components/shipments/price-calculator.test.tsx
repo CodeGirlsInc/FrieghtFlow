@@ -15,10 +15,23 @@ jest.mock('sonner', () => ({
   toast: { error: (...args: unknown[]) => mockToastError(...args), success: jest.fn() },
 }));
 
-function fillRequiredFields() {
+const COST_BREAKDOWN = {
+  baseRate: 42.17,
+  weightCharge: 13.03,
+  volumeCharge: 0,
+  categoryMultiplier: 1.25,
+  total: 68.999999,
+  currency: 'USD',
+};
+
+function fillRequiredFields(weightKg = '100') {
   fireEvent.change(screen.getByLabelText('Origin'), { target: { value: 'New York' } });
   fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'Los Angeles' } });
-  fireEvent.change(screen.getByLabelText('Weight (kg)'), { target: { value: '100' } });
+  fireEvent.change(screen.getByLabelText('Weight (kg)'), { target: { value: weightKg } });
+}
+
+function submit() {
+  fireEvent.click(screen.getByRole('button', { name: /calculate cost/i }));
 }
 
 describe('PriceCalculator', () => {
@@ -26,17 +39,145 @@ describe('PriceCalculator', () => {
     jest.clearAllMocks();
   });
 
-  it('requires origin, destination, and weight before submitting', () => {
-    render(<PriceCalculator />);
-    // fireEvent.submit dispatches the submit event directly, bypassing the
-    // browser's native HTML5 `required` constraint validation (which would
-    // otherwise block submission before the component's own JS-level check
-    // ever runs) — this specifically tests that JS-level check.
-    fireEvent.submit(screen.getByRole('button', { name: /calculate cost/i }).closest('form')!);
-    expect(mockToastError).toHaveBeenCalledWith(
-      'Origin, destination, and weight are required',
-    );
-    expect(mockApiClient).not.toHaveBeenCalled();
+  describe('validation', () => {
+    it('shows a per-field error for each empty required field and does not call the API', async () => {
+      render(<PriceCalculator />);
+      submit();
+
+      expect(await screen.findByText('Origin is required')).toBeInTheDocument();
+      expect(screen.getByText('Destination is required')).toBeInTheDocument();
+      expect(screen.getByText('Weight is required')).toBeInTheDocument();
+      expect(mockApiClient).not.toHaveBeenCalled();
+
+      const origin = screen.getByLabelText('Origin');
+      expect(origin).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByLabelText('Origin')).toHaveAttribute('aria-describedby', 'calc-origin-error');
+      expect(screen.getByLabelText('Weight (kg)')).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getAllByRole('alert')).toHaveLength(3);
+    });
+
+    it('rejects origin and destination that are only whitespace', async () => {
+      render(<PriceCalculator />);
+      fireEvent.change(screen.getByLabelText('Origin'), { target: { value: '   ' } });
+      fireEvent.change(screen.getByLabelText('Destination'), { target: { value: '  ' } });
+      fireEvent.change(screen.getByLabelText('Weight (kg)'), { target: { value: '100' } });
+      submit();
+
+      expect(await screen.findByText('Origin is required')).toBeInTheDocument();
+      expect(screen.getByText('Destination is required')).toBeInTheDocument();
+      expect(mockApiClient).not.toHaveBeenCalled();
+    });
+
+    it('rejects a zero or negative weight', async () => {
+      render(<PriceCalculator />);
+      fireEvent.change(screen.getByLabelText('Origin'), { target: { value: 'New York' } });
+      fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'Los Angeles' } });
+      fireEvent.change(screen.getByLabelText('Weight (kg)'), { target: { value: '0' } });
+      submit();
+
+      expect(await screen.findByText('Weight must be greater than 0')).toBeInTheDocument();
+      expect(mockApiClient).not.toHaveBeenCalled();
+    });
+
+    it('rejects a negative weight', async () => {
+      render(<PriceCalculator />);
+      fireEvent.change(screen.getByLabelText('Origin'), { target: { value: 'New York' } });
+      fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'Los Angeles' } });
+      fireEvent.change(screen.getByLabelText('Weight (kg)'), { target: { value: '-5' } });
+      submit();
+
+      expect(await screen.findByText('Weight must be greater than 0')).toBeInTheDocument();
+      expect(mockApiClient).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-numeric weight without calling the API', async () => {
+      render(<PriceCalculator />);
+      fireEvent.change(screen.getByLabelText('Origin'), { target: { value: 'New York' } });
+      fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'Los Angeles' } });
+      fireEvent.change(screen.getByLabelText('Weight (kg)'), { target: { value: 'abc' } });
+      submit();
+
+      await waitFor(() =>
+        expect(screen.getByLabelText('Weight (kg)')).toHaveAttribute('aria-invalid', 'true'),
+      );
+      // A number input sanitizes unparseable text, so this surfaces as the
+      // "required" error rather than the "must be a number" one — either way
+      // the form is blocked and the API is never called.
+      expect(screen.getByRole('alert')).toHaveTextContent(/Weight/);
+      expect(mockApiClient).not.toHaveBeenCalled();
+    });
+
+    it('rejects a weight above the maximum', async () => {
+      render(<PriceCalculator />);
+      fireEvent.change(screen.getByLabelText('Origin'), { target: { value: 'New York' } });
+      fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'Los Angeles' } });
+      fireEvent.change(screen.getByLabelText('Weight (kg)'), { target: { value: '1000001' } });
+      submit();
+
+      expect(await screen.findByText('Weight must be 1,000,000 kg or less')).toBeInTheDocument();
+      expect(mockApiClient).not.toHaveBeenCalled();
+    });
+
+    it('accepts a weight at the maximum boundary', async () => {
+      mockApiClient.mockResolvedValue(COST_BREAKDOWN);
+      render(<PriceCalculator />);
+      fillRequiredFields('1000000');
+      submit();
+
+      await waitFor(() => expect(screen.getByText('Price Breakdown')).toBeInTheDocument());
+      expect(mockApiClient).toHaveBeenCalledWith(
+        '/shipments/calculate-cost',
+        expect.objectContaining({
+          body: expect.stringContaining('"weightKg":1000000'),
+        }),
+      );
+    });
+
+    it('rejects a negative volume', async () => {
+      render(<PriceCalculator />);
+      fillRequiredFields();
+      fireEvent.change(screen.getByLabelText('Volume m³ (optional)'), { target: { value: '-1' } });
+      submit();
+
+      expect(await screen.findByText('Volume must be 0 or greater')).toBeInTheDocument();
+      expect(mockApiClient).not.toHaveBeenCalled();
+    });
+
+    it('calculates and sends trimmed, numeric values on a valid submission', async () => {
+      mockApiClient.mockResolvedValue(COST_BREAKDOWN);
+      render(<PriceCalculator />);
+      fireEvent.change(screen.getByLabelText('Origin'), { target: { value: '  New York  ' } });
+      fireEvent.change(screen.getByLabelText('Destination'), { target: { value: ' Los Angeles ' } });
+      fireEvent.change(screen.getByLabelText('Weight (kg)'), { target: { value: '100' } });
+      fireEvent.change(screen.getByLabelText('Volume m³ (optional)'), { target: { value: '2.5' } });
+      fireEvent.change(screen.getByLabelText('Cargo Category'), { target: { value: 'Electronics' } });
+      submit();
+
+      await waitFor(() => expect(screen.getByText('Price Breakdown')).toBeInTheDocument());
+      expect(mockApiClient).toHaveBeenCalledWith('/shipments/calculate-cost', {
+        method: 'POST',
+        body: JSON.stringify({
+          origin: 'New York',
+          destination: 'Los Angeles',
+          weightKg: 100,
+          volumeCbm: 2.5,
+          cargoCategory: 'Electronics',
+        }),
+      });
+    });
+
+    it('omits the optional volume when it is left blank', async () => {
+      mockApiClient.mockResolvedValue(COST_BREAKDOWN);
+      render(<PriceCalculator />);
+      fillRequiredFields();
+      submit();
+
+      await waitFor(() => expect(screen.getByText('Price Breakdown')).toBeInTheDocument());
+      const body = JSON.parse(
+        (mockApiClient.mock.calls[0][1] as { body: string }).body,
+      );
+      expect(body.volumeCbm).toBeUndefined();
+    });
   });
 
   it('displays exactly the backend-calculated breakdown, not an independently re-derived price', async () => {
@@ -44,18 +185,11 @@ describe('PriceCalculator', () => {
     // formula (e.g. weightCharge isn't weightKg * some visible constant) —
     // if the component were re-deriving the total instead of just
     // formatting what the backend sent, this would catch it.
-    mockApiClient.mockResolvedValue({
-      baseRate: 42.17,
-      weightCharge: 13.03,
-      volumeCharge: 0,
-      categoryMultiplier: 1.25,
-      total: 68.999999, // backend rounding quirk — component must not "fix" this
-      currency: 'USD',
-    });
+    mockApiClient.mockResolvedValue(COST_BREAKDOWN);
     render(<PriceCalculator />);
     fillRequiredFields();
 
-    fireEvent.click(screen.getByRole('button', { name: /calculate cost/i }));
+    submit();
 
     await waitFor(() => expect(screen.getByText('Price Breakdown')).toBeInTheDocument());
     expect(screen.getByText('$42.17')).toBeInTheDocument();
@@ -77,7 +211,7 @@ describe('PriceCalculator', () => {
     });
     render(<PriceCalculator />);
     fillRequiredFields();
-    fireEvent.click(screen.getByRole('button', { name: /calculate cost/i }));
+    submit();
 
     await waitFor(() => expect(screen.getByText('Price Breakdown')).toBeInTheDocument());
     expect(screen.getByText('$0.00')).toBeInTheDocument();
@@ -94,7 +228,7 @@ describe('PriceCalculator', () => {
     });
     render(<PriceCalculator />);
     fillRequiredFields();
-    fireEvent.click(screen.getByRole('button', { name: /calculate cost/i }));
+    submit();
 
     await waitFor(() => expect(screen.getByText('Price Breakdown')).toBeInTheDocument());
     expect(screen.getByText('$850,000.50')).toBeInTheDocument();
@@ -111,7 +245,7 @@ describe('PriceCalculator', () => {
     });
     render(<PriceCalculator />);
     fillRequiredFields();
-    fireEvent.click(screen.getByRole('button', { name: /calculate cost/i }));
+    submit();
 
     await waitFor(() => expect(screen.getByText('Price Breakdown')).toBeInTheDocument());
     // Two occurrences: baseRate and total both format to $0.00
@@ -129,7 +263,7 @@ describe('PriceCalculator', () => {
     });
     render(<PriceCalculator />);
     fillRequiredFields();
-    fireEvent.click(screen.getByRole('button', { name: /calculate cost/i }));
+    submit();
 
     await waitFor(() => expect(screen.getByText('Price Breakdown')).toBeInTheDocument());
     expect(screen.getByText('€15.00')).toBeInTheDocument();
@@ -139,7 +273,7 @@ describe('PriceCalculator', () => {
     mockApiClient.mockRejectedValue(new Error('network down'));
     render(<PriceCalculator />);
     fillRequiredFields();
-    fireEvent.click(screen.getByRole('button', { name: /calculate cost/i }));
+    submit();
 
     await waitFor(() =>
       expect(mockToastError).toHaveBeenCalledWith('Failed to calculate cost'),

@@ -8,7 +8,10 @@ import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { apiClient } from '../../lib/api/client';
-import { partitionValidFiles } from '../../lib/validation/file-upload';
+import { partitionValidFiles, buildFileAcceptAttribute } from '../../lib/validation/file-upload';
+
+/** Derived from ALLOWED_FILE_EXTENSIONS so the picker and the validator agree. */
+const EVIDENCE_ACCEPT = buildFileAcceptAttribute();
 
 const schema = z.object({
   reason: z.string().min(10, 'Please describe the issue (min 10 characters)'),
@@ -108,7 +111,7 @@ export function DisputeForm({ shipmentId, onSuccess, onClose }: Props) {
               id="evidence"
               type="file"
               multiple
-              accept="image/*,.pdf,.doc,.docx"
+              accept={EVIDENCE_ACCEPT}
               ref={fileRef}
               aria-label="Upload evidence files"
               className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"

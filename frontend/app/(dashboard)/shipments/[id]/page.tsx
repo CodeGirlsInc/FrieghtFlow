@@ -7,12 +7,125 @@ import { Shipment, ShipmentStatus, ShipmentStatusHistory } from '../../../../typ
 import { Payment, PaymentStatus } from '../../../../types/payment.types';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
 import { paymentApi } from '../../../../lib/api/payments.api';
+import { formatMoney } from '../../../../lib/format/currency';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { StatusBadge } from '../../../../components/shipment/status-badge';
 import { StatusTimeline } from '../../../../components/shipment/status-timeline';
 import { SubmitReviewForm } from '../../../../components/reviews/SubmitReviewForm';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+
+/**
+ * Cap on a free-text reason/note. The backend (`CancelBody`/`ResolveDisputeBody`
+ * in `shipments.controller.ts`) applies no length limit and the
+ * `shipment_status_history.reason` column is `text`, so this is a client-side
+ * usability bound only — long enough to explain a cancellation or a dispute
+ * decision, short enough that the timeline stays readable.
+ */
+const MAX_REASON_LENGTH = 500;
+
+/**
+ * The confirmation step that both destructive, audit-trailed actions share
+ * (FE-190 / FE-191): cancelling a shipment and resolving a dispute. Modelled
+ * on the `ConfirmDialog` in `app/(dashboard)/admin/disputes/page.tsx` so the
+ * two admin paths look and behave alike, with the a11y that dialog is missing
+ * (dialog role, labelled title/description, real `<label>` for the field).
+ */
+function ReasonConfirmDialog({
+  title,
+  description,
+  fieldLabel,
+  placeholder,
+  confirmLabel,
+  destructive = false,
+  loading,
+  reason,
+  onReason,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  description: string;
+  fieldLabel: string;
+  placeholder: string;
+  confirmLabel: string;
+  destructive?: boolean;
+  loading: boolean;
+  reason: string;
+  onReason: (value: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const trimmed = reason.trim();
+  const tooLong = trimmed.length > MAX_REASON_LENGTH;
+  const fieldId = 'reason-confirm-field';
+  const hintId = 'reason-confirm-hint';
+  const errorId = 'reason-confirm-error';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reason-confirm-title"
+        aria-describedby="reason-confirm-description"
+        className="bg-card rounded-lg border border-border shadow-xl w-full max-w-md p-6 space-y-4"
+      >
+        <h3 id="reason-confirm-title" className="font-semibold text-foreground">
+          {title}
+        </h3>
+        <p id="reason-confirm-description" className="text-sm text-muted-foreground">
+          {description}
+        </p>
+        <div className="space-y-1">
+          <label htmlFor={fieldId} className="text-xs font-medium text-foreground">
+            {fieldLabel}
+          </label>
+          <textarea
+            id={fieldId}
+            autoFocus
+            className="w-full text-sm bg-background border border-border rounded-md px-3 py-2 resize-none"
+            rows={3}
+            maxLength={MAX_REASON_LENGTH}
+            placeholder={placeholder}
+            aria-invalid={tooLong}
+            aria-describedby={tooLong ? `${hintId} ${errorId}` : hintId}
+            value={reason}
+            onChange={(e) => onReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') onCancel();
+            }}
+          />
+          <p id={hintId} className="text-xs text-muted-foreground">
+            Required, up to {MAX_REASON_LENGTH} characters. This is recorded on
+            the shipment&apos;s status history and shown to everyone who can view it.
+          </p>
+          {tooLong && (
+            <p id={errorId} role="alert" className="text-xs text-destructive">
+              Please shorten this to {MAX_REASON_LENGTH} characters or fewer.
+            </p>
+          )}
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>Cancel</Button>
+          <Button
+            size="sm"
+            variant={destructive ? 'destructive' : 'default'}
+            onClick={onConfirm}
+            disabled={loading || !trimmed || tooLong}
+          >
+            {loading ? 'Working…' : confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The reason-requiring actions the detail page gates behind a confirm step. */
+type PendingAction =
+  | { kind: 'cancel' }
+  | { kind: 'resolve'; resolution: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED };
 
 export default function ShipmentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +138,8 @@ export default function ShipmentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [reason, setReason] = useState('');
 
   const reload = useCallback(async () => {
     const [s, h] = await Promise.all([
@@ -42,16 +157,47 @@ export default function ShipmentDetailPage() {
       .finally(() => setLoading(false));
   }, [reload]);
 
-  const act = async (fn: () => Promise<unknown>, successMsg: string) => {
+  const act = async (fn: () => Promise<unknown>, successMsg: string, onDone?: () => void) => {
     setActionLoading(true);
     try {
       await fn();
       toast.success(successMsg);
       await reload();
+      onDone?.();
     } catch {
       toast.error('Action failed. Please try again.');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // FE-190 / FE-191: both reason-requiring actions open a confirmation step
+  // instead of firing on a single click.
+  const openAction = (action: PendingAction) => {
+    setReason('');
+    setPendingAction(action);
+  };
+
+  const closeAction = () => {
+    setPendingAction(null);
+    setReason('');
+  };
+
+  const confirmAction = () => {
+    if (!pendingAction || !shipment) return;
+    const note = reason.trim();
+    // Belt and braces: the dialog already disables Confirm in this state.
+    if (!note || note.length > MAX_REASON_LENGTH) return;
+    const action = pendingAction;
+    if (action.kind === 'cancel') {
+      act(() => shipmentApi.cancel(shipment.id, note), 'Shipment cancelled', closeAction);
+    } else {
+      const word = action.resolution === ShipmentStatus.COMPLETED ? 'completed' : 'cancelled';
+      act(
+        () => shipmentApi.resolveDispute(shipment.id, action.resolution, note),
+        `Dispute resolved — ${word}`,
+        closeAction,
+      );
     }
   };
 
@@ -79,13 +225,42 @@ export default function ShipmentDetailPage() {
   const isCarrier = user?.id === shipment.carrierId;
   const isAdmin = user?.role === 'admin';
 
-  const formattedPrice = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: shipment.currency || 'USD',
-  }).format(Number(shipment.price));
+  // Never throws on an unrecognised currency code — see lib/format/currency.ts.
+  const formattedPrice = formatMoney(shipment.price, shipment.currency);
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {pendingAction?.kind === 'cancel' && (
+        <ReasonConfirmDialog
+          title="Cancel this shipment?"
+          description="This action cannot be undone."
+          fieldLabel="Reason for cancelling"
+          placeholder="Explain why this shipment is being cancelled…"
+          confirmLabel="Cancel shipment"
+          destructive
+          loading={actionLoading}
+          reason={reason}
+          onReason={setReason}
+          onConfirm={confirmAction}
+          onCancel={closeAction}
+        />
+      )}
+      {pendingAction?.kind === 'resolve' && (
+        <ReasonConfirmDialog
+          title={`Resolve as ${pendingAction.resolution === ShipmentStatus.COMPLETED ? 'Completed' : 'Cancelled'}?`}
+          description="This action cannot be undone."
+          fieldLabel="Resolution Note"
+          placeholder="Explain the resolution…"
+          confirmLabel="Confirm"
+          destructive={pendingAction.resolution === ShipmentStatus.CANCELLED}
+          loading={actionLoading}
+          reason={reason}
+          onReason={setReason}
+          onConfirm={confirmAction}
+          onCancel={closeAction}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -210,16 +385,14 @@ export default function ShipmentDetailPage() {
                 </Button>
               )}
 
-              {/* Cancel */}
+              {/* Cancel — opens a confirmation step that collects a real reason */}
               {[ShipmentStatus.PENDING, ShipmentStatus.ACCEPTED].includes(shipment.status) &&
                 (isShipper || isCarrier || isAdmin) && (
                   <Button
                     size="sm"
                     variant="outline"
                     disabled={actionLoading}
-                    onClick={() =>
-                      act(() => shipmentApi.cancel(shipment.id, 'Cancelled by user'), 'Shipment cancelled')
-                    }
+                    onClick={() => openAction({ kind: 'cancel' })}
                   >
                     Cancel
                   </Button>
@@ -243,22 +416,15 @@ export default function ShipmentDetailPage() {
                   </Button>
                 )}
 
-              {/* Admin resolve */}
+              {/* Admin resolve — same note + confirm requirement as the admin
+                  dispute queue in admin/disputes/page.tsx */}
               {shipment.status === ShipmentStatus.DISPUTED && isAdmin && (
                 <>
                   <Button
                     size="sm"
                     disabled={actionLoading}
                     onClick={() =>
-                      act(
-                        () =>
-                          shipmentApi.resolveDispute(
-                            shipment.id,
-                            ShipmentStatus.COMPLETED,
-                            'Resolved by admin — completed',
-                          ),
-                        'Dispute resolved — completed',
-                      )
+                      openAction({ kind: 'resolve', resolution: ShipmentStatus.COMPLETED })
                     }
                   >
                     Resolve: Complete
@@ -268,15 +434,7 @@ export default function ShipmentDetailPage() {
                     variant="outline"
                     disabled={actionLoading}
                     onClick={() =>
-                      act(
-                        () =>
-                          shipmentApi.resolveDispute(
-                            shipment.id,
-                            ShipmentStatus.CANCELLED,
-                            'Resolved by admin — cancelled',
-                          ),
-                        'Dispute resolved — cancelled',
-                      )
+                      openAction({ kind: 'resolve', resolution: ShipmentStatus.CANCELLED })
                     }
                   >
                     Resolve: Cancel

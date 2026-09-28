@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { documentsApi, DocumentType } from '../../lib/api/documents.api';
-import { partitionValidFiles } from '../../lib/validation/file-upload';
+import { partitionValidFiles, buildFileAcceptAttribute } from '../../lib/validation/file-upload';
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   [DocumentType.BILL_OF_LADING]: 'Bill of Lading',
@@ -19,9 +19,18 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   [DocumentType.OTHER]: 'Other',
 };
 
+/** Derived from ALLOWED_FILE_EXTENSIONS so the picker and the validator agree. */
+const ACCEPTED_FILES = buildFileAcceptAttribute();
+
 interface SelectedFile {
   file: File;
   id: string;
+  /**
+   * Each queued file carries its own document type. A single shared type
+   * would silently mis-categorize every file in a mixed batch (e.g. a Bill
+   * of Lading PDF uploaded alongside a Proof-of-Delivery photo).
+   */
+  documentType: DocumentType;
 }
 
 interface DocumentUploadModalProps {
@@ -39,6 +48,7 @@ export function DocumentUploadModal({
   onSuccess,
 }: DocumentUploadModalProps) {
   const [files, setFiles] = useState<SelectedFile[]>([]);
+  /** Type pre-selected for newly queued files; not applied retroactively. */
   const [docType, setDocType] = useState<DocumentType>(DocumentType.OTHER);
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -52,11 +62,19 @@ export function DocumentUploadModal({
     const next: SelectedFile[] = valid.map((file) => ({
       file,
       id: `${file.name}-${file.size}-${Date.now()}`,
+      documentType: docType,
     }));
     setFiles((prev) => [...prev, ...next]);
   };
 
   const removeFile = (id: string) => setFiles((prev) => prev.filter((f) => f.id !== id));
+
+  // Only touches the one row — the other queued files keep their own types.
+  const setFileType = (id: string, type: DocumentType) =>
+    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, documentType: type } : f)));
+
+  // Bulk override, for the common case where a whole batch shares one type.
+  const applyTypeToAll = () => setFiles((prev) => prev.map((f) => ({ ...f, documentType: docType })));
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -85,7 +103,7 @@ export function DocumentUploadModal({
       for (let i = 0; i < files.length; i++) {
         await documentsApi.upload(
           files[i].file,
-          { shipmentId, documentType: docType },
+          { shipmentId, documentType: files[i].documentType },
           (filePercent) => {
             const overall = ((i + filePercent / 100) / files.length) * 100;
             setProgress(Math.round(overall));
@@ -137,11 +155,31 @@ export function DocumentUploadModal({
             Drag and drop files below or click to browse. Supported: PDF, images, Word docs.
           </p>
 
-          {/* Document type selector */}
+          {/* Default document type for newly added files */}
           <div className="mb-4 space-y-1.5">
-            <Label htmlFor="docType">Document Type</Label>
+            <div className="flex items-end justify-between gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="docType">Default Document Type</Label>
+                <p id="docType-hint" className="text-xs text-muted-foreground">
+                  Applies to files you add from now on. Change any file&apos;s type in the list
+                  below.
+                </p>
+              </div>
+              {files.length > 1 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={applyTypeToAll}
+                  className="shrink-0"
+                >
+                  Apply to all files
+                </Button>
+              )}
+            </div>
             <select
               id="docType"
+              aria-describedby="docType-hint"
               value={docType}
               onChange={(e) => setDocType(e.target.value as DocumentType)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -176,20 +214,35 @@ export function DocumentUploadModal({
               multiple
               className="hidden"
               onChange={(e) => addFiles(e.target.files)}
-              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp"
+              accept={ACCEPTED_FILES}
             />
           </div>
 
-          {/* File list */}
+          {/* File list — one document type per file */}
           {files.length > 0 && (
-            <ul className="mt-4 space-y-2 max-h-40 overflow-y-auto">
-              {files.map(({ file, id }) => (
-                <li key={id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
+            <ul className="mt-4 space-y-2 max-h-56 overflow-y-auto">
+              {files.map(({ file, id, documentType }) => (
+                <li key={id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border px-3 py-2 text-sm">
                   <FileText size={16} className="text-muted-foreground shrink-0" />
-                  <span className="flex-1 truncate">{file.name}</span>
+                  <span className="flex-1 min-w-0 truncate">{file.name}</span>
                   <span className="text-xs text-muted-foreground shrink-0">
                     {(file.size / 1024).toFixed(1)} KB
                   </span>
+                  <Label htmlFor={`docType-${id}`} className="sr-only">
+                    Document type for {file.name}
+                  </Label>
+                  <select
+                    id={`docType-${id}`}
+                    value={documentType}
+                    onChange={(e) => setFileType(id, e.target.value as DocumentType)}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {Object.values(DocumentType).map((t) => (
+                      <option key={t} value={t}>
+                        {DOCUMENT_TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     onClick={() => removeFile(id)}

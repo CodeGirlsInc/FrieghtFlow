@@ -7,6 +7,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
+import {
+  SUPPORTED_CURRENCIES_HINT,
+  currencySchema,
+} from '../../../../lib/validation/currency';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
@@ -27,7 +31,10 @@ const step2Schema = z.object({
 
 const step3Schema = z.object({
   price: z.coerce.number().min(0.01, 'Price must be greater than 0'),
-  currency: z.string().length(3, 'Must be 3 characters').default('USD'),
+  // FE-192: was `z.string().length(3)`, which accepted any three characters
+  // ('ZZZ') and then crashed `Intl.NumberFormat` on every page that renders
+  // this shipment's price. Only allow-listed ISO-4217 codes are accepted.
+  currency: currencySchema.default('USD'),
   pickupDate: z.string().optional(),
   estimatedDeliveryDate: z.string().optional(),
 });
@@ -412,8 +419,24 @@ function NewShipmentForm() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="currency">Currency</Label>
-                  <Input id="currency" placeholder="USD" maxLength={3} {...register('currency')} />
-                  {errors.currency && <p className="text-xs text-destructive">{errors.currency.message}</p>}
+                  <Input
+                    id="currency"
+                    placeholder="USD"
+                    maxLength={3}
+                    autoComplete="off"
+                    aria-invalid={!!errors.currency}
+                    aria-describedby="currency-help"
+                    {...register('currency')}
+                  />
+                  <p id="currency-help" className="text-xs text-muted-foreground">
+                    {errors.currency ? (
+                      <span role="alert" className="text-destructive">
+                        {errors.currency.message}
+                      </span>
+                    ) : (
+                      SUPPORTED_CURRENCIES_HINT
+                    )}
+                  </p>
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
