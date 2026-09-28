@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { documentsApi, DocumentType } from '../../lib/api/documents.api';
-import { partitionValidFiles } from '../../lib/validation/file-upload';
+import { partitionValidFiles, buildFileAcceptAttribute } from '../../lib/validation/file-upload';
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   [DocumentType.BILL_OF_LADING]: 'Bill of Lading',
@@ -18,6 +18,9 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   [DocumentType.PHOTO]: 'Photo',
   [DocumentType.OTHER]: 'Other',
 };
+
+/** Derived from ALLOWED_FILE_EXTENSIONS so the picker and the validator agree. */
+const ACCEPTED_FILES = buildFileAcceptAttribute();
 
 interface SelectedFile {
   file: File;
@@ -211,7 +214,7 @@ export function DocumentUploadModal({
               multiple
               className="hidden"
               onChange={(e) => addFiles(e.target.files)}
-              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp"
+              accept={ACCEPTED_FILES}
             />
           </div>
 
