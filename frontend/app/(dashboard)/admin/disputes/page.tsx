@@ -7,13 +7,14 @@ import { toast } from 'sonner';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { adminApi } from '../../../../lib/api/admin.api';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
+import { formatMoney } from '../../../../lib/format/currency';
 import { ShipmentStatus, type Shipment, type ShipmentStatusHistory } from '../../../../types/shipment.types';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { StatusTimeline } from '../../../../components/shipment/status-timeline';
 
-const fmt = (n: number, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n);
+// Never throws on an unrecognised currency code — see lib/format/currency.ts.
+const fmt = (n: number, currency = 'USD') => formatMoney(n, currency);
 
 function ConfirmDialog({
   resolution,
