@@ -1,5 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QueryAuditLogDto {
@@ -21,4 +28,29 @@ export class QueryAuditLogDto {
   @IsString()
   @IsOptional()
   action?: string;
+
+  @ApiPropertyOptional({ description: 'Only entries performed by this admin' })
+  @IsUUID()
+  @IsOptional()
+  adminId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by target type, e.g. payment' })
+  @IsString()
+  @IsOptional()
+  targetType?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by target id' })
+  @IsString()
+  @IsOptional()
+  targetId?: string;
+
+  @ApiPropertyOptional({ description: 'Only entries created at or after this ISO date' })
+  @IsDateString()
+  @IsOptional()
+  from?: string;
+
+  @ApiPropertyOptional({ description: 'Only entries created at or before this ISO date' })
+  @IsDateString()
+  @IsOptional()
+  to?: string;
 }

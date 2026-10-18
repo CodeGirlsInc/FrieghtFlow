@@ -5,7 +5,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -74,7 +74,11 @@ export function isOriginAllowed(
   },
 })
 export class NotificationsGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnModuleDestroy
 {
   @WebSocketServer()
   private server: Server;
@@ -86,8 +90,41 @@ export class NotificationsGateway
     private readonly configService: ConfigService,
   ) {}
 
+  private revalidationTimer?: NodeJS.Timeout;
+
   afterInit() {
     this.logger.log('WebSocket gateway initialised');
+    // The JWT is verified once at handshake; re-check expiry periodically so
+    // a long-lived socket cannot outlive its token.
+    this.revalidationTimer = setInterval(
+      () => this.disconnectExpiredSockets(),
+      60_000,
+    );
+    this.revalidationTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.revalidationTimer) clearInterval(this.revalidationTimer);
+  }
+
+  private disconnectExpiredSockets() {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    for (const socket of this.server?.sockets?.sockets?.values() ?? []) {
+      const exp = (socket.data as { tokenExp?: number }).tokenExp;
+      if (exp !== undefined && exp <= nowSeconds) {
+        this.disconnect(socket, 'Token expired');
+      }
+    }
+  }
+
+  /** Closes every open socket belonging to a user (e.g. after deactivation). */
+  disconnectUser(userId: string) {
+    this.server.in(userRoom(userId)).disconnectSockets(true);
+  }
+
+  @OnEvent('user.deactivated')
+  onUserDeactivated(payload: { userId: string }) {
+    this.disconnectUser(payload.userId);
   }
 
   // ── Connection lifecycle ────────────────────────────────────────────────────
@@ -116,6 +153,9 @@ export class NotificationsGateway
 
       // Store userId on the socket for later use
       (client.data as { userId: string }).userId = payload.sub;
+      (client.data as { tokenExp?: number }).tokenExp = (
+        payload as JwtPayload & { exp?: number }
+      ).exp;
 
       // Join the user's personal room
       await client.join(userRoom(payload.sub));
