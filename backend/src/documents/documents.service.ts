@@ -5,6 +5,7 @@ import {
   Logger,
   BadRequestException,
   ConflictException,
+  PayloadTooLargeException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -185,6 +186,26 @@ export class DocumentsService {
     };
   }
 
+  /** Total bytes a single user may store across all their uploads. */
+  private static readonly MAX_USER_STORAGE_BYTES = 500 * 1024 * 1024;
+
+  private async assertWithinStorageQuota(
+    uploaderId: string,
+    incomingBytes: number,
+  ): Promise<void> {
+    const rows =
+      (await this.documentRepo.find({
+        where: { uploaderId },
+        select: { sizeBytes: true },
+      })) ?? [];
+    const used = rows.reduce((sum, row) => sum + row.sizeBytes, 0);
+    if (used + incomingBytes > DocumentsService.MAX_USER_STORAGE_BYTES) {
+      throw new PayloadTooLargeException(
+        'Upload would exceed your storage quota; delete old documents first',
+      );
+    }
+  }
+
   private async persistDocument(
     file: Express.Multer.File | undefined,
     uploader: User,
@@ -195,6 +216,7 @@ export class DocumentsService {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
+    await this.assertWithinStorageQuota(uploader.id, file.size ?? file.buffer?.length ?? 0);
     const persisted = this.persistFile(file);
 
     try {

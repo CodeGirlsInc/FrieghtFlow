@@ -30,16 +30,17 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/enums/role.enum';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { User } from '../users/entities/user.entity';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 
 class DisputeBody {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 2000 })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   reason?: string;
 }
 
@@ -56,9 +57,10 @@ class ResolveDisputeBody {
 }
 
 class CancelBody {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 2000 })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   reason?: string;
 }
 
