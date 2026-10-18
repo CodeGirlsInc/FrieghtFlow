@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Document } from '../../documents/entities/document.entity';
+import { User } from '../../users/entities/user.entity';
 
 export enum CertificationType {
   OPERATING_LICENSE = 'Operating License',
@@ -29,6 +30,10 @@ export class CarrierCertification {
 
   @Column({ name: 'carrier_id', type: 'uuid' })
   carrierId: string;
+
+  @ManyToOne(() => User, { nullable: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'carrier_id' })
+  carrier: User;
 
   @Column({
     name: 'document_type',

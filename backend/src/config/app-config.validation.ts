@@ -9,7 +9,7 @@ export const appConfigValidationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'production', 'test')
     .default('development'),
-  PORT: Joi.number().default(6000),
+  PORT: Joi.number().default(6006),
   FRONTEND_URL: Joi.string().default('http://localhost:3000'),
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN: Joi.string().default('15m'),
