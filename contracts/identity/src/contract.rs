@@ -100,14 +100,7 @@ impl IdentityContract {
         }
 
         // Enforce the per-hash wallet cap before appending to the index.
-        let existing: Vec<Address> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::HashToWallets(user_id_hash.clone()))
-            .unwrap_or_else(|| Vec::new(&env));
-        if existing.len() >= MAX_WALLETS_PER_HASH {
-            return Err(IdentityError::WalletLimitReached);
-        }
+        Self::require_wallet_capacity(&env, &user_id_hash)?;
 
         env.storage()
             .persistent()
@@ -144,6 +137,18 @@ impl IdentityContract {
             .persistent()
             .get(&DataKey::Identity(wallet.clone()))
             .ok_or(IdentityError::NotRegistered)?;
+
+        // The per-hash cap has to hold on this path too. `register_identity`
+        // checks it, but without a matching check here a wallet can move
+        // itself into an already-full hash and many wallets can be pushed past
+        // the ceiling by updating instead of registering, defeating the bound
+        // that keeps `unindex_wallet` and the reverse lookup cheap (issue
+        // #1680). Skipped when the hash is unchanged: `unindex_wallet` below
+        // drops the wallet from the list before `index_wallet` re-adds it, so
+        // the count cannot grow and the old record is still in place.
+        if old_user_id_hash != new_user_id_hash {
+            Self::require_wallet_capacity(&env, &new_user_id_hash)?;
+        }
 
         env.storage()
             .persistent()
@@ -244,6 +249,43 @@ impl IdentityContract {
         Ok(())
     }
 
+    /// Remove the caller's **own** identity record, authorised by the
+    /// caller's own signature.
+    ///
+    /// Until now `revoke_identity` (admin-only) was the only way to remove a
+    /// record, so a user whose key is compromised — or who simply wants to
+    /// unlink a retired device, or to stop a `user_id_hash` from being
+    /// correlatable with this wallet — had no option but to ask the platform.
+    /// `update_identity` is not a substitute: it can only re-point the wallet
+    /// at another hash, never remove the link entirely.
+    ///
+    /// This is the self-service counterpart to `revoke_identity`, and it emits
+    /// the same `revoked` event: on this path the wallet in the event topic
+    /// *is* the actor, so the event identifies who removed the record without
+    /// a second event type. It removes both the forward record and the reverse
+    /// index entry, exactly as `revoke_identity` does.
+    ///
+    /// Fails with `NotRegistered` if `wallet` has no identity to remove.
+    pub fn deregister_identity(env: Env, wallet: Address) -> Result<(), IdentityError> {
+        wallet.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let user_id_hash: BytesN<32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Identity(wallet.clone()))
+            .ok_or(IdentityError::NotRegistered)?;
+
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Identity(wallet.clone()));
+
+        Self::unindex_wallet(&env, &user_id_hash, &wallet);
+
+        events::revoked(&env, &wallet, &user_id_hash);
+        Ok(())
+    }
+
     /// Add `wallet` to the reverse index for `user_id_hash`.
     fn index_wallet(env: &Env, user_id_hash: &BytesN<32>, wallet: &Address) {
         let key = DataKey::HashToWallets(user_id_hash.clone());
@@ -285,6 +327,27 @@ impl IdentityContract {
                 .persistent()
                 .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
         }
+    }
+
+    /// Fail unless `user_id_hash` has room for one more wallet.
+    ///
+    /// Shared by `register_identity` and `update_identity` so the ceiling
+    /// cannot be enforced on one entrypoint and forgotten on the other. The
+    /// bound exists to keep `unindex_wallet`'s O(n) rebuild and the read cost
+    /// of `get_wallets_by_identity` predictable.
+    fn require_wallet_capacity(
+        env: &Env,
+        user_id_hash: &BytesN<32>,
+    ) -> Result<(), IdentityError> {
+        let existing: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::HashToWallets(user_id_hash.clone()))
+            .unwrap_or_else(|| Vec::new(env));
+        if existing.len() >= MAX_WALLETS_PER_HASH {
+            return Err(IdentityError::WalletLimitReached);
+        }
+        Ok(())
     }
 
     fn require_not_paused(env: &Env) -> Result<(), IdentityError> {
