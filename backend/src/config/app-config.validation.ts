@@ -11,6 +11,24 @@ export const appConfigValidationSchema = Joi.object({
     .default('development'),
   PORT: Joi.number().default(6006),
   FRONTEND_URL: Joi.string().default('http://localhost:3000'),
+  /**
+   * How many reverse proxies sit in front of this app, so `request.ip` (and
+   * therefore every IP-based rate limit) resolves to the real client rather than
+   * to the proxy's address (issue #1667).
+   *
+   * `false` means the app is exposed directly and nothing is trusted — the safe
+   * default, and correct for local development. `true` trusts the whole
+   * `X-Forwarded-For` chain and is only safe when the outermost proxy *replaces*
+   * that header, because a client that can set it can then spoof its own IP and
+   * walk straight through the rate limits. A hop count (`1`) is the middle
+   * ground for a known single-proxy deployment.
+   */
+  TRUST_PROXY: Joi.alternatives()
+    .try(
+      Joi.boolean().truthy('true').falsy('false'),
+      Joi.number().integer().min(0),
+    )
+    .default(false),
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN: Joi.string().default('15m'),
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),

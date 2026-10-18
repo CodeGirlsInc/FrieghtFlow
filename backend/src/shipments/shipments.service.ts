@@ -499,6 +499,20 @@ export class ShipmentsService {
         `No shipment found for tracking number ${trackingNumber}`,
       );
     }
+
+    // The public tracking page also wants a timeline, and the authenticated
+    // `GET /shipments/:id/history` it used to call for one rejects a stranger
+    // with 403 (issue #1669). Returning the timeline here closes that gap.
+    //
+    // Deliberately *not* `getHistory`: that returns full `ShipmentStatusHistory`
+    // rows including `changedBy` and `reason`, which would leak a user id and
+    // whatever free text a party typed into an endpoint that now has no
+    // authentication on it. Only the status and its timestamp are public.
+    const history = await this.historyRepo.find({
+      where: { shipmentId: shipment.id },
+      order: { changedAt: 'ASC' },
+    });
+
     return {
       trackingNumber: shipment.trackingNumber,
       status: shipment.status,
@@ -508,6 +522,10 @@ export class ShipmentsService {
       estimatedDeliveryDate: shipment.estimatedDeliveryDate,
       actualDeliveryDate: shipment.actualDeliveryDate,
       updatedAt: shipment.updatedAt,
+      timeline: history.map((entry) => ({
+        status: entry.toStatus,
+        changedAt: entry.changedAt,
+      })),
     };
   }
 
