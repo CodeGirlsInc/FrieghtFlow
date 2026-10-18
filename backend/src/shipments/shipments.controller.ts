@@ -18,6 +18,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { Public } from '../auth/decorators/public.decorator';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
@@ -216,8 +217,25 @@ export class ShipmentsController {
     });
   }
 
+  /**
+   * Public shipment tracking.
+   *
+   * Marked `@Public()` because the frontend serves this on an unauthenticated
+   * `/track/[trackingNumber]` page. Without it the global `JwtAuthGuard` covered
+   * the route and anonymous visitors received 401 (issue #1669) — the route was
+   * described as "public-style" but carried no decorator, and the tracking page's
+   * second call, `GET /shipments/:id/history`, requires a logged-in party, so even
+   * an authenticated stranger got 403.
+   *
+   * Because this is now reachable without credentials it carries its own throttle
+   * and is backed by `findByTracking`, which returns a restricted projection
+   * (status, route, ETA) with no price, email or wallet. The full record stays
+   * behind authentication on `GET /shipments/:id`.
+   */
   @Get('track/:trackingNumber')
-  @ApiOperation({ summary: 'Track shipment by tracking number (public-style)' })
+  @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Track shipment by tracking number (public)' })
   @ApiParam({ name: 'trackingNumber', example: 'FF-ABC123-DEF456' })
   findByTracking(@Param('trackingNumber') trackingNumber: string) {
     return this.shipmentsService.findByTracking(trackingNumber);
