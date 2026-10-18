@@ -212,6 +212,39 @@ const CITY_TOKENS: Readonly<Record<string, ShipmentZone>> = Object.freeze({
   MUMBAI: ShipmentZone.AS,
 });
 
+/**
+ * US state and district codes → `ShipmentZone.US`.
+ *
+ * These collide head-on with three ISO 3166-1 alpha-2 codes that are already in
+ * `LOCATION_TOKENS`: `CA` (Canada), `DE` (Germany) and `IN` (India). A US
+ * address like "Los Angeles, CA" therefore matched the city table (US) *and* the
+ * country table (CA) and `resolveZone` rejected it as a conflicting location,
+ * while "Indianapolis, IN" — a city with no entry — silently resolved to the
+ * Asia zone and quoted a 12-day transit.
+ *
+ * The whole-token guarantee that the country table's doc comment relies on does
+ * not save this: US state codes *are* legitimate whole tokens. Only the trailing
+ * `City, ST` shape disambiguates them, so `collectZoneMatches` applies this
+ * table under narrow conditions — see the note there.
+ */
+const US_STATE_TOKENS: Readonly<Record<string, ShipmentZone>> = Object.freeze({
+  AL: ShipmentZone.US, AK: ShipmentZone.US, AZ: ShipmentZone.US, AR: ShipmentZone.US,
+  CA: ShipmentZone.US, CO: ShipmentZone.US, CT: ShipmentZone.US, DE: ShipmentZone.US,
+  FL: ShipmentZone.US, GA: ShipmentZone.US, HI: ShipmentZone.US, ID: ShipmentZone.US,
+  IL: ShipmentZone.US, IN: ShipmentZone.US, IA: ShipmentZone.US, KS: ShipmentZone.US,
+  KY: ShipmentZone.US, LA: ShipmentZone.US, ME: ShipmentZone.US, MD: ShipmentZone.US,
+  MA: ShipmentZone.US, MI: ShipmentZone.US, MN: ShipmentZone.US, MS: ShipmentZone.US,
+  MO: ShipmentZone.US, MT: ShipmentZone.US, NE: ShipmentZone.US, NV: ShipmentZone.US,
+  NH: ShipmentZone.US, NJ: ShipmentZone.US, NM: ShipmentZone.US, NY: ShipmentZone.US,
+  NC: ShipmentZone.US, ND: ShipmentZone.US, OH: ShipmentZone.US, OK: ShipmentZone.US,
+  OR: ShipmentZone.US, PA: ShipmentZone.US, RI: ShipmentZone.US, SC: ShipmentZone.US,
+  SD: ShipmentZone.US, TN: ShipmentZone.US, TX: ShipmentZone.US, UT: ShipmentZone.US,
+  VT: ShipmentZone.US, VA: ShipmentZone.US, WA: ShipmentZone.US, WV: ShipmentZone.US,
+  WI: ShipmentZone.US, WY: ShipmentZone.US,
+  // District of Columbia — not a state, but shipped from and to like one.
+  DC: ShipmentZone.US,
+});
+
 /** Splits free-form location text into comparable upper-case tokens. */
 function tokenize(location: string): string[] {
   return (
@@ -232,7 +265,7 @@ interface ZoneMatch {
   zone: ShipmentZone;
   /** The exact text that matched, for error messages. */
   phrase: string;
-  kind: 'city' | 'country';
+  kind: 'city' | 'country' | 'state';
 }
 
 /**
@@ -248,10 +281,11 @@ function collectZoneMatches(location: string): ZoneMatch[] {
   const matches: ZoneMatch[] = [];
   const seenPhrases = new Set<string>();
 
-  for (const [table, kind] of [
-    [CITY_TOKENS, 'city'],
-    [LOCATION_TOKENS, 'country'],
-  ] as const) {
+  const scan = (
+    table: Readonly<Record<string, ShipmentZone>>,
+    kind: ZoneMatch['kind'],
+    firstEnd?: { value: number },
+  ): void => {
     for (
       let length = MAX_PLACE_PHRASE_TOKENS;
       length >= 1;
@@ -259,17 +293,73 @@ function collectZoneMatches(location: string): ZoneMatch[] {
     ) {
       for (let start = 0; start + length <= tokens.length; start += 1) {
         const phrase = tokens.slice(start, start + length).join(' ');
-        // A phrase already matched by the city table must not be
-        // re-reported by the country table.
+        // A phrase already matched by an earlier table must not be
+        // re-reported by a later one.
         if (seenPhrases.has(phrase)) continue;
         const zone = table[phrase];
         if (zone) {
           seenPhrases.add(phrase);
           matches.push({ zone, phrase, kind });
+          if (firstEnd !== undefined && firstEnd.value < 0) {
+            firstEnd.value = start + length;
+          }
         }
       }
     }
+  };
+
+  // Index just past the first city match, used below to tell the `City, ST`
+  // shape from a longer string that merely ends in a state-like token.
+  const cityEnd = { value: -1 };
+  scan(CITY_TOKENS, 'city', cityEnd);
+
+  // Disambiguate a trailing two-letter token that is both a US state code and an
+  // ISO country code (`CA`, `DE`, `IN`). Two deliberate restrictions keep this
+  // from breaking the cases that already worked:
+  //
+  //   1. Only when the city table matched nothing. A known city has already
+  //      decided the zone, and a state code must not overrule it — that is what
+  //      keeps "Toronto, CA" in Canada and "Los Angeles, CA" in the US rather
+  //      than turning the former into a conflict.
+  //   2. Only when a token precedes it, i.e. the `City, ST` shape. A bare "DE"
+  //      must keep resolving to Germany, which is what a caller sending to
+  //      Germany with no city typed actually means.
+  //
+  // Trade-off: for a city that is *not* in `CITY_TOKENS`, "Frankfurt, DE" now
+  // reads as Delaware. That ambiguity is inherent — nothing in the string
+  // distinguishes the two — and the fix is to type the country name, which the
+  // country table matches on the earlier, explicit-name pass and which therefore
+  // takes priority over the bare code.
+  const trailing = tokens.length > 0 ? tokens[tokens.length - 1] : undefined;
+
+  if (matches.length === 0 && tokens.length > 1 && trailing !== undefined) {
+    const zone = US_STATE_TOKENS[trailing];
+    if (zone) {
+      seenPhrases.add(trailing);
+      matches.push({ zone, phrase: trailing, kind: 'state' });
+    }
+  } else if (
+    matches.length > 0 &&
+    trailing !== undefined &&
+    // Only the immediate `City, ST` shape. "Lagos, NG vs CA" also ends in a bare
+    // `CA`, but it is not a US address, and suppressing that `CA` would hide a
+    // real conflict the caller needs told about.
+    cityEnd.value === tokens.length - 1 &&
+    US_STATE_TOKENS[trailing] !== undefined
+  ) {
+    // A city match already decided the zone, and the trailing token is a state
+    // code that is *also* a country code. The country table must not report it
+    // again: that pair is what made "Los Angeles, CA" resolve to both US and CA
+    // and be rejected as a conflict.
+    //
+    // Only US state codes are suppressed, so genuine country/city disagreements
+    // are still reported — "Lagos, US" still conflicts, because `US` is not a
+    // state code, and "Lagos, Canada" still conflicts, because `CANADA` is not a
+    // bare two-letter token.
+    seenPhrases.add(trailing);
   }
+
+  scan(LOCATION_TOKENS, 'country');
 
   return matches;
 }
