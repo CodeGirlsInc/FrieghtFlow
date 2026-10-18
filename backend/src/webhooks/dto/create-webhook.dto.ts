@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsUrl, MaxLength } from 'class-validator';
+import { IsString, IsUrl, MaxLength, MinLength } from 'class-validator';
 
 export class CreateWebhookDto {
   @ApiProperty({ example: 'https://partner.example.com/webhooks/freightflow' })
@@ -8,9 +8,11 @@ export class CreateWebhookDto {
 
   @ApiProperty({
     example: 'whsec_test_123',
-    description: 'Shared secret used to verify the HMAC signature.',
+    description:
+      'Shared secret used to verify the HMAC signature (at least 16 characters).',
   })
   @IsString()
+  @MinLength(16)
   @MaxLength(255)
   secret: string;
 }
