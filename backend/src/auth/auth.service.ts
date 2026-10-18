@@ -27,6 +27,13 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+// Hash of a throwaway password, compared against when the email is unknown so
+// that "no such account" and "wrong password" cost the same bcrypt work.
+const TIMING_EQUALISATION_HASH = bcrypt.hashSync(
+  'timing-equalisation-password',
+  12,
+);
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -41,7 +48,10 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersService.findByEmail(email);
-    if (!user) return null;
+    if (!user) {
+      await this.usersService.verifyPassword(password, TIMING_EQUALISATION_HASH);
+      return null;
+    }
     const isMatch = await this.usersService.verifyPassword(
       password,
       user.passwordHash,
