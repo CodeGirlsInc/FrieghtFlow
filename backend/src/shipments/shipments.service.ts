@@ -553,6 +553,8 @@ export class ShipmentsService {
       carrier.role,
     );
 
+    await this.paymentsService.assertFundedForPickup(shipmentId);
+
     shipment.status = ShipmentStatus.IN_TRANSIT;
     const saved = await this.shipmentRepo.save(shipment);
     await this.recordHistory(
@@ -667,6 +669,8 @@ export class ShipmentsService {
       ShipmentStatus.CANCELLED,
       user.role,
     );
+
+    await this.paymentsService.assertCanCancelShipment(shipmentId);
 
     const previousStatus = shipment.status;
     const cancellationFee = this.cancellationFeeService.applyTo(
