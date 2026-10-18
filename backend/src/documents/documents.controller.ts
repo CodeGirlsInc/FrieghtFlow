@@ -27,6 +27,7 @@ import {
 import { Response } from 'express';
 import { DocumentsService } from './documents.service';
 import {
+  contentMatchesMimeType,
   isAllowedDocumentMimeType,
   unsupportedDocumentMimeTypeMessage,
 } from './document-upload.constants';
@@ -124,6 +125,14 @@ export class DocumentsController {
     if (!isAllowedDocumentMimeType(file.mimetype)) {
       throw new BadRequestException(
         unsupportedDocumentMimeTypeMessage(file.mimetype),
+      );
+    }
+    if (
+      file.buffer?.length &&
+      !contentMatchesMimeType(file.buffer, file.mimetype)
+    ) {
+      throw new BadRequestException(
+        `File content does not match the declared type ${file.mimetype}`,
       );
     }
   }

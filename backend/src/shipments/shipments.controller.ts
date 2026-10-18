@@ -240,7 +240,7 @@ export class ShipmentsController {
     @CurrentUser() user: User,
     @Body() dto: UpdateShipmentDto,
   ) {
-    return this.shipmentsService.update(id, user.id, dto);
+    return this.shipmentsService.update(id, user.id, dto, user.role);
   }
 
   @Patch(':id/cancel')
