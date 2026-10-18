@@ -375,6 +375,14 @@ export class AdminService {
       mismatches.push(
         `Status mismatch: off-chain=${payment.status}, on-chain=${onChain.status}`,
       );
+    } else if (
+      payment.status === PaymentStatus.CANCELLED &&
+      (onChain.status === 'Funded' || onChain.status === 'Disputed')
+    ) {
+      // A cancelled payment must not leave funds locked on-chain.
+      mismatches.push(
+        `Status mismatch: off-chain=${payment.status}, on-chain=${onChain.status} (funds still held after cancellation)`,
+      );
     }
 
     const match = mismatches.length === 0;

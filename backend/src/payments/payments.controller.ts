@@ -10,6 +10,7 @@ import {
 import {
   ApiBearerAuth,
   ApiConflictResponse,
+  ApiExcludeEndpoint,
   ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
@@ -101,6 +102,8 @@ export class PaymentsController {
   @Post(':paymentId/test-sign-and-submit')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER)
+  // Hidden from Swagger unless the test-signing flag is enabled.
+  @ApiExcludeEndpoint(process.env.ALLOW_TEST_SIGNING !== 'true')
   @ApiOperation({
     summary: 'TEST ONLY — signs with a provided secret and submits (shipper only)',
     description:
