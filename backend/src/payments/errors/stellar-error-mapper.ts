@@ -10,6 +10,7 @@ import {
   EscrowContractRejectedError,
   EscrowSimulationFailedError,
   EscrowSubmissionFailedError,
+  EscrowSubmissionTimeoutError,
   PaymentFlowError,
 } from './payment-flow.errors';
 
@@ -54,10 +55,12 @@ export function mapStellarFundingError(error: unknown): PaymentFlowError {
   if (error instanceof SimulationError) {
     return new EscrowSimulationFailedError({ rawError: error.rawError });
   }
-  if (error instanceof SubmissionError || error instanceof ChainTimeoutError) {
+  if (error instanceof ChainTimeoutError) {
+    return new EscrowSubmissionTimeoutError({ message: error.message });
+  }
+  if (error instanceof SubmissionError) {
     return new EscrowSubmissionFailedError({
-      rawResponse:
-        error instanceof SubmissionError ? error.rawResponse : undefined,
+      rawResponse: error.rawResponse,
       message: error.message,
     });
   }

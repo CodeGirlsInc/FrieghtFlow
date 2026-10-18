@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -86,15 +87,37 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
+  /**
+   * Stores a new refresh-token hash. When `expectedPreviousHash` is given the
+   * write is a compare-and-set in the database, so two backend instances
+   * racing to rotate the same token cannot both succeed: the loser gets an
+   * UnauthorizedException instead of silently overwriting the winner.
+   */
   async updateRefreshToken(
     id: string,
     refreshToken: string | null,
+    expectedPreviousHash?: string,
   ): Promise<void> {
     let hashedToken: string | null = null;
     if (refreshToken) {
       hashedToken = await bcrypt.hash(refreshToken, 10);
     }
-    await this.usersRepository.update(id, { refreshToken: hashedToken });
+    if (expectedPreviousHash === undefined) {
+      await this.usersRepository.update(id, { refreshToken: hashedToken });
+      return;
+    }
+    const result = await this.usersRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ refreshToken: hashedToken })
+      .where('id = :id AND refresh_token = :expectedPreviousHash', {
+        id,
+        expectedPreviousHash,
+      })
+      .execute();
+    if (!result.affected) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   async updateVerificationToken(

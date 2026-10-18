@@ -1,4 +1,8 @@
 import {
+  cursorPaginate,
+  CursorPageOptions,
+} from '../common/cursor-pagination.util';
+import {
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -32,6 +36,11 @@ export class AddressesService {
       where: { userId },
       order: { isDefault: 'DESC', createdAt: 'DESC' },
     });
+  }
+
+  /** Cursor-paginated listing (newest first); `nextCursor` is null on the last page. */
+  async findPage(userId: string, options: CursorPageOptions) {
+    return cursorPaginate(this.addressRepo, { userId }, options);
   }
 
   async findOne(id: string, userId: string): Promise<Address> {

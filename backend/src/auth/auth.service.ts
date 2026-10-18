@@ -118,7 +118,12 @@ export class AuthService {
       }
 
       const tokens = await this.generateTokens(user);
-      await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
+      // Compare-and-set: only one instance can rotate this token hash.
+      await this.usersService.updateRefreshToken(
+        user.id,
+        tokens.refreshToken,
+        user.refreshToken,
+      );
       return this.buildAuthResponse(user, tokens);
     })();
 
