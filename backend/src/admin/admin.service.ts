@@ -366,6 +366,22 @@ export class AdminService {
       }
     }
 
+    // Funding can land on chain after a cancellation request has already
+    // observed an in-flight payment. Reconciliation is the recovery path for
+    // that orphan: refund it and bring the local row back into agreement.
+    if (shipment.status === ShipmentStatus.CANCELLED && onChain?.status === 'Funded') {
+      const result = await this.stellarContractService.refundPayment(
+        BigInt(payment.onChainShipmentId),
+      );
+      payment.status = PaymentStatus.REFUNDED;
+      payment.settledAt = new Date();
+      payment.stellarTxHash = result.txHash;
+      await this.paymentRepo.save(payment);
+      onChain = await this.stellarContractService.getEscrow(
+        BigInt(payment.onChainShipmentId),
+      );
+    }
+
     const expectedStatus = PAYMENT_TO_ESCROW_STATUS[payment.status];
     const mismatches: string[] = [];
 

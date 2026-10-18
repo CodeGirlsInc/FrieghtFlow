@@ -300,6 +300,34 @@ describe('PaymentsService', () => {
   });
 
   describe('submitFunding', () => {
+    it('blocks cancellation while the claimed funding transaction is still pending', async () => {
+      shipmentRepo.findOne.mockResolvedValue(makeShipment());
+      const payment = makePayment();
+      paymentRepo.findOne.mockResolvedValue(payment);
+      paymentRepo.update.mockImplementation(async (criteria, values) => {
+        if (typeof criteria === 'object' && values?.status) {
+          payment.status = values.status;
+          return { affected: 1 };
+        }
+        return { affected: 1 };
+      });
+      let finishChain!: (value: { txHash: string; status: string }) => void;
+      stellarContractService.submitSignedTransaction.mockReturnValue(
+        new Promise((resolve) => { finishChain = resolve; }),
+      );
+
+      const submission = service.submitFunding(
+        'shipment-1', 'payment-1', 'shipper-1', 'signed-xdr',
+      );
+      // The funding call is now outstanding and the atomic claim has persisted.
+      await expect(service.assertCanCancelShipment('shipment-1')).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({ code: 'PAYMENT_FUNDING_IN_PROGRESS' }),
+      });
+      finishChain({ txHash: 'funded-tx', status: 'SUCCESS' });
+      await expect(submission).resolves.toMatchObject({ status: PaymentStatus.FUNDED });
+    });
+
     it('claims the payment, submits, and marks it FUNDED', async () => {
       shipmentRepo.findOne.mockResolvedValue(makeShipment());
       paymentRepo.findOne.mockResolvedValue(makePayment());
@@ -687,6 +715,46 @@ describe('PaymentsService', () => {
         service.refundEscrowForShipment('shipment-1', 10),
       ).rejects.toThrow(ChainTimeoutError);
       expect(paymentRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('settlement and cancellation guards', () => {
+    it('rejects release when no payment row exists', async () => {
+      paymentRepo.findOne.mockResolvedValue(null);
+      await expect(service.releaseEscrowForShipment('shipment-1')).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({ code: 'ESCROW_NOT_FUNDED' }),
+      });
+      expect(stellarContractService.releasePayment).not.toHaveBeenCalled();
+    });
+
+    it('rejects release while payment is pending', async () => {
+      paymentRepo.findOne.mockResolvedValue(makePayment({ status: PaymentStatus.PENDING }));
+      await expect(service.releaseEscrowForShipment('shipment-1')).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({ code: 'ESCROW_NOT_FUNDED' }),
+      });
+      expect(stellarContractService.releasePayment).not.toHaveBeenCalled();
+    });
+
+    it('releases a funded escrow', async () => {
+      paymentRepo.findOne.mockResolvedValue(makePayment({ status: PaymentStatus.FUNDED }));
+      await service.releaseEscrowForShipment('shipment-1');
+      expect(stellarContractService.releasePayment).toHaveBeenCalledWith(1n);
+    });
+
+    it('returns 409 when cancellation observes a funding claim', async () => {
+      paymentRepo.findOne.mockResolvedValue(makePayment({ status: PaymentStatus.FUNDING }));
+      await expect(service.assertCanCancelShipment('shipment-1')).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({ code: 'PAYMENT_FUNDING_IN_PROGRESS' }),
+      });
+    });
+
+    it('requires a funded escrow for pickup when Soroban is enabled', async () => {
+      config.get.mockImplementation((key: string) => key === 'SOROBAN_ENABLED' ? 'true' : undefined);
+      paymentRepo.findOne.mockResolvedValue(makePayment({ status: PaymentStatus.PENDING }));
+      await expect(service.assertFundedForPickup('shipment-1')).rejects.toMatchObject({ status: 409 });
     });
   });
 });

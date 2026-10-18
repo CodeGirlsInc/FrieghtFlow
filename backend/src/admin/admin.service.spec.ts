@@ -26,7 +26,7 @@ describe('AdminService', () => {
     createQueryBuilder: jest.Mock;
     count: jest.Mock;
   };
-  let paymentRepo: { findOne: jest.Mock; update: jest.Mock };
+  let paymentRepo: { findOne: jest.Mock; update: jest.Mock; save: jest.Mock };
   let stellarContractService: {
     getEscrow: jest.Mock;
     releasePayment: jest.Mock;
@@ -49,6 +49,7 @@ describe('AdminService', () => {
     paymentRepo = {
       findOne: jest.fn(),
       update: jest.fn(),
+      save: jest.fn((payment) => Promise.resolve(payment)),
     };
     stellarContractService = {
       getEscrow: jest.fn(),
@@ -156,6 +157,41 @@ describe('AdminService', () => {
   });
 
   describe('reconcileEscrow', () => {
+    it('refunds an on-chain funded escrow when the shipment is cancelled', async () => {
+      shipmentRepo.findOne.mockResolvedValue({
+        id: 'shipment-1', status: ShipmentStatus.CANCELLED,
+      } as Shipment);
+      const payment = {
+        id: 'payment-1', shipmentId: 'shipment-1', onChainShipmentId: 1,
+        status: PaymentStatus.FUNDING, stellarTxHash: null, amount: 100,
+        assetCode: 'USDC',
+      } as Payment;
+      paymentRepo.findOne.mockResolvedValue(payment);
+      stellarContractService.getEscrow
+        .mockResolvedValueOnce({
+          shipmentId: 1n, shipper: 'GSHIPPER', carrier: 'GCARRIER',
+          amount: 1_000_000_000n, status: 'Funded', fundedAt: 1_700_000_000n,
+          settledAt: 0n,
+        } as EscrowRecord)
+        .mockResolvedValueOnce({
+          shipmentId: 1n, shipper: 'GSHIPPER', carrier: 'GCARRIER',
+          amount: 1_000_000_000n, status: 'Refunded', fundedAt: 1_700_000_000n,
+          settledAt: 1_700_000_100n,
+        } as EscrowRecord);
+      stellarContractService.refundPayment.mockResolvedValue({
+        txHash: 'recovery-refund', status: 'SUCCESS',
+      });
+
+      const result = await service.reconcileEscrow('shipment-1');
+
+      expect(stellarContractService.refundPayment).toHaveBeenCalledWith(1n);
+      expect(payment.status).toBe(PaymentStatus.REFUNDED);
+      expect(payment.stellarTxHash).toBe('recovery-refund');
+      expect(paymentRepo.save).toHaveBeenCalledWith(payment);
+      expect(result.match).toBe(true);
+      expect(result.onChain?.status).toBe('Refunded');
+    });
+
     it('returns a matching result when off-chain and on-chain agree', async () => {
       shipmentRepo.findOne.mockResolvedValue({ id: 'shipment-1' } as Shipment);
       paymentRepo.findOne.mockResolvedValue({

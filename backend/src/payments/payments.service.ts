@@ -161,7 +161,16 @@ export class PaymentsService {
   async releaseEscrowForShipment(shipmentId: string): Promise<void> {
     const payment = await this.findByShipmentId(shipmentId);
     if (!payment) {
-      return;
+      throw new ConflictException({
+        code: 'ESCROW_NOT_FUNDED',
+        message: 'Shipment has no payment escrow to release',
+      });
+    }
+    if (payment.status !== PaymentStatus.FUNDED) {
+      throw new ConflictException({
+        code: 'ESCROW_NOT_FUNDED',
+        message: `Shipment escrow cannot be released while payment is ${payment.status}`,
+      });
     }
 
     const result = await this.stellarContractService.releasePayment(
@@ -172,6 +181,33 @@ export class PaymentsService {
       settledAt: new Date(),
       stellarTxHash: result.txHash,
     });
+  }
+
+  async assertCanCancelShipment(shipmentId: string): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (payment?.status === PaymentStatus.FUNDING) {
+      throw new ConflictException({
+        code: 'PAYMENT_FUNDING_IN_PROGRESS',
+        message: 'Cancellation is unavailable while escrow funding is in progress',
+      });
+    }
+  }
+
+  async assertFundedForPickup(shipmentId: string): Promise<void> {
+    if (String(this.config.get('SOROBAN_ENABLED')) !== 'true') return;
+    await this.assertFunded(shipmentId);
+  }
+
+  private async assertFunded(shipmentId: string): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (payment?.status !== PaymentStatus.FUNDED) {
+      throw new ConflictException({
+        code: 'ESCROW_NOT_FUNDED',
+        message: payment
+          ? `Shipment escrow is not releasable while payment is ${payment.status}`
+          : 'Shipment has no funded payment escrow',
+      });
+    }
   }
 
   /**
@@ -408,6 +444,9 @@ export class PaymentsService {
     const shipment = await this.getShipment(shipmentId);
     if (shipment.shipperId !== requesterId) {
       throw new ForbiddenPaymentActionError();
+    }
+    if (shipment.status !== ShipmentStatus.ACCEPTED) {
+      throw new ShipmentNotAcceptedError();
     }
 
     const payment = await this.paymentRepo.findOne({

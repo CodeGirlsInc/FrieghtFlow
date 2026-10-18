@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -114,6 +115,8 @@ describe('ShipmentsService', () => {
   let paymentsService: {
     releaseEscrowForShipment: jest.Mock;
     refundEscrowForShipment: jest.Mock;
+    assertCanCancelShipment: jest.Mock;
+    assertFundedForPickup: jest.Mock;
     raiseEscrowDisputeForShipment: jest.Mock;
     resolveEscrowDisputeForShipment: jest.Mock;
   };
@@ -125,6 +128,8 @@ describe('ShipmentsService', () => {
     paymentsService = {
       releaseEscrowForShipment: jest.fn(),
       refundEscrowForShipment: jest.fn(),
+      assertCanCancelShipment: jest.fn(),
+      assertFundedForPickup: jest.fn(),
       raiseEscrowDisputeForShipment: jest.fn(),
       resolveEscrowDisputeForShipment: jest.fn(),
     };
@@ -545,6 +550,21 @@ describe('ShipmentsService', () => {
   });
 
   describe('cancel()', () => {
+    it('rejects cancellation if funding is in flight before saving the shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      shipmentRepo.findOne.mockResolvedValue(makeShipment({
+        status: ShipmentStatus.ACCEPTED,
+        shipperId: shipper.id,
+      }));
+      paymentsService.assertCanCancelShipment.mockRejectedValue(
+        new ConflictException({ code: 'PAYMENT_FUNDING_IN_PROGRESS' }),
+      );
+
+      await expect(service.cancel('shipment-uuid-1', shipper)).rejects.toThrow();
+      expect(shipmentRepo.save).not.toHaveBeenCalled();
+      expect(paymentsService.refundEscrowForShipment).not.toHaveBeenCalled();
+    });
+
     function primeCancelFlow(shipment: Shipment, saved: Shipment): void {
       shipmentRepo.findOne
         .mockResolvedValueOnce(shipment)
