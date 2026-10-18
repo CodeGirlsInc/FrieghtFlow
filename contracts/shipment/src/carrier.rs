@@ -17,6 +17,14 @@ pub fn accept(env: &Env, carrier: Address, shipment_id: u64) -> Result<(), Shipm
         return Err(ShipmentError::InvalidStatus);
     }
 
+    // A shipper cannot accept their own posting. Without this check one address
+    // can carry a shipment from `Created` all the way to delivery by itself,
+    // which is a cheap way to manufacture completed jobs and to inflate the
+    // reputation ratings derived from them (#1676).
+    if shipment.shipper == carrier {
+        return Err(ShipmentError::SelfDealing);
+    }
+
     shipment.carrier = Some(carrier.clone());
     shipment.status = ShipmentStatus::Accepted;
     shipment.updated_at = env.ledger().timestamp();

@@ -13,4 +13,13 @@ pub enum ShipmentError {
     NotCarrier = 7,
     NotShipper = 8,
     Paused = 9,
+    /// The caller would act as both parties to the shipment — a shipper
+    /// accepting their own posting, or an escrow funded with the same address
+    /// as shipper and carrier.
+    ///
+    /// Self-dealing here is not a harmless no-op: it lets one address carry a
+    /// shipment from `Created` through to delivery on its own, which
+    /// manufactures completed jobs out of nothing and pollutes the reputation
+    /// signals derived from them. Rejected up front instead.
+    SelfDealing = 10,
 }

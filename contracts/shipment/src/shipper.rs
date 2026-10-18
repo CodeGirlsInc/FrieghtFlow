@@ -152,9 +152,22 @@ pub fn cancel(env: &Env, shipper: Address, shipment_id: u64) -> Result<(), Shipm
         return Err(ShipmentError::InvalidStatus);
     }
 
+    // Cancelling an `Accepted` shipment has to unwind the carrier assignment,
+    // not just flip the status (#1677). Leaving it in place leaves two live
+    // defects: the id stays in `CarrierList(carrier)` so
+    // `get_shipments_by_carrier` keeps handing back a cancelled job, and
+    // `Shipment::is_party` still treats the ex-carrier as a party to it — which
+    // `dispute::open_dispute` authorises on, so the carrier of a cancelled
+    // shipment could still register dispute evidence against it.
+    let previous_carrier = shipment.carrier.take();
+
     shipment.status = ShipmentStatus::Cancelled;
     shipment.updated_at = env.ledger().timestamp();
     storage::save(env, &shipment);
+
+    if let Some(carrier) = previous_carrier {
+        storage::remove_from_list(env, DataKey::CarrierList(carrier), shipment_id);
+    }
 
     events::cancelled(env, &shipment);
     Ok(())
