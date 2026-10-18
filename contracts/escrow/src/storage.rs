@@ -74,30 +74,34 @@ pub fn store_settlement_fee(env: &Env, shipment_id: u64, fee: i128) {
     env.storage().persistent().extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
 }
 
-/// Settlement is reserved for the configured shipment contract, falling back
-/// to the platform admin for the custody model the backend still uses.
+/// Settlement requires the platform admin's authorisation.
 ///
-/// If a shipment contract address has been configured via
-/// `set_shipment_contract`, the *caller of the enclosing entrypoint* must be
-/// that address — checked with `require_auth()` on it. Otherwise the platform
-/// admin is required to authorise the call instead.
+/// `DataKey::ShipmentContract` records the contract that may settle an escrow
+/// atomically, but it deliberately does **not** gate settlement here. This
+/// function used to return as soon as a shipment contract was configured and
+/// never evaluated `admin.require_auth()`, which silently revoked the admin's
+/// settlement authority the moment `set_shipment_contract` was called — while
+/// `set_shipment_contract`'s own doc comment claimed the admin "remains
+/// supported for custody-model compatibility". The backend settles with the
+/// admin key, so enabling the link broke every backend settlement path, and an
+/// admin could no longer rescue funds if the shipment contract misbehaved.
 ///
-/// Previously this compared `DataKey::ShipmentContract` against
-/// `env.current_contract_address()` (the escrow contract's own address), a
-/// comparison that can never be true in practice, effectively making
-/// `set_shipment_contract` a no-op and always falling through to the admin
-/// check. The fix compares against the *configured* shipment-contract address
-/// and calls `require_auth()` on whichever authority is active.
+/// # Why this is admin-only rather than "admin OR shipment contract"
+///
+/// The obvious policy is "either authority is enough", and it cannot be
+/// expressed with the current SDK. `Address::require_auth` *accumulates*
+/// requirements, so calling it on both the admin and the shipment contract
+/// demands both signatures and breaks the backend path just as badly. Choosing
+/// between them needs to know who is actually invoking, and `Env::invoker` was
+/// removed in soroban-sdk 22. Requiring the admin is therefore the only
+/// encoding that fails safe: it restores the path that works today and never
+/// silently removes an authority that something depends on.
+///
+/// Supporting atomic cross-contract settlement needs either separate
+/// admin- and contract-authorised entrypoints, or invoker detection once the SDK
+/// exposes it again. That is a policy decision for the maintainers, not something
+/// to smuggle in as a storage-layer change.
 pub fn require_settlement_authority(env: &Env) -> Result<(), EscrowError> {
-    let admin = admin(env)?;
-    let shipment_contract: Option<Address> =
-        env.storage().instance().get(&DataKey::ShipmentContract);
-
-    if let Some(sc) = shipment_contract {
-        sc.require_auth();
-        return Ok(());
-    }
-
-    admin.require_auth();
+    admin(env)?.require_auth();
     Ok(())
 }

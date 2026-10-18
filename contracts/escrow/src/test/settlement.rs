@@ -170,10 +170,14 @@ fn test_refund_with_fee_on_released_escrow_fails() {
 }
 
 /// `refund_with_fee` must honour the same settlement authority as every
-/// other settling entrypoint: with a shipment contract configured, that
-/// contract authorises the call rather than the admin.
+/// other settling entrypoint: a partial refund settles on the same authority.
+///
+/// Note this case cannot distinguish which authority was required — `setup` calls
+/// `env.mock_all_auths()`, so every `require_auth` passes regardless. Before
+/// #1673 this test was named and commented as if it proved the shipment contract
+/// took over from the admin; it never did. It now covers the fee split only.
 #[test]
-fn test_refund_with_fee_uses_shipment_contract_authority_when_set() {
+fn test_refund_with_fee_settles_when_shipment_contract_is_configured() {
     let ctx = setup(AMOUNT);
     let shipment_contract = Address::generate(&ctx.env);
     ctx.client.set_shipment_contract(&shipment_contract);
@@ -254,11 +258,18 @@ fn test_unauthorized_dispute_fails() {
 
 // --- Issue #1445: require_settlement_authority ---
 
-/// When a shipment contract is configured, release_payment / refund_payment /
-/// resolve_dispute must be authorised by *that* contract address — not by the
-/// admin, and not without any auth at all.
+/// Configuring a shipment contract must not stop the platform admin settling:
+/// `set_shipment_contract` records configuration and does not change who may
+/// settle (#1673). Before that fix this entrypoint skipped the admin check
+/// whenever a contract was configured, so a single `set_shipment_contract` call
+/// silently broke every backend settlement path.
+///
+/// This still cannot prove *which* address was required, because `setup` calls
+/// `env.mock_all_auths()` — that blanket mock is why the original bug survived.
+/// A test that genuinely distinguishes the two needs `env.mock_auths` scoped to
+/// the admin alone, which is left as a follow-up rather than smuggled in here.
 #[test]
-fn test_settlement_authority_uses_shipment_contract_when_set() {
+fn test_settlement_still_works_after_shipment_contract_is_configured() {
     let ctx = setup(AMOUNT);
     let shipment_contract = Address::generate(&ctx.env);
 
@@ -268,9 +279,6 @@ fn test_settlement_authority_uses_shipment_contract_when_set() {
 
     ctx.fund();
 
-    // release_payment now requires auth from shipment_contract, not admin.
-    // With mock_all_auths the call still passes — what matters is it does not
-    // panic, and the escrow transitions to Released.
     ctx.client.release_payment(&SHIPMENT_ID);
     assert_eq!(
         ctx.client.get_escrow(&SHIPMENT_ID).status,
@@ -278,13 +286,12 @@ fn test_settlement_authority_uses_shipment_contract_when_set() {
     );
 }
 
-/// After a shipment contract is configured, the admin alone is *not* sufficient
-/// to settle — the shipment-contract branch is taken instead.
-/// (mock_all_auths covers both; this test verifies the right branch runs by
-/// checking the post-state when the contract is set vs. not set.)
+/// With no shipment contract configured, settlement requires the admin — the
+/// custody model the backend uses. Since #1673 this is also the only authority
+/// checked when one *is* configured.
 #[test]
 fn test_settlement_authority_falls_back_to_admin_when_no_shipment_contract() {
-    // No set_shipment_contract call — admin fallback is used.
+    // No set_shipment_contract call — admin is the settlement authority.
     let ctx = setup(AMOUNT);
     ctx.fund();
 

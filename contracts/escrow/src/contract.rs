@@ -67,8 +67,23 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Configure the shipment contract allowed to settle escrow atomically.
-    /// The platform admin remains supported for custody-model compatibility.
+    /// Admin-only: configure the shipment contract allowed to settle escrow
+    /// atomically.
+    ///
+    /// This records configuration only. It does **not** change who may settle:
+    /// [`storage::require_settlement_authority`] requires the platform admin
+    /// whether or not an address is set here, so calling this can no longer
+    /// revoke the admin's settlement authority (issue #1673).
+    ///
+    /// The previous comment claimed "the platform admin remains supported for
+    /// custody-model compatibility" while the code did the opposite — the admin
+    /// check was skipped whenever this value was set, so a single call to this
+    /// entrypoint silently broke every backend settlement path.
+    ///
+    /// Settling from the shipment contract itself needs a separate admin- and
+    /// contract-authorised entrypoint, or invoker detection once soroban-sdk
+    /// exposes it again; see the note on
+    /// [`storage::require_settlement_authority`].
     pub fn set_shipment_contract(env: Env, shipment_contract: Address) -> Result<(), EscrowError> {
         storage::admin(&env)?.require_auth();
         storage::require_not_paused(&env)?;
