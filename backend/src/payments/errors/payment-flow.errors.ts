@@ -15,6 +15,7 @@ export type PaymentFlowErrorCode =
   | 'INVALID_CANCELLATION_FEE'
   | 'ESCROW_SIMULATION_FAILED'
   | 'ESCROW_SUBMISSION_FAILED'
+  | 'ESCROW_SUBMISSION_TIMEOUT'
   | 'ESCROW_CONTRACT_REJECTED';
 
 export abstract class PaymentFlowError extends HttpException {
@@ -131,6 +132,22 @@ export class EscrowSubmissionFailedError extends PaymentFlowError {
       'ESCROW_SUBMISSION_FAILED',
       'The funding transaction was rejected by the network',
       HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+    );
+  }
+}
+
+/**
+ * The network did not confirm in time, so the outcome is unknown: the
+ * transaction may still land. Unlike ESCROW_SUBMISSION_FAILED this is NOT
+ * safe to retry blindly - check the payment status first.
+ */
+export class EscrowSubmissionTimeoutError extends PaymentFlowError {
+  constructor(details?: unknown) {
+    super(
+      'ESCROW_SUBMISSION_TIMEOUT',
+      'The funding transaction was not confirmed in time; check the payment status before retrying',
+      HttpStatus.GATEWAY_TIMEOUT,
       details,
     );
   }

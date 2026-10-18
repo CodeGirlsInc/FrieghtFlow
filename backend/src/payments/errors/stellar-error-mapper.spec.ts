@@ -10,6 +10,7 @@ import {
   EscrowContractRejectedError,
   EscrowSimulationFailedError,
   EscrowSubmissionFailedError,
+  EscrowSubmissionTimeoutError,
   PaymentFlowError,
 } from './payment-flow.errors';
 import { mapStellarFundingError } from './stellar-error-mapper';
@@ -121,14 +122,14 @@ describe('mapStellarFundingError', () => {
     });
   });
 
-  describe('ChainTimeoutError → EscrowSubmissionFailedError', () => {
-    it('maps a chain timeout to ESCROW_SUBMISSION_FAILED', () => {
+  describe('ChainTimeoutError → EscrowSubmissionTimeoutError', () => {
+    it('maps a chain timeout to ESCROW_SUBMISSION_TIMEOUT', () => {
       const input = new ChainTimeoutError('network never confirmed');
 
       const result = mapStellarFundingError(input);
 
-      expect(result).toBeInstanceOf(EscrowSubmissionFailedError);
-      expect(result.code).toBe('ESCROW_SUBMISSION_FAILED');
+      expect(result).toBeInstanceOf(EscrowSubmissionTimeoutError);
+      expect(result.code).toBe('ESCROW_SUBMISSION_TIMEOUT');
     });
   });
 
