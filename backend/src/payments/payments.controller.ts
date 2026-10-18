@@ -39,7 +39,6 @@ export class PaymentsController {
       'Returns the escrow payment record if one exists for this shipment. Accessible to the shipper, carrier, and admin.',
   })
   @ApiOkResponse({ description: 'Payment record found', type: Payment })
-  @ApiOperation({ summary: 'Get escrow status for a shipment' })
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   getStatus(
