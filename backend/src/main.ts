@@ -3,6 +3,8 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { securityHeaders } from './common/security-headers.middleware';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -11,6 +13,12 @@ async function bootstrap() {
     // Start NestJS application
     const app = await NestFactory.create(AppModule);
     const configService = app.get(ConfigService);
+
+    // SECURITY HEADERS
+    app.use(securityHeaders);
+
+    // CONSISTENT ERROR RESPONSES
+    app.useGlobalFilters(new AllExceptionsFilter());
 
     // GLOBAL PREFIX (optional, keeps API versioned/clean)
     app.setGlobalPrefix('api/v1');
