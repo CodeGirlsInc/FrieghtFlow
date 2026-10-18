@@ -50,7 +50,12 @@ export class User {
   })
   refreshToken: string | null;
 
-  @Column({ name: 'verification_token', nullable: true, type: 'varchar' })
+  @Column({
+    name: 'verification_token',
+    nullable: true,
+    type: 'varchar',
+    select: false,
+  })
   verificationToken: string | null;
 
   @Column({

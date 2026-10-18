@@ -486,6 +486,31 @@ export class ShipmentsService {
     };
   }
 
+  /**
+   * Public tracking view: status and route only. The full shipment (price,
+   * cargo description, notes, party records) is never returned here.
+   */
+  async findByTracking(trackingNumber: string) {
+    const shipment = await this.shipmentRepo.findOne({
+      where: { trackingNumber },
+    });
+    if (!shipment) {
+      throw new NotFoundException(
+        `No shipment found for tracking number ${trackingNumber}`,
+      );
+    }
+    return {
+      trackingNumber: shipment.trackingNumber,
+      status: shipment.status,
+      origin: shipment.origin,
+      destination: shipment.destination,
+      pickupDate: shipment.pickupDate,
+      estimatedDeliveryDate: shipment.estimatedDeliveryDate,
+      actualDeliveryDate: shipment.actualDeliveryDate,
+      updatedAt: shipment.updatedAt,
+    };
+  }
+
   async update(
     id: string,
     shipperId: string,
