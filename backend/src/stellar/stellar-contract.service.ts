@@ -22,6 +22,9 @@ import { EscrowErrorCode } from './errors/escrow-error-code.enum';
 import { ContractCallResult, EscrowRecord } from './escrow-record.interface';
 
 const TX_TIMEOUT_SECONDS = 30;
+const DEFAULT_CONFIRMATION_TIMEOUT_MS = 60_000;
+const CONFIRMATION_POLL_INTERVAL_MS = 1_000;
+const MAX_SUBMISSION_BACKOFF_MS = 5_000;
 
 /**
  * Soroban error strings for contract-level rejections look like
@@ -49,6 +52,7 @@ export class StellarContractService implements OnModuleInit {
   private adminKeypair: Keypair;
   private networkPassphrase: string;
   private enabled = false;
+  private confirmationTimeoutMs = DEFAULT_CONFIRMATION_TIMEOUT_MS;
 
   constructor(private readonly config: ConfigService) {}
 
@@ -59,6 +63,11 @@ export class StellarContractService implements OnModuleInit {
     // Joi may hand this back as a coerced boolean or as the raw string,
     // depending on config-loading path — normalize defensively.
     this.enabled = String(this.config.get('SOROBAN_ENABLED')) === 'true';
+    this.confirmationTimeoutMs =
+      Number(
+        this.config.get('SOROBAN_CONFIRMATION_TIMEOUT_MS') ??
+          DEFAULT_CONFIRMATION_TIMEOUT_MS,
+      ) || DEFAULT_CONFIRMATION_TIMEOUT_MS;
     if (!this.enabled) {
       this.logger.warn(
         'SOROBAN_ENABLED is not "true" — Stellar contract integration is disabled; no chain calls will be made.',
@@ -271,6 +280,12 @@ export class StellarContractService implements OnModuleInit {
     return StellarContractService.decodeEscrowRecord(retval);
   }
 
+  async getTransactionStatus(txHash: string): Promise<string> {
+    this.assertEnabled();
+    const result = await this.server.getTransaction(txHash);
+    return result.status;
+  }
+
   async getBalance(): Promise<bigint> {
     const retval = await this.simulateRead('get_balance');
     return BigInt(scValToNative(retval) as bigint | number);
@@ -369,6 +384,7 @@ export class StellarContractService implements OnModuleInit {
     prepared: Transaction,
     method: string,
   ): Promise<ContractCallResult> {
+    const deadline = Date.now() + this.confirmationTimeoutMs;
     let sendResult;
     try {
       sendResult = await this.server.sendTransaction(prepared);
@@ -379,44 +395,57 @@ export class StellarContractService implements OnModuleInit {
       );
     }
 
+    let backoffMs = CONFIRMATION_POLL_INTERVAL_MS;
+    while (sendResult.status === 'TRY_AGAIN_LATER') {
+      if (Date.now() >= deadline) {
+        throw new ChainTimeoutError(
+          `Escrow contract call "${method}" was not accepted before the submission window expired`,
+          sendResult.hash,
+        );
+      }
+      await this.delay(Math.min(backoffMs, deadline - Date.now()));
+      backoffMs = Math.min(backoffMs * 2, MAX_SUBMISSION_BACKOFF_MS);
+      try {
+        sendResult = await this.server.sendTransaction(prepared);
+      } catch (error) {
+        throw new SubmissionError(
+          `Retrying submission of "${method}" failed`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+
     if (sendResult.status === 'ERROR') {
       throw new SubmissionError(
         `Escrow contract call "${method}" was rejected on submission: ${sendResult.status}`,
         sendResult,
+        true,
+        sendResult.hash,
       );
     }
 
-    if (
-      sendResult.status === 'TRY_AGAIN_LATER' ||
-      sendResult.status === 'DUPLICATE'
-    ) {
-      return this.pollForConfirmation(sendResult.hash, method);
-    }
-
-    return { txHash: sendResult.hash, status: sendResult.status };
+    return this.pollForConfirmation(sendResult.hash, method, deadline);
   }
 
   private async pollForConfirmation(
     txHash: string,
     method: string,
+    deadline: number,
   ): Promise<ContractCallResult> {
-    const deadline = Date.now() + 2_000;
     while (Date.now() < deadline) {
       try {
-        const tx = await (
-          this.server as unknown as {
-            getTransaction: (hash: string) => Promise<{ status: string }>;
-          }
-        ).getTransaction(txHash);
+        const status = await this.getTransactionStatus(txHash);
 
-        if (tx.status === 'SUCCESS') {
+        if (status === 'SUCCESS') {
           return { txHash, status: 'SUCCESS' };
         }
 
-        if (tx.status === 'FAILED') {
+        if (status === 'FAILED') {
           throw new SubmissionError(
             `Escrow contract call "${method}" failed after submission`,
-            tx,
+            { txHash, status },
+            true,
+            txHash,
           );
         }
       } catch (error) {
@@ -425,11 +454,14 @@ export class StellarContractService implements OnModuleInit {
         }
       }
 
-      await this.delay(1_000);
+      await this.delay(
+        Math.min(CONFIRMATION_POLL_INTERVAL_MS, deadline - Date.now()),
+      );
     }
 
     throw new ChainTimeoutError(
       `Escrow contract call "${method}" did not confirm before the polling window expired`,
+      txHash,
     );
   }
 

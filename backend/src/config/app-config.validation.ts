@@ -41,6 +41,11 @@ export const appConfigValidationSchema = Joi.object({
   UPLOAD_DIR: Joi.string().default('./uploads'),
   WEBHOOK_MAX_PER_USER: Joi.number().integer().min(1).max(100).default(10),
   SOROBAN_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
+  SOROBAN_CONFIRMATION_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(5_000)
+    .max(120_000)
+    .default(60_000),
   SOROBAN_RPC_URL: Joi.string().when('SOROBAN_ENABLED', {
     is: true,
     then: Joi.required(),
