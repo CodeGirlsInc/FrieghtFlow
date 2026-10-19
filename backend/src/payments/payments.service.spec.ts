@@ -175,8 +175,10 @@ describe('PaymentsService', () => {
       ).rejects.toThrow(MissingWalletAddressError);
     });
 
-    it('creates the payment row and returns unsigned XDR on first funding attempt', async () => {
-      shipmentRepo.findOne.mockResolvedValue(makeShipment());
+    it('funds escrow at the accepted lower bid price', async () => {
+      shipmentRepo.findOne.mockResolvedValue(
+        makeShipment({ price: 80, listedPrice: 100 }),
+      );
       userRepo.findOne.mockImplementation(({ where: { id } }) =>
         Promise.resolve(
           id === 'shipper-1'
@@ -206,7 +208,7 @@ describe('PaymentsService', () => {
         shipperKeypair.publicKey(),
         'GCARRIER',
         1n,
-        1_000_000_000n, // 100 * 10^7
+        800_000_000n, // 80 * 10^7
       );
     });
 
