@@ -26,4 +26,11 @@ pub enum DocumentError {
     /// `reason` in `flag_document` is capped at 1024 bytes, matching
     /// `cargo_description` in the shipment contract.
     FieldTooLong = 11,
+    /// A string or byte field is shorter than its minimum allowed length.
+    ///
+    /// `ipfs_cid` in `register_document` must be at least
+    /// `MIN_IPFS_CID_LEN` (8) bytes: an empty CID would record an
+    /// off-chain pointer that does not exist, and no canonical CID is
+    /// shorter than the 8-byte `bafkqaaa` CIDv1 form.
+    FieldTooShort = 12,
 }

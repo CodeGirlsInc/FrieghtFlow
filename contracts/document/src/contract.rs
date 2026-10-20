@@ -88,6 +88,10 @@ impl DocumentContract {
     }
 
     /// Anchor a document to a shipment. See [`registry::register`].
+    ///
+    /// `ipfs_cid` must be between `registry::MIN_IPFS_CID_LEN` (8) and
+    /// `registry::MAX_IPFS_CID_LEN` (512) bytes, so an empty value can
+    /// never be stored as an off-chain pointer.
     pub fn register_document(
         env: Env,
         uploader: Address,
