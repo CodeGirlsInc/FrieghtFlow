@@ -11,6 +11,7 @@ import { Readable } from 'node:stream';
 import { ILike } from 'typeorm';
 import { ShipmentsService } from './shipments.service';
 import { Shipment } from './entities/shipment.entity';
+import { Bid, BidStatus } from '../bids/entities/bid.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
@@ -80,6 +81,7 @@ function mockRepo() {
     save: jest.fn(),
     createQueryBuilder: jest.fn(),
     manager: {
+      transaction: jest.fn(),
       connection: {
         createQueryRunner: jest.fn(),
       },
@@ -92,6 +94,7 @@ function mockRepo() {
     save: jest.Mock;
     createQueryBuilder: jest.Mock;
     manager: {
+      transaction: jest.Mock;
       connection: { createQueryRunner: jest.Mock };
       save: jest.Mock;
     };
@@ -123,6 +126,16 @@ describe('ShipmentsService', () => {
 
   beforeEach(async () => {
     shipmentRepo = mockRepo();
+    shipmentRepo.manager.transaction.mockImplementation(async (callback: any) =>
+      callback({
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
+        findOne: jest.fn().mockResolvedValue(makeShipment({
+          status: ShipmentStatus.ACCEPTED,
+          carrierId: 'carrier-uuid-1',
+        })),
+        save: jest.fn().mockResolvedValue({}),
+      }),
+    );
     historyRepo = mockRepo();
     eventEmitter = { emit: jest.fn() } as unknown as jest.Mocked<EventEmitter2>;
     paymentsService = {
@@ -367,33 +380,68 @@ describe('ShipmentsService', () => {
         id: 'carrier-uuid-1',
         role: UserRole.CARRIER,
       });
-      const accepted = makeShipment({
-        status: ShipmentStatus.ACCEPTED,
-        carrierId: carrier.id,
-      });
-
-      shipmentRepo.findOne
-        .mockResolvedValueOnce(shipment)
-        .mockResolvedValueOnce(accepted);
-      shipmentRepo.save.mockResolvedValue(accepted);
+      shipmentRepo.findOne.mockResolvedValue(shipment);
       historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
       historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
 
       await service.accept('shipment-uuid-1', carrier);
 
-      expect(shipmentRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: ShipmentStatus.ACCEPTED,
-          carrierId: carrier.id,
-        }),
-      );
+      expect(shipmentRepo.manager.transaction).toHaveBeenCalled();
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'shipment.accepted',
         expect.anything(),
       );
     });
 
-    it('throws BadRequestException when shipment is not PENDING', async () => {
+    it('allows only one of two concurrent accepts and rejects pending bids', async () => {
+      const shipment = makeShipment();
+      const carrier = makeUser({ id: 'carrier-uuid-1', role: UserRole.CARRIER });
+      const otherCarrier = makeUser({ id: 'carrier-uuid-2', role: UserRole.CARRIER });
+      let status = ShipmentStatus.PENDING;
+      const update = jest.fn(async (entity: any, criteria: any, values: any) => {
+        if (entity === Shipment) {
+          if (status !== ShipmentStatus.PENDING) return { affected: 0 };
+          status = values.status;
+          return { affected: 1 };
+        }
+        return { affected: 1 };
+      });
+      const bidUpdate = jest.fn(async () => ({ affected: 1 }));
+      shipmentRepo.findOne.mockResolvedValue(shipment);
+      shipmentRepo.manager.transaction.mockImplementation(async (callback: any) =>
+        callback({
+          update: jest.fn(async (entity: any, criteria: any, values: any) => {
+            const result = await update(entity, criteria, values);
+            if (entity !== Shipment) bidUpdate(entity, criteria, values);
+            return result;
+          }),
+          findOne: jest.fn().mockResolvedValue(makeShipment({
+            status: ShipmentStatus.ACCEPTED,
+            carrierId: carrier.id,
+          })),
+          save: jest.fn().mockResolvedValue({}),
+        }),
+      );
+
+      const results = await Promise.allSettled([
+        service.accept(shipment.id, carrier),
+        service.accept(shipment.id, otherCarrier),
+      ]);
+
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+      expect(rejected.reason).toBeInstanceOf(ConflictException);
+      expect(bidUpdate).toHaveBeenCalledWith(
+        Bid,
+        expect.objectContaining({ status: BidStatus.PENDING }),
+        expect.objectContaining({ status: BidStatus.REJECTED }),
+      );
+      expect(bidUpdate).toHaveBeenCalledTimes(2);
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws ConflictException when shipment is not PENDING', async () => {
       const shipment = makeShipment({ status: ShipmentStatus.ACCEPTED });
       const carrier = makeUser({
         id: 'carrier-uuid-1',
@@ -402,7 +450,7 @@ describe('ShipmentsService', () => {
       shipmentRepo.findOne.mockResolvedValue(shipment);
 
       await expect(service.accept('shipment-uuid-1', carrier)).rejects.toThrow(
-        BadRequestException,
+        ConflictException,
       );
     });
   });
