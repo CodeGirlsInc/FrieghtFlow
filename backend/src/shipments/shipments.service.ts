@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Readable, Transform } from 'node:stream';
@@ -11,11 +12,13 @@ import {
   FindOptionsWhere,
   ILike,
   SelectQueryBuilder,
+  Not,
 } from 'typeorm';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { v4 as uuidv4 } from 'uuid';
 import { Shipment } from './entities/shipment.entity';
+import { Bid, BidStatus } from '../bids/entities/bid.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
@@ -560,22 +563,55 @@ export class ShipmentsService {
 
   async accept(shipmentId: string, carrier: User): Promise<Shipment> {
     const shipment = await this.findOne(shipmentId);
+    if (shipment.status !== ShipmentStatus.PENDING) {
+      throw new ConflictException('Shipment has already been accepted');
+    }
     this.assertTransitionAllowed(
       shipment.status,
       ShipmentStatus.ACCEPTED,
       carrier.role,
     );
 
-    shipment.carrierId = carrier.id;
-    shipment.carrier = carrier;
-    shipment.status = ShipmentStatus.ACCEPTED;
-    const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(
-      shipmentId,
-      ShipmentStatus.PENDING,
-      ShipmentStatus.ACCEPTED,
-      carrier.id,
-    );
+    const saved = await this.shipmentRepo.manager.transaction(async (manager) => {
+      const result = await manager.update(
+        Shipment,
+        { id: shipmentId, status: ShipmentStatus.PENDING },
+        { carrierId: carrier.id, status: ShipmentStatus.ACCEPTED },
+      );
+      if (result.affected !== 1) {
+        throw new ConflictException('Shipment has already been accepted');
+      }
+
+      await manager.update(
+        Bid,
+        { shipmentId, carrierId: carrier.id, status: BidStatus.PENDING },
+        { status: BidStatus.ACCEPTED },
+      );
+      await manager.update(
+        Bid,
+        {
+          shipmentId,
+          carrierId: Not(carrier.id),
+          status: BidStatus.PENDING,
+        },
+        { status: BidStatus.REJECTED },
+      );
+      const accepted = await manager.findOne(Shipment, {
+        where: { id: shipmentId },
+      });
+      if (!accepted) throw new NotFoundException('Shipment not found');
+      accepted.carrier = carrier;
+      await manager.save(
+        this.historyRepo.create({
+          shipmentId,
+          fromStatus: ShipmentStatus.PENDING,
+          toStatus: ShipmentStatus.ACCEPTED,
+          changedById: carrier.id,
+          reason: null,
+        }),
+      );
+      return accepted;
+    });
     this.eventEmitter.emit(
       SHIPMENT_ACCEPTED,
       new ShipmentEvent(saved, carrier.id),

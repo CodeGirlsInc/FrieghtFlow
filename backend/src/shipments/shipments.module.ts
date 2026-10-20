@@ -9,6 +9,7 @@ import { EtaService } from './eta.service';
 import { ShipmentTemplateService } from './shipment-template.service';
 import { Shipment } from './entities/shipment.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
+import { Bid } from '../bids/entities/bid.entity';
 import { ShipmentTemplate } from './entities/shipment-template.entity';
 import { PaymentsModule } from '../payments/payments.module';
 
@@ -17,6 +18,7 @@ import { PaymentsModule } from '../payments/payments.module';
     TypeOrmModule.forFeature([
       Shipment,
       ShipmentStatusHistory,
+      Bid,
       ShipmentTemplate,
     ]),
     PaymentsModule,
