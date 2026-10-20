@@ -16,6 +16,12 @@ import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { User } from '../users/entities/user.entity';
 import { StellarContractService } from '../stellar/stellar-contract.service';
 import {
+  ChainTimeoutError,
+  EscrowContractError,
+  SimulationError,
+  SubmissionError,
+} from '../stellar/errors/stellar-integration.errors';
+import {
   CancellationSettlementResult,
   ContractCallResult,
 } from '../stellar/escrow-record.interface';
@@ -476,7 +482,11 @@ export class PaymentsService {
   ): Promise<SubmitFundingResult> {
     const claim = await this.paymentRepo.update(
       { id: payment.id, status: PaymentStatus.PENDING },
-      { status: PaymentStatus.FUNDING },
+      {
+        status: PaymentStatus.FUNDING,
+        stellarTxHash: null,
+        failureReason: null,
+      },
     );
     if (claim.affected !== 1) {
       throw new PaymentAlreadyInFlightError(payment.id);
@@ -499,10 +509,31 @@ export class PaymentsService {
       };
     } catch (error) {
       const mapped = mapStellarFundingError(error);
-      await this.paymentRepo.update(payment.id, {
-        status: PaymentStatus.PENDING,
-        failureReason: mapped.code,
-      });
+      const definitelyFailed =
+        error instanceof SimulationError ||
+        error instanceof EscrowContractError ||
+        (error instanceof SubmissionError && error.definitiveFailure);
+
+      if (
+        error instanceof ChainTimeoutError ||
+        (error instanceof SubmissionError && !error.definitiveFailure) ||
+        !definitelyFailed
+      ) {
+        await this.paymentRepo.update(payment.id, {
+          status: PaymentStatus.FUNDING,
+          stellarTxHash:
+            error instanceof ChainTimeoutError ||
+            error instanceof SubmissionError
+              ? (error.txHash ?? null)
+              : null,
+          failureReason: mapped.code,
+        });
+      } else {
+        await this.paymentRepo.update(payment.id, {
+          status: PaymentStatus.PENDING,
+          failureReason: mapped.code,
+        });
+      }
       throw mapped;
     }
   }

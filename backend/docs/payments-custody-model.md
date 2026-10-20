@@ -57,7 +57,23 @@ The backend uses UUID primary keys for `Shipment` entities. The escrow contract 
 - The sequence is dense (no gaps) and per-environment to avoid cross-deployment collisions.
 - Unique constraints on both `shipmentId` and `onChainShipmentId` prevent duplicates.
 
+## Submission Confirmation and Recovery
+
+Soroban `sendTransaction` returning `PENDING` means the transaction was
+accepted for processing, not that it was applied. The backend polls the
+transaction hash until Soroban reports `SUCCESS` or `FAILED`, with a
+configurable `SOROBAN_CONFIRMATION_TIMEOUT_MS` (60 seconds by default).
+`TRY_AGAIN_LATER` is retried with back-off because that response means the
+transaction was not accepted.
+
+If confirmation times out, the payment remains `FUNDING` and retains the
+known transaction hash so it cannot be submitted again while its outcome is
+unknown. A scheduled reconciler checks stale `FUNDING` rows against the escrow
+record and transaction status: a funded escrow becomes `FUNDED`, and a
+definitively failed transaction returns the payment to `PENDING`. Unknown or
+not-yet-visible outcomes remain `FUNDING` for a later sweep.
+
 ## Scope
 
-- **In scope:** Payment entity, ID mapping, custody-model documentation.
-- **Out of scope:** Soroban RPC calls, wallet UI, fee splitting, multisig/timelock implementation.
+- **In scope:** Payment entity, ID mapping, Soroban transaction confirmation and recovery.
+- **Out of scope:** Wallet UI, fee splitting, multisig/timelock implementation.
