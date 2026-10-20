@@ -158,3 +158,41 @@ export async function apiClient<T = unknown>(
   const text = await response.text();
   return text ? (JSON.parse(text) as T) : ({} as T);
 }
+
+/**
+ * Pulls the human-readable message out of an error thrown by `apiClient`,
+ * which rejects with the parsed response body rather than an `Error`
+ * (see the throws above). The backend sends `message` as either a single
+ * string or — for class-validator failures — an array of strings, so both
+ * shapes are unwrapped to their first usable entry.
+ *
+ * Returns `null` when there is no server message to show, so callers can
+ * fall back to their own generic text:
+ *
+ *   toast.error(getErrorMessage(err) ?? 'Action failed. Please try again.');
+ *
+ * `Error` instances are deliberately not unwrapped: they come from transport
+ * and local failures (network errors, the XHR upload path), and their raw
+ * text — "TypeError: Failed to fetch" and friends — is noise for the user,
+ * not a server-supplied explanation.
+ */
+export function getErrorMessage(err: unknown): string | null {
+  if (typeof err === 'string') {
+    return err.trim() ? err : null;
+  }
+  if (err instanceof Error || err === null || typeof err !== 'object') {
+    return null;
+  }
+
+  const { message } = err as { message?: unknown };
+  if (typeof message === 'string') {
+    return message.trim() ? message : null;
+  }
+  if (Array.isArray(message)) {
+    const first = message.find(
+      (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
+    );
+    return first ?? null;
+  }
+  return null;
+}
