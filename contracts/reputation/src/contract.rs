@@ -110,6 +110,9 @@ impl ReputationContract {
     }
 
     /// Submit a 1-5 star rating. See [`rating::submit`].
+    ///
+    /// Both `rater` and `rated` must be registered users; an unregistered
+    /// caller receives [`ReputationError::UserNotFound`].
     pub fn submit_rating(
         env: Env,
         rater: Address,
