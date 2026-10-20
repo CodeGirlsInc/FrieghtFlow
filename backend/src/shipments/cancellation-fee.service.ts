@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { Shipment } from './entities/shipment.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
+import { UserRole } from '../common/enums/role.enum';
 
 /**
  * Share of the quoted price retained by the platform when a shipment is
@@ -85,15 +86,24 @@ export class CancellationFeeService {
    * Stamps the calculated fee onto `shipment` (in memory — the caller
    * persists it) and appends an audit line to the existing notes rather
    * than overwriting them, so a shipper's own notes survive a
-   * cancellation.
+   * cancellation. Carrier-initiated cancellations are fee-free; shipper
+   * and admin cancellations use the status-based fee tier.
    *
+   * @param actorRole role of the user initiating the cancellation.
    * @param previousStatus the status the shipment is being cancelled
    *   *from*; defaults to the shipment's current status.
    * @returns the fee that was applied.
    */
-  applyTo(shipment: Shipment, previousStatus?: ShipmentStatus): number {
+  applyTo(
+    shipment: Shipment,
+    actorRole: UserRole,
+    previousStatus?: ShipmentStatus,
+  ): number {
     const from = previousStatus ?? shipment.status;
-    const fee = this.calculateFee(Number(shipment.price), from);
+    const fee =
+      actorRole === UserRole.CARRIER
+        ? 0
+        : this.calculateFee(Number(shipment.price), from);
     const note = this.describeFee(fee, shipment.currency);
 
     shipment.cancellationFee = fee;

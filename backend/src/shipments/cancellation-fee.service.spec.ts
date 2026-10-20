@@ -5,6 +5,7 @@ import {
 } from './cancellation-fee.service';
 import { Shipment } from './entities/shipment.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
+import { UserRole } from '../common/enums/role.enum';
 
 function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
   return {
@@ -116,7 +117,11 @@ describe('CancellationFeeService', () => {
     it('stamps the fee and an audit note onto the shipment', () => {
       const shipment = makeShipment({ status: ShipmentStatus.ACCEPTED });
 
-      const fee = service.applyTo(shipment, ShipmentStatus.ACCEPTED);
+      const fee = service.applyTo(
+        shipment,
+        UserRole.SHIPPER,
+        ShipmentStatus.ACCEPTED,
+      );
 
       expect(fee).toBe(20);
       expect(shipment.cancellationFee).toBe(20);
@@ -126,7 +131,7 @@ describe('CancellationFeeService', () => {
     it('defaults to the shipment’s current status', () => {
       const shipment = makeShipment({ status: ShipmentStatus.IN_TRANSIT });
 
-      expect(service.applyTo(shipment)).toBe(50);
+      expect(service.applyTo(shipment, UserRole.SHIPPER)).toBe(50);
       expect(shipment.cancellationFee).toBe(50);
     });
 
@@ -136,7 +141,7 @@ describe('CancellationFeeService', () => {
         notes: 'Handle with care — fragile electronics',
       });
 
-      service.applyTo(shipment);
+      service.applyTo(shipment, UserRole.SHIPPER);
 
       expect(shipment.notes).toBe(
         'Handle with care — fragile electronics\nCancellation fee: 50 USD',
@@ -146,7 +151,7 @@ describe('CancellationFeeService', () => {
     it('records a zero fee for a cancelled-before-accept shipment', () => {
       const shipment = makeShipment({ status: ShipmentStatus.PENDING });
 
-      expect(service.applyTo(shipment)).toBe(0);
+      expect(service.applyTo(shipment, UserRole.SHIPPER)).toBe(0);
       expect(shipment.cancellationFee).toBe(0);
       expect(shipment.notes).toBe('Cancellation fee: 0 USD');
     });
@@ -154,14 +159,36 @@ describe('CancellationFeeService', () => {
     it('refuses to apply a fee to a non-cancellable shipment', () => {
       const shipment = makeShipment({ status: ShipmentStatus.DELIVERED });
 
-      expect(() => service.applyTo(shipment)).toThrow(BadRequestException);
+      expect(() => service.applyTo(shipment, UserRole.SHIPPER)).toThrow(
+        BadRequestException,
+      );
       expect(shipment.cancellationFee).toBeNull();
     });
 
     it('coerces a stringified numeric price (Postgres numeric) safely', () => {
       const shipment = makeShipment({ price: '1000.00' as never });
 
-      expect(service.applyTo(shipment, ShipmentStatus.IN_TRANSIT)).toBe(250);
+      expect(
+        service.applyTo(
+          shipment,
+          UserRole.SHIPPER,
+          ShipmentStatus.IN_TRANSIT,
+        ),
+      ).toBe(250);
+    });
+
+    it('waives the fee when a carrier cancels', () => {
+      const shipment = makeShipment({ status: ShipmentStatus.IN_TRANSIT });
+
+      expect(service.applyTo(shipment, UserRole.CARRIER)).toBe(0);
+      expect(shipment.cancellationFee).toBe(0);
+      expect(shipment.notes).toBe('Cancellation fee: 0 USD');
+    });
+
+    it('uses the status tier when an admin cancels on the shipper side', () => {
+      const shipment = makeShipment({ status: ShipmentStatus.ACCEPTED });
+
+      expect(service.applyTo(shipment, UserRole.ADMIN)).toBe(20);
     });
   });
 

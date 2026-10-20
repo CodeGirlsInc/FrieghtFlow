@@ -749,7 +749,7 @@ describe('ShipmentsService', () => {
       expect(shipmentRepo.save).not.toHaveBeenCalled();
     });
 
-    it('lets the assigned carrier cancel an in-transit shipment', async () => {
+    it('lets the assigned carrier cancel an in-transit shipment without a fee', async () => {
       const carrier = makeUser({
         id: 'carrier-uuid-1',
         role: UserRole.CARRIER,
@@ -764,7 +764,11 @@ describe('ShipmentsService', () => {
       await service.cancel('shipment-uuid-1', carrier);
 
       expect(shipmentRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ cancellationFee: 200 }),
+        expect.objectContaining({ cancellationFee: 0 }),
+      );
+      expect(paymentsService.refundEscrowForShipment).toHaveBeenCalledWith(
+        'shipment-uuid-1',
+        0,
       );
     });
   });
