@@ -34,6 +34,7 @@ import { User } from '../users/entities/user.entity';
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Response } from 'express';
+import { pipeline } from 'node:stream/promises';
 import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 
@@ -210,11 +211,9 @@ export class ShipmentsController {
       `attachment; filename="${exportResult.fileName}"`,
     );
 
-    await new Promise<void>((resolve, reject) => {
-      exportResult.stream.once('error', reject);
-      res.once('close', resolve);
-      exportResult.stream.pipe(res);
-    });
+    // pipeline forwards stream errors and destroys the export stream if the
+    // response closes early, releasing the database query/connection.
+    await pipeline(exportResult.stream, res);
   }
 
   /**

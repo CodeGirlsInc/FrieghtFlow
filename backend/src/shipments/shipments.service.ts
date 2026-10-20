@@ -960,7 +960,7 @@ export class ShipmentsService {
       },
     });
 
-    return rowStream.pipe(transformer);
+    return this.pipeExportRows(rowStream, transformer);
   }
 
   private createJsonExportStream(rowStream: Readable): Readable {
@@ -979,6 +979,16 @@ export class ShipmentsService {
       },
     });
 
+    return this.pipeExportRows(rowStream, transformer);
+  }
+
+  private pipeExportRows(rowStream: Readable, transformer: Transform): Readable {
+    // Readable.pipe() does not forward source errors to its destination. Forward
+    // them explicitly, and release the query stream if the consumer goes away.
+    rowStream.once('error', (error) => transformer.destroy(error));
+    transformer.once('close', () => {
+      if (!rowStream.destroyed) rowStream.destroy();
+    });
     return rowStream.pipe(transformer);
   }
 
@@ -1013,7 +1023,7 @@ export class ShipmentsService {
     }
 
     const escapedValue = sanitized.replace(/"/g, '""');
-    if (/[",\n]/.test(sanitized)) {
+    if (/[",\r\n]/.test(sanitized)) {
       return `"${escapedValue}"`;
     }
 
