@@ -341,8 +341,14 @@ export default function ShipmentDetailPage() {
               <CardTitle className="text-base">Actions</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              {/* Carrier actions */}
-              {shipment.status === ShipmentStatus.PENDING && !isShipper && (
+              {/* Carrier actions — the accept route is carrier/admin only, so the
+                  button is gated on the user's role rather than "not the shipper".
+                  That also keeps it hidden while the session user is still null
+                  (hydration), when a `!isShipper` check would evaluate true for
+                  every visitor and produce a 403 on click. */}
+              {shipment.status === ShipmentStatus.PENDING &&
+                user?.role === 'carrier' &&
+                !isShipper && (
                 <Button
                   size="sm"
                   disabled={actionLoading}
