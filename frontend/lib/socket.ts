@@ -10,6 +10,8 @@ const SOCKET_URL =
 const GIVE_UP_RETRY_DELAY_MS = 30_000;
 
 let socket: Socket | null = null;
+/** The token baked into the current socket's handshake — see connectSocket(). */
+let socketToken: string | null = null;
 let giveUpRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function getSocket(): Socket | null {
@@ -24,13 +26,18 @@ function clearGiveUpRetryTimer() {
 }
 
 export function connectSocket(token: string): Socket {
-  if (socket?.connected) return socket;
+  // The server checks auth only during the handshake (BE-193), so a rotated
+  // token reaches it only by reconnecting — a healthy socket still carrying
+  // the previous token must be rebuilt, not reused. Reuse only when this very
+  // token is already on the wire.
+  if (socket?.connected && socketToken === token) return socket;
 
   // Tear down any stale socket before creating a new one
   if (socket) {
     socket.disconnect();
     socket = null;
   }
+  socketToken = null;
   clearGiveUpRetryTimer();
 
   useSocketStatusStore.getState().setStatus('connecting');
@@ -43,6 +50,7 @@ export function connectSocket(token: string): Socket {
     reconnectionDelay: 2000,
     reconnectionDelayMax: 15000,
   });
+  socketToken = token;
 
   socket.on('connect', () => {
     useSocketStatusStore.getState().setStatus('connected');
@@ -86,5 +94,6 @@ export function disconnectSocket() {
     socket.disconnect();
     socket = null;
   }
+  socketToken = null;
   useSocketStatusStore.getState().setStatus('disconnected');
 }
