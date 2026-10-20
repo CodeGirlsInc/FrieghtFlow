@@ -19,11 +19,12 @@ import {
 } from '../../../components/ui/card';
 import { useAuthStore } from '../../../stores/auth.store';
 import { loginSchema, type LoginFormData } from '../../../lib/validation/auth';
+import { safeCallbackUrl } from '../../../lib/callback-url';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/dashboard';
+  const callbackUrl = safeCallbackUrl(searchParams.get('callbackUrl'));
   const { login, isLoading } = useAuthStore();
 
   const {

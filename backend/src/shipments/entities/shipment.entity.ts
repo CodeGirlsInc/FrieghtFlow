@@ -75,6 +75,9 @@ export class Shipment {
   @Column({ type: 'decimal', precision: 14, scale: 2 })
   price: number;
 
+  @Column({ name: 'listed_price', type: 'decimal', precision: 14, scale: 2 })
+  listedPrice: number;
+
   @Column({ default: 'USD', length: 3 })
   currency: string;
 

@@ -13,6 +13,7 @@ use crate::{events, storage};
 /// - Score must be 1-5.
 /// - Cannot rate yourself.
 /// - Each address can only rate a given shipment once.
+/// - `rater` must be a registered user.
 /// - `rated` must be a registered user.
 pub fn submit(
     env: &Env,
@@ -30,6 +31,10 @@ pub fn submit(
     if rater == rated {
         return Err(ReputationError::CannotRateSelf);
     }
+
+    // The rater must be registered: creating addresses is free, so an
+    // unchecked rater would be the cheapest input for rating-farming.
+    storage::load_reputation(env, &rater)?;
 
     // Prevent duplicate ratings per shipment per rater.
     let mut raters: Vec<Address> = env

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Shipment, ShipmentStatus, ShipmentStatusHistory } from '../../../../types/shipment.types';
 import { Payment, PaymentStatus } from '../../../../types/payment.types';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
+import { getErrorMessage } from '../../../../lib/api/client';
 import { paymentApi } from '../../../../lib/api/payments.api';
 import { formatMoney } from '../../../../lib/format/currency';
 import { useAuthStore } from '../../../../stores/auth.store';
@@ -164,8 +165,11 @@ export default function ShipmentDetailPage() {
       toast.success(successMsg);
       await reload();
       onDone?.();
-    } catch {
-      toast.error('Action failed. Please try again.');
+    } catch (err) {
+      // Surface the backend's own explanation ('Cannot transition shipment
+      // from "delivered" to "accepted"', typed escrow errors, …) when there
+      // is one; only fall back to the generic text for transport failures.
+      toast.error(getErrorMessage(err) ?? 'Action failed. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -341,8 +345,14 @@ export default function ShipmentDetailPage() {
               <CardTitle className="text-base">Actions</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              {/* Carrier actions */}
-              {shipment.status === ShipmentStatus.PENDING && !isShipper && (
+              {/* Carrier actions — the accept route is carrier/admin only, so the
+                  button is gated on the user's role rather than "not the shipper".
+                  That also keeps it hidden while the session user is still null
+                  (hydration), when a `!isShipper` check would evaluate true for
+                  every visitor and produce a 403 on click. */}
+              {shipment.status === ShipmentStatus.PENDING &&
+                user?.role === 'carrier' &&
+                !isShipper && (
                 <Button
                   size="sm"
                   disabled={actionLoading}

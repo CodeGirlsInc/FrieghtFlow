@@ -134,6 +134,11 @@ export class BidsService {
       await queryRunner.manager.update(Shipment, shipmentId, {
         carrierId: bid.carrierId,
         status: ShipmentStatus.ACCEPTED,
+        price: bid.proposedPrice,
+        listedPrice: shipment.listedPrice ?? shipment.price,
+        insurancePremium: shipment.isInsured
+          ? Math.round(Number(bid.proposedPrice) * 0.015 * 100) / 100
+          : null,
       });
       await queryRunner.commitTransaction();
     } catch (error) {

@@ -13,6 +13,9 @@ import {
   ILike,
   SelectQueryBuilder,
   Not,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
 } from 'typeorm';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -240,6 +243,7 @@ export class ShipmentsService {
       weightKg: dto.weightKg,
       volumeCbm: dto.volumeCbm ?? null,
       price: dto.price,
+      listedPrice: dto.price,
       currency: dto.currency ?? 'USD',
       notes: dto.notes ?? null,
       status: ShipmentStatus.PENDING,
@@ -304,6 +308,7 @@ export class ShipmentsService {
           weightKg: shipmentDto.weightKg,
           volumeCbm: shipmentDto.volumeCbm ?? null,
           price: shipmentDto.price,
+          listedPrice: shipmentDto.price,
           currency: shipmentDto.currency ?? 'USD',
           notes: shipmentDto.notes ?? null,
           status: ShipmentStatus.PENDING,
@@ -406,7 +411,7 @@ export class ShipmentsService {
   }
 
   async findMarketplace(query: QueryShipmentDto): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, origin, destination, cargoCategory } = query;
+    const { page = 1, limit = 20, origin, destination, cargoCategory, minPrice, maxPrice } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {
@@ -415,6 +420,13 @@ export class ShipmentsService {
     if (origin) where.origin = ILike(`%${origin}%`);
     if (destination) where.destination = ILike(`%${destination}%`);
     if (cargoCategory) where.cargoCategory = cargoCategory;
+    if (minPrice !== undefined && maxPrice !== undefined) {
+      where.price = Between(minPrice, maxPrice);
+    } else if (minPrice !== undefined) {
+      where.price = MoreThanOrEqual(minPrice);
+    } else if (maxPrice !== undefined) {
+      where.price = LessThanOrEqual(maxPrice);
+    }
 
     const [data, total] = await this.shipmentRepo.findAndCount({
       where,
@@ -712,11 +724,11 @@ export class ShipmentsService {
    * Cancels a shipment, refunding escrow and retaining a tiered
    * cancellation fee.
    *
-   * The fee rate is a function of the status being cancelled *from*
-   * (see `CancellationFeeService`): free while PENDING, 10% once a carrier
-   * has accepted, 25% while the cargo is IN_TRANSIT, and free for an
-   * admin cancelling a disputed shipment. The fee is stamped on the
-   * shipment and surfaced on every shipment read via
+   * Shipper and admin cancellations use the status-based fee tier (free
+   * while PENDING, 10% once a carrier has accepted, 25% while IN_TRANSIT,
+   * and free for an admin cancelling a disputed shipment). Carrier-
+   * initiated cancellations are always fee-free. The fee is stamped on
+   * the shipment and surfaced on every shipment read via
    * `shipment.cancellationFee`.
    *
    * Ordering matters: the fee is computed before the settlement so a failing
@@ -752,6 +764,7 @@ export class ShipmentsService {
     const previousStatus = shipment.status;
     const cancellationFee = this.cancellationFeeService.applyTo(
       shipment,
+      user.role,
       previousStatus,
     );
 
@@ -983,7 +996,7 @@ export class ShipmentsService {
       },
     });
 
-    return rowStream.pipe(transformer);
+    return this.pipeExportRows(rowStream, transformer);
   }
 
   private createJsonExportStream(rowStream: Readable): Readable {
@@ -1002,6 +1015,16 @@ export class ShipmentsService {
       },
     });
 
+    return this.pipeExportRows(rowStream, transformer);
+  }
+
+  private pipeExportRows(rowStream: Readable, transformer: Transform): Readable {
+    // Readable.pipe() does not forward source errors to its destination. Forward
+    // them explicitly, and release the query stream if the consumer goes away.
+    rowStream.once('error', (error) => transformer.destroy(error));
+    transformer.once('close', () => {
+      if (!rowStream.destroyed) rowStream.destroy();
+    });
     return rowStream.pipe(transformer);
   }
 
@@ -1036,7 +1059,7 @@ export class ShipmentsService {
     }
 
     const escapedValue = sanitized.replace(/"/g, '""');
-    if (/[",\n]/.test(sanitized)) {
+    if (/[",\r\n]/.test(sanitized)) {
       return `"${escapedValue}"`;
     }
 
