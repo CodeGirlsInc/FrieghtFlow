@@ -4,6 +4,7 @@ import { CreatePaymentsTable1724140800000 } from './1724140800000-CreatePayments
 import { AddPaymentFundingFields1724227200000 } from './1724227200000-AddPaymentFundingFields';
 import { CreateShipmentTemplatesTable1724313600000 } from './1724313600000-CreateShipmentTemplatesTable';
 import { AddShipmentCancellationFee1724400000000 } from './1724400000000-AddShipmentCancellationFee';
+import { AddShipmentListedPrice1724700000000 } from './1724700000000-AddShipmentListedPrice';
 import { AddCertificationDocumentProvenance1724313600000 } from './1724313600000-AddCertificationDocumentProvenance';
 import { CreateTwoFactorOtpTable1724313600000 } from './1724313600000-CreateTwoFactorOtpTable';
 
@@ -104,6 +105,24 @@ describe('migrations', () => {
     );
   });
 
+  it('adds, backfills, and removes the shipment listed price column', async () => {
+    const queryRunner = mockQueryRunner();
+    const migration = new AddShipmentListedPrice1724700000000();
+
+    await migration.up(queryRunner as never);
+    await migration.down(queryRunner as never);
+
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('ADD COLUMN IF NOT EXISTS "listed_price"'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('SET "listed_price" = "price"'),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('DROP COLUMN IF EXISTS "listed_price"'),
+    );
+  });
+
   it('adds platform document provenance and expiry-safe certification fields', async () => {
     const queryRunner = mockQueryRunner();
     const migration = new AddCertificationDocumentProvenance1724313600000();
@@ -188,6 +207,7 @@ describe('migrations', () => {
         '1724313600000-CreateShipmentTemplatesTable.ts',
         '1724313600000-CreateTwoFactorOtpTable.ts',
         '1724400000000-AddShipmentCancellationFee.ts',
+        '1724700000000-AddShipmentListedPrice.ts',
       ]) {
         expect(matched).toContain(`src/migrations/${migration}`);
       }

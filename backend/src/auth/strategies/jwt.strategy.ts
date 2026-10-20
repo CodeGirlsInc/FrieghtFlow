@@ -28,6 +28,15 @@ function extractCookie(request: Request, name: string): string | null {
   return match ? match.slice(name.length + 1) : null;
 }
 
+/**
+ * Prefer an explicit Authorization Bearer token; use the auth_token cookie
+ * only when no Bearer token was supplied.
+ */
+export function extractJwtFromRequest(request: Request): string | null {
+  const bearerToken = ExtractJwt.fromAuthHeaderAsBearerToken()(request);
+  return bearerToken ?? extractCookie(request, 'auth_token');
+}
+
 /** How long a successful user lookup is reused, in milliseconds. */
 const USER_CACHE_TTL_MS = Number(process.env.JWT_USER_CACHE_TTL_MS ?? 15_000);
 
@@ -43,10 +52,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly usersService: UsersService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromExtractors([
-        (request: Request) => extractCookie(request, 'auth_token'),
-        ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ]),
+      jwtFromRequest: extractJwtFromRequest,
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET') || '',
     });

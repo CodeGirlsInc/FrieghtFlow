@@ -135,11 +135,18 @@ describe('BidsService', () => {
 
   describe('acceptBid', () => {
     it('accepts bid and rejects others in one transaction', async () => {
-      shipmentRepo.findOne.mockResolvedValue(pendingShipment());
+      shipmentRepo.findOne.mockResolvedValue(
+        pendingShipment({
+          price: 100,
+          listedPrice: 100,
+          isInsured: true,
+        }),
+      );
       const bid = {
         id: 'bid1',
         shipmentId: 'ship1',
         carrierId: 'carrier1',
+        proposedPrice: 80,
         status: BidStatus.PENDING,
       };
       bidRepo.findOne.mockResolvedValue(bid);
@@ -162,7 +169,12 @@ describe('BidsService', () => {
       expect(queryRunner.manager.update).toHaveBeenCalledWith(
         Shipment,
         'ship1',
-        expect.objectContaining({ carrierId: 'carrier1' }),
+        expect.objectContaining({
+          carrierId: 'carrier1',
+          price: 80,
+          listedPrice: 100,
+          insurancePremium: 1.2,
+        }),
       );
       expect(queryRunner.commitTransaction).toHaveBeenCalled();
       expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();

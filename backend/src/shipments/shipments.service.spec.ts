@@ -171,7 +171,11 @@ describe('ShipmentsService', () => {
       });
 
       expect(shipmentRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ status: ShipmentStatus.PENDING }),
+        expect.objectContaining({
+          status: ShipmentStatus.PENDING,
+          price: 5000,
+          listedPrice: 5000,
+        }),
       );
       expect(historyRepo.save).toHaveBeenCalled();
       expect(eventEmitter.emit).toHaveBeenCalledWith(
