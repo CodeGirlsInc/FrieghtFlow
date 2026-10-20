@@ -15,13 +15,22 @@ use crate::{events, storage};
 /// growth, matching the upper-bound discipline in `shipper::create`.
 pub const MAX_IPFS_CID_LEN: u32 = 512;
 
+/// Minimum byte length for `ipfs_cid` in `register_document`.
+///
+/// An empty (or near-empty) CID would store an off-chain pointer that
+/// does not exist, making the record claim provenance it cannot back.
+/// 8 bytes is the length of `bafkqaaa`, the shortest canonical CIDv1
+/// encoding, so no legitimate CID is rejected.
+pub const MIN_IPFS_CID_LEN: u32 = 8;
+
 /// Register a new document for a shipment.
 ///
 /// `content_hash`    — 32-byte hash of the document file, computed with
 ///                      `hash_algorithm`.
 /// `hash_algorithm`  — which algorithm `content_hash` was computed with.
 /// `ipfs_cid`        — IPFS CID (as bytes) pointing to the full document.
-///                     Must not exceed `MAX_IPFS_CID_LEN` (512) bytes.
+///                     Must be at least `MIN_IPFS_CID_LEN` (8) bytes and
+///                     must not exceed `MAX_IPFS_CID_LEN` (512) bytes.
 ///
 /// The shipment must exist in the configured shipment contract, and
 /// `uploader` must be a party to it (its shipper or its carrier). Without both
@@ -41,6 +50,9 @@ pub fn register(
 
     if ipfs_cid.len() > MAX_IPFS_CID_LEN {
         return Err(DocumentError::FieldTooLong);
+    }
+    if ipfs_cid.len() < MIN_IPFS_CID_LEN {
+        return Err(DocumentError::FieldTooShort);
     }
 
     let shipment = fetch_shipment(env, shipment_id)?;
