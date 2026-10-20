@@ -678,11 +678,11 @@ export class ShipmentsService {
    * Cancels a shipment, refunding escrow and retaining a tiered
    * cancellation fee.
    *
-   * The fee rate is a function of the status being cancelled *from*
-   * (see `CancellationFeeService`): free while PENDING, 10% once a carrier
-   * has accepted, 25% while the cargo is IN_TRANSIT, and free for an
-   * admin cancelling a disputed shipment. The fee is stamped on the
-   * shipment and surfaced on every shipment read via
+   * Shipper and admin cancellations use the status-based fee tier (free
+   * while PENDING, 10% once a carrier has accepted, 25% while IN_TRANSIT,
+   * and free for an admin cancelling a disputed shipment). Carrier-
+   * initiated cancellations are always fee-free. The fee is stamped on
+   * the shipment and surfaced on every shipment read via
    * `shipment.cancellationFee`.
    *
    * Ordering matters: the fee is computed before the settlement so a failing
@@ -718,6 +718,7 @@ export class ShipmentsService {
     const previousStatus = shipment.status;
     const cancellationFee = this.cancellationFeeService.applyTo(
       shipment,
+      user.role,
       previousStatus,
     );
 

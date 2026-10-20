@@ -17,6 +17,16 @@ This creates a **hybrid custody model**: non-custodial deposit (the shipper cont
 
 We adopt a **hybrid (non-custodial deposit + admin-arbitrated release)** custody model.
 
+### Cancellation Fees
+
+Cancellation fees are based on shipment progress only when the shipper
+cancels, or an admin cancels on the shipper's behalf: cancellation is free
+while `PENDING`, retains 10% of the quoted price after `ACCEPTED`, and retains
+25% while `IN_TRANSIT`. A carrier-initiated cancellation is always fee-free,
+so the shipper receives the full escrow refund. An admin cancelling a
+`DISPUTED` shipment also refunds in full. The backend records the applied
+fee on the shipment and includes it in the escrow refund calculation.
+
 ### What the Admin Keypair Can Do
 
 | Action | Authorized By | Effect |
