@@ -11,6 +11,9 @@ import {
   FindOptionsWhere,
   ILike,
   SelectQueryBuilder,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
 } from 'typeorm';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -403,7 +406,7 @@ export class ShipmentsService {
   }
 
   async findMarketplace(query: QueryShipmentDto): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, origin, destination, cargoCategory } = query;
+    const { page = 1, limit = 20, origin, destination, cargoCategory, minPrice, maxPrice } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {
@@ -412,6 +415,13 @@ export class ShipmentsService {
     if (origin) where.origin = ILike(`%${origin}%`);
     if (destination) where.destination = ILike(`%${destination}%`);
     if (cargoCategory) where.cargoCategory = cargoCategory;
+    if (minPrice !== undefined && maxPrice !== undefined) {
+      where.price = Between(minPrice, maxPrice);
+    } else if (minPrice !== undefined) {
+      where.price = MoreThanOrEqual(minPrice);
+    } else if (maxPrice !== undefined) {
+      where.price = LessThanOrEqual(maxPrice);
+    }
 
     const [data, total] = await this.shipmentRepo.findAndCount({
       where,
