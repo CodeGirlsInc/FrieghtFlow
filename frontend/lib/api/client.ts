@@ -107,8 +107,14 @@ export async function apiClient<T = unknown>(
   const { skipAuth = false, ...fetchOptions } = options;
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
 
+  // A FormData body must be encoded as multipart/form-data *by the fetch
+  // implementation*, which also generates the part boundary — forcing
+  // application/json here would label a multipart body as JSON and the
+  // server could not parse it. Callers that send FormData (e.g. DisputeForm)
+  // therefore get no default Content-Type at all.
+  const isFormData = fetchOptions.body instanceof FormData;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(fetchOptions.headers as Record<string, string>),
   };
 
