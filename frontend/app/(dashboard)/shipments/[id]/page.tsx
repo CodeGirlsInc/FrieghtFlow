@@ -475,6 +475,9 @@ export default function ShipmentDetailPage() {
           {shipment.status === ShipmentStatus.COMPLETED && isShipper && shipment.carrierId && (
             <SubmitReviewForm shipmentId={shipment.id} title="Rate your carrier" />
           )}
+          {shipment.status === ShipmentStatus.COMPLETED && isCarrier && shipment.shipperId && (
+            <SubmitReviewForm shipmentId={shipment.id} title="Rate your shipper" />
+          )}
         </div>
       </div>
     </div>

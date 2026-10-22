@@ -1,4 +1,4 @@
-import { apiClient, getAccessToken } from './client';
+import { apiClient, getApiUrl, uploadWithProgress } from './client';
 
 export enum DocumentType {
   BILL_OF_LADING = 'bill_of_lading',
@@ -28,8 +28,6 @@ export interface UploadDocumentPayload {
   notes?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:6000/api/v1';
-
 /**
  * FE-107 — centralizes document upload/list/retrieval so it's reusable
  * outside DocumentUploadModal and DocumentViewer (e.g. a shipment detail
@@ -49,7 +47,7 @@ export const documentsApi = {
    * authenticates the request via the session cookie).
    */
   getDownloadUrl(id: string): string {
-    return `${API_BASE}/documents/${id}/download`;
+    return getApiUrl(`/documents/${id}/download`);
   },
 
   remove(id: string): Promise<void> {
@@ -66,6 +64,7 @@ export const documentsApi = {
     file: File,
     payload: UploadDocumentPayload,
     onProgress?: (percent: number) => void,
+    signal?: AbortSignal,
   ): Promise<DocumentMetadata> {
     const formData = new FormData();
     formData.append('file', file);
@@ -73,32 +72,11 @@ export const documentsApi = {
     formData.append('documentType', payload.documentType);
     if (payload.notes) formData.append('notes', payload.notes);
 
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', `${API_BASE}/documents/upload`);
-
-      const token = getAccessToken();
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      xhr.withCredentials = true;
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText) as DocumentMetadata);
-          } catch {
-            resolve({} as DocumentMetadata);
-          }
-        } else {
-          reject(new Error(xhr.statusText || 'Upload failed'));
-        }
-      };
-
-      xhr.onerror = () => reject(new Error('Upload failed'));
-      xhr.send(formData);
-    });
+    return uploadWithProgress<DocumentMetadata>(
+      '/documents/upload',
+      formData,
+      onProgress,
+      signal,
+    );
   },
 };
