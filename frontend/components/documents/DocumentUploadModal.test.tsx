@@ -175,18 +175,21 @@ describe('DocumentUploadModal', () => {
         expect.objectContaining({ name: 'bol.pdf' }),
         { shipmentId: 'ship-1', documentType: DocumentType.BILL_OF_LADING },
         expect.any(Function),
+        expect.any(AbortSignal),
       );
       expect(mockUpload).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({ name: 'pod.jpg' }),
         { shipmentId: 'ship-1', documentType: DocumentType.PROOF_OF_DELIVERY },
         expect.any(Function),
+        expect.any(AbortSignal),
       );
       expect(mockUpload).toHaveBeenNthCalledWith(
         3,
         expect.objectContaining({ name: 'customs.pdf' }),
         { shipmentId: 'ship-1', documentType: DocumentType.CUSTOMS_DECLARATION },
         expect.any(Function),
+        expect.any(AbortSignal),
       );
     });
 
@@ -233,12 +236,14 @@ describe('DocumentUploadModal', () => {
         expect.objectContaining({ name: 'bol.pdf' }),
         { shipmentId: 'ship-1', documentType: DocumentType.BILL_OF_LADING },
         expect.any(Function),
+        expect.any(AbortSignal),
       );
       expect(mockUpload).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({ name: 'pod.jpg' }),
         { shipmentId: 'ship-1', documentType: DocumentType.PROOF_OF_DELIVERY },
         expect.any(Function),
+        expect.any(AbortSignal),
       );
     });
 
@@ -263,6 +268,7 @@ describe('DocumentUploadModal', () => {
         expect.objectContaining({ name: 'b.pdf' }),
         { shipmentId: 'ship-1', documentType: DocumentType.CUSTOMS_DECLARATION },
         expect.any(Function),
+        expect.any(AbortSignal),
       );
     });
 
@@ -276,5 +282,40 @@ describe('DocumentUploadModal', () => {
       queueFiles([makeFile('b.pdf', 1024, 'application/pdf')]);
       expect(screen.getByRole('button', { name: 'Apply to all files' })).toBeInTheDocument();
     });
+  });
+
+  it('shows the server validation message instead of a generic upload error', async () => {
+    mockUpload.mockRejectedValue({ statusCode: 400, message: 'File signature does not match' });
+    renderModal();
+    queueFiles([makeFile('invoice.pdf', 1024, 'application/pdf')]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith('File signature does not match'),
+    );
+  });
+
+  it('aborts an in-progress upload without showing an upload failure', async () => {
+    let uploadSignal: AbortSignal | undefined;
+    mockUpload.mockImplementation((_file, _payload, _progress, signal) => {
+      uploadSignal = signal as AbortSignal;
+      return new Promise((_resolve, reject) => {
+        uploadSignal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('Upload aborted', 'AbortError')),
+          { once: true },
+        );
+      });
+    });
+    renderModal();
+    queueFiles([makeFile('invoice.pdf', 1024, 'application/pdf')]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel upload' }));
+
+    await waitFor(() => expect(uploadSignal?.aborted).toBe(true));
+    expect(mockToastError).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Upload' })).toBeEnabled());
   });
 });

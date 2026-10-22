@@ -1,4 +1,8 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:6000/api/v1';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:6000/api/v1';
+
+export function getApiUrl(path: string): string {
+  return path.startsWith('http') ? path : `${API_BASE}${path}`;
+}
 
 let _accessToken: string | null = null;
 
@@ -105,7 +109,7 @@ export async function apiClient<T = unknown>(
   options: FetchOptions = {},
 ): Promise<T> {
   const { skipAuth = false, ...fetchOptions } = options;
-  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const url = getApiUrl(path);
 
   // A FormData body must be encoded as multipart/form-data *by the fetch
   // implementation*, which also generates the part boundary — forcing
@@ -157,6 +161,88 @@ export async function apiClient<T = unknown>(
   // Handle empty responses (204 No Content)
   const text = await response.text();
   return text ? (JSON.parse(text) as T) : ({} as T);
+}
+
+/**
+ * XHR upload counterpart to apiClient. Keeps upload progress while sharing
+ * the API base URL, auth token, and single refresh-and-retry behavior.
+ */
+export async function uploadWithProgress<T>(
+  path: string,
+  body: FormData,
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  const url = getApiUrl(path);
+
+  const send = (token: string | null): Promise<XMLHttpRequest> =>
+    new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException('Upload aborted', 'AbortError'));
+        return;
+      }
+
+      const xhr = new XMLHttpRequest();
+      const cleanup = () => signal?.removeEventListener('abort', abort);
+      const abort = () => xhr.abort();
+
+      xhr.open('POST', url);
+      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      };
+      xhr.onload = () => {
+        cleanup();
+        resolve(xhr);
+      };
+      xhr.onerror = () => {
+        cleanup();
+        reject(new Error('Upload failed'));
+      };
+      xhr.onabort = () => {
+        cleanup();
+        reject(new DOMException('Upload aborted', 'AbortError'));
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      xhr.send(body);
+    });
+
+  let response = await send(_accessToken);
+  if (response.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (!newToken) {
+      hardLogout();
+    } else {
+      if (signal?.aborted) throw new DOMException('Upload aborted', 'AbortError');
+      response = await send(newToken);
+    }
+  }
+
+  let data: unknown;
+  try {
+    data = response.responseText ? JSON.parse(response.responseText) : {};
+  } catch {
+    if (response.status >= 200 && response.status < 300) {
+      throw new Error('Invalid response from server');
+    }
+    data = {
+      message: response.statusText || 'Request failed',
+      statusCode: response.status,
+    };
+  }
+
+  if (response.status < 200 || response.status >= 300) {
+    if (data === null || typeof data !== 'object') {
+      data = {
+        message: response.statusText || 'Request failed',
+        statusCode: response.status,
+      };
+    }
+    throw data;
+  }
+
+  return data as T;
 }
 
 /**

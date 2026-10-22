@@ -184,6 +184,8 @@ describe('SubmitReviewForm — mouse and submit still work (FE-193)', () => {
       rating: 3,
       comment: undefined,
     }));
+    expect(await screen.findByText('✓ Your review has been submitted.')).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
   });
 
   it('still refuses to submit with no rating', async () => {
@@ -194,5 +196,18 @@ describe('SubmitReviewForm — mouse and submit still work (FE-193)', () => {
 
     expect(mockToast.error).toHaveBeenCalledWith('Please select a star rating');
     expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it('hides the form when the server reports that this party already reviewed', async () => {
+    const user = userEvent.setup();
+    mockSubmit.mockRejectedValue({ statusCode: 409, message: 'Review already exists' });
+    render(<SubmitReviewForm shipmentId="s-1" title="Rate your shipper" />);
+
+    await user.click(star(5));
+    await user.click(screen.getByRole('button', { name: 'Submit Review' }));
+
+    expect(await screen.findByText('You have already reviewed this shipment.')).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    expect(mockSubmit).toHaveBeenCalledWith('s-1', { rating: 5, comment: undefined });
   });
 });

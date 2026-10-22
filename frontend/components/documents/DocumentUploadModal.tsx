@@ -6,6 +6,7 @@ import { X, Upload, FileText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
+import { getErrorMessage } from '../../lib/api/client';
 import { documentsApi, DocumentType } from '../../lib/api/documents.api';
 import { partitionValidFiles, buildFileAcceptAttribute } from '../../lib/validation/file-upload';
 
@@ -53,6 +54,7 @@ export function DocumentUploadModal({
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return;
@@ -96,6 +98,8 @@ export function DocumentUploadModal({
     }
 
     setProgress(0);
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
 
     try {
       // The backend accepts one file per request, so upload sequentially
@@ -108,19 +112,26 @@ export function DocumentUploadModal({
             const overall = ((i + filePercent / 100) / files.length) * 100;
             setProgress(Math.round(overall));
           },
+          controller.signal,
         );
+        setFiles((prev) => prev.filter((file) => file.id !== files[i].id));
       }
 
       toast.success('Documents uploaded successfully!');
       setFiles([]);
-      setProgress(null);
       onSuccess?.();
       onOpenChange(false);
-    } catch {
-      toast.error('Upload failed. Please try again.');
+    } catch (err: unknown) {
+      if (!controller.signal.aborted) {
+        toast.error(getErrorMessage(err) ?? 'Upload failed. Please try again.');
+      }
+    } finally {
+      uploadAbortRef.current = null;
       setProgress(null);
     }
   };
+
+  const cancelUpload = () => uploadAbortRef.current?.abort();
 
   const handleClose = () => {
     if (progress !== null) return; // block close during upload
@@ -274,6 +285,11 @@ export function DocumentUploadModal({
 
           {/* Actions */}
           <div className="flex gap-3 justify-end mt-6">
+            {progress !== null && (
+              <Button type="button" variant="outline" onClick={cancelUpload}>
+                Cancel upload
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={handleClose} disabled={progress !== null}>
               Cancel
             </Button>

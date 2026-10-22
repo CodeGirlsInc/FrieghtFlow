@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { getErrorMessage } from '../../lib/api/client';
 import { reviewsApi } from '../../lib/api/reviews.api';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -15,8 +16,7 @@ interface SubmitReviewFormProps {
 }
 
 /**
- * FE-108 — lets a shipper rate a completed shipment's carrier. Surfaced on
- * the shipment detail page once a shipment reaches COMPLETED.
+ * Lets either party rate the other once a shipment reaches COMPLETED.
  */
 export function SubmitReviewForm({ shipmentId, title = 'Rate this shipment' }: SubmitReviewFormProps) {
   const [rating, setRating] = useState(0);
@@ -24,6 +24,7 @@ export function SubmitReviewForm({ shipmentId, title = 'Rate this shipment' }: S
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [alreadyReviewed, setAlreadyReviewed] = useState(false);
 
   // FE-193 — the WAI-ARIA radiogroup pattern. Selection follows focus, so the
   // focusable star and the checked star are always the same one, and the group
@@ -74,8 +75,16 @@ export function SubmitReviewForm({ shipmentId, title = 'Rate this shipment' }: S
       toast.success('Thanks for your review!');
       setSubmitted(true);
     } catch (err: unknown) {
-      const error = err as { message?: string };
-      toast.error(error?.message ?? 'Failed to submit review. Please try again.');
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        ('statusCode' in err && err.statusCode === 409 || 'status' in err && err.status === 409)
+      ) {
+        setAlreadyReviewed(true);
+        setSubmitted(true);
+      } else {
+        toast.error(getErrorMessage(err) ?? 'Failed to submit review. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -85,7 +94,9 @@ export function SubmitReviewForm({ shipmentId, title = 'Rate this shipment' }: S
     return (
       <Card>
         <CardContent className="py-6 text-center text-sm text-muted-foreground">
-          ✓ Your review has been submitted.
+          {alreadyReviewed
+            ? 'You have already reviewed this shipment.'
+            : '✓ Your review has been submitted.'}
         </CardContent>
       </Card>
     );
