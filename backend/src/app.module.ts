@@ -25,6 +25,7 @@ import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { PaymentsModule } from './payments/payments.module';
 import { StellarModule } from './stellar/stellar.module';
+import { HealthModule } from './health/health.module';
 import {
   shipmentCreateTracker,
   forgotPasswordTracker,
@@ -115,6 +116,7 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     ReviewsModule,
     PaymentsModule,
     StellarModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
