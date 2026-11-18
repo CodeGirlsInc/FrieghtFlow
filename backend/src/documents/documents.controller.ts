@@ -127,10 +127,10 @@ export class DocumentsController {
         unsupportedDocumentMimeTypeMessage(file.mimetype),
       );
     }
-    if (
-      file.buffer?.length &&
-      !contentMatchesMimeType(file.buffer, file.mimetype)
-    ) {
+    if (file.buffer && file.buffer.length === 0) {
+      throw new BadRequestException('File is empty');
+    }
+    if (file.buffer && !contentMatchesMimeType(file.buffer, file.mimetype)) {
       throw new BadRequestException(
         `File content does not match the declared type ${file.mimetype}`,
       );

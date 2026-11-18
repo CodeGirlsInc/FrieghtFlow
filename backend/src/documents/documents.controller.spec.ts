@@ -52,6 +52,34 @@ describe('DocumentsController', () => {
     expect(service.cleanupUpload).toHaveBeenCalled();
   });
 
+  it('rejects a zero-byte file declared as PDF before calling the service', async () => {
+    const file = {
+      mimetype: 'application/pdf',
+      originalname: 'empty.pdf',
+      buffer: Buffer.alloc(0),
+    } as Express.Multer.File;
+
+    await expect(
+      controller.upload(file, { shipmentId: 'shipment-1' } as never, user),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(service.upload).not.toHaveBeenCalled();
+    expect(service.cleanupUpload).toHaveBeenCalledWith(file);
+  });
+
+  it('rejects a file whose bytes do not match its declared type', async () => {
+    const file = {
+      mimetype: 'application/pdf',
+      originalname: 'fake.pdf',
+      buffer: Buffer.from('not a pdf at all'),
+    } as Express.Multer.File;
+
+    await expect(
+      controller.upload(file, { shipmentId: 'shipment-1' } as never, user),
+    ).rejects.toThrow(BadRequestException);
+    expect(service.upload).not.toHaveBeenCalled();
+  });
+
   it('cleans up a controller-stage failure after a file was accepted', async () => {
     const file = {
       mimetype: 'application/pdf',
