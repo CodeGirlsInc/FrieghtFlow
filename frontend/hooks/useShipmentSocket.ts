@@ -26,6 +26,11 @@ interface ShipmentUpdatedPayload {
   origin: string;
   destination: string;
   updatedAt: string;
+  /**
+   * Id of the user whose action triggered the event (the gateway sends
+   * `ShipmentEvent.actorId`). Optional because older backends don't send it.
+   */
+  actorId?: string;
 }
 
 export function useShipmentSocket() {
@@ -48,6 +53,11 @@ export function useShipmentSocket() {
     const socket = connectSocket(token);
 
     const handleUpdate = (payload: ShipmentUpdatedPayload) => {
+      // The actor already saw the success toast on the page they're on, and a
+      // bell entry about something they just did is noise — skip the echo of
+      // their own action. Other users are still notified, as are events
+      // without an actor id.
+      if (payload.actorId && payload.actorId === user?.id) return;
       const label = EVENT_LABELS[payload.event] ?? 'Shipment updated';
       const description = `${payload.trackingNumber} · ${payload.origin} → ${payload.destination}`;
 
