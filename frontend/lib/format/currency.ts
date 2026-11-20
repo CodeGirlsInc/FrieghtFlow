@@ -39,21 +39,32 @@ const DECIMAL_FALLBACK = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+/** Rendered for missing or non-numeric amounts (#1847). */
+export const AMOUNT_PLACEHOLDER = '—';
+
 /**
  * Formats a monetary amount for display. Never throws.
  *
- * @param value    The amount. A numeric string is coerced; `NaN`/`Infinity`
- *                 are passed through as-is (`Intl` renders them as "NaN" /
- *                 "∞" rather than throwing).
+ * @param value    The amount. A numeric string is coerced. Missing or
+ *                 non-numeric values (`undefined`, `null`, `''` or a
+ *                 malformed string) render `AMOUNT_PLACEHOLDER` instead of
+ *                 "NaN"/zero.
  * @param currency ISO-4217 code. Blank/absent falls back to `USD`, matching
  *                 the previous `shipment.currency || 'USD'` behaviour.
  */
 export function formatMoney(
-  value: number | string,
+  value: number | string | null | undefined,
   currency?: string | null,
 ): string {
   const amount = Number(value);
   const code = (currency ?? '').trim() || DEFAULT_CURRENCY;
+
+  // A missing or malformed amount (`undefined`, `null`, `''` or garbage)
+  // has no meaningful value to format — show a placeholder rather than
+  // '$NaN' or a silent '$0.00' for an empty string.
+  if (value == null || value === '' || !Number.isFinite(amount)) {
+    return AMOUNT_PLACEHOLDER;
+  }
 
   try {
     return new Intl.NumberFormat('en-US', {
