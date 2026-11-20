@@ -51,7 +51,7 @@ export default function ProfilePage() {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting, isDirty },
+    formState: { errors, isSubmitting, isDirty, dirtyFields },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   useEffect(() => {
@@ -95,7 +95,9 @@ export default function ProfilePage() {
       const updated = await updateProfile({
         firstName: data.firstName,
         lastName: data.lastName,
-        walletAddress: data.walletAddress || undefined,
+        walletAddress: dirtyFields.walletAddress
+          ? data.walletAddress || null
+          : undefined,
       });
       setUser(updated);
       reset({

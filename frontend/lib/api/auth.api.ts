@@ -84,7 +84,7 @@ export async function resetPassword(
 export async function updateProfile(dto: {
   firstName?: string;
   lastName?: string;
-  walletAddress?: string;
+  walletAddress?: string | null;
 }): Promise<User> {
   return apiClient<User>('/auth/profile', {
     method: 'PATCH',
