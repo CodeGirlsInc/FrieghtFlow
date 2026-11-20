@@ -336,3 +336,93 @@ describe('New shipment form — currency is validated against real codes (FE-192
     );
   });
 });
+
+describe('New shipment form — mirrors the backend DTO bounds (#1839)', () => {
+  it('rejects origin/destination over 255 characters on step 1', async () => {
+    render(<NewShipmentPage />);
+    fireEvent.change(screen.getByLabelText(/Origin/), { target: { value: 'L'.repeat(256) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next →' }));
+    expect(await screen.findByText('Origin must be at most 255 characters')).toBeInTheDocument();
+    expect(stepButton(1)).toHaveAttribute('aria-current', 'step');
+
+    fireEvent.change(screen.getByLabelText(/Origin/), { target: { value: 'L'.repeat(255) } });
+    fireEvent.change(screen.getByLabelText(/Destination/), { target: { value: 'D'.repeat(256) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next →' }));
+    expect(await screen.findByText('Destination must be at most 255 characters')).toBeInTheDocument();
+    expect(stepButton(1)).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('rejects a cargo description over 2000 characters on step 2', async () => {
+    render(<NewShipmentPage />);
+    await advanceToCargo();
+    fireEvent.change(screen.getByLabelText(/Description/), { target: { value: 'C'.repeat(2001) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next →' }));
+    expect(await screen.findByText('Cargo description must be at most 2000 characters')).toBeInTheDocument();
+    expect(stepButton(2)).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('rejects weightKg with more than 2 decimal places on step 2', async () => {
+    render(<NewShipmentPage />);
+    await advanceToCargo();
+    fireEvent.change(screen.getByLabelText(/Weight/), { target: { value: '500.555' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next →' }));
+    expect(await screen.findByText('Weight must have at most 2 decimal places')).toBeInTheDocument();
+    expect(stepButton(2)).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('rejects volumeCbm with more than 3 decimal places on step 2', async () => {
+    render(<NewShipmentPage />);
+    await advanceToCargo();
+    fireEvent.change(screen.getByLabelText(/Volume/), { target: { value: '2.1234' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next →' }));
+    expect(stepButton(2)).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByLabelText(/Volume/)).toBeInTheDocument();
+  });
+
+  it('rejects a price above 1,000,000 on step 3', async () => {
+    await goToPricingStep();
+    fireEvent.change(screen.getByLabelText(/Price/), { target: { value: '1000001' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next →' }));
+    expect(await screen.findByText('Price must be at most 1,000,000')).toBeInTheDocument();
+    expect(stepButton(3)).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('rejects price with more than 2 decimal places on step 3', async () => {
+    await goToPricingStep();
+    fireEvent.change(screen.getByLabelText(/Price/), { target: { value: '1500.555' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next →' }));
+    expect(await screen.findByText('Price must have at most 2 decimal places')).toBeInTheDocument();
+  });
+
+  it('allows the boundary value (price at 1,000,000) and advances to review', async () => {
+    await goToPricingStep();
+    fireEvent.change(screen.getByLabelText(/Price/), { target: { value: '1000000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next →' }));
+    expect(await screen.findByText('Review & Submit')).toBeInTheDocument();
+  });
+});
+
+describe('NewShipmentPage — server error display (#1838)', () => {
+  it('shows the server message and maps the 400 field error onto the form', async () => {
+    const user = await goToPricingStep();
+    await user.click(screen.getByRole('button', { name: 'Next →' }));
+    expect(await screen.findByText('Review & Submit')).toBeInTheDocument();
+
+    mockCreate.mockRejectedValue({
+      statusCode: 400,
+      message: ['price must be less than or equal to 1000000'],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Create Shipment' }));
+
+    // The API's message is shown instead of the generic retry hint (#1838).
+    await waitFor(() =>
+      expect(mockToast.error).toHaveBeenCalledWith('price must be less than or equal to 1000000'),
+    );
+    expect(mockToast.error).not.toHaveBeenCalledWith('Failed to create shipment. Please try again.');
+
+    // The mapped field error is visible on the step that owns the field.
+    await user.click(screen.getByRole('button', { name: '← Back' }));
+    expect(await screen.findByText('price must be less than or equal to 1000000')).toBeInTheDocument();
+  });
+});
