@@ -1,0 +1,534 @@
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  Address,
+  BASE_FEE,
+  Contract,
+  Keypair,
+  nativeToScVal,
+  scValToNative,
+  SorobanRpc,
+  Transaction,
+  TransactionBuilder,
+  xdr,
+} from '@stellar/stellar-sdk';
+import {
+  ChainTimeoutError,
+  EscrowContractError,
+  SimulationError,
+  SubmissionError,
+} from './errors/stellar-integration.errors';
+import { EscrowErrorCode } from './errors/escrow-error-code.enum';
+import { ContractCallResult, EscrowRecord } from './escrow-record.interface';
+
+const TX_TIMEOUT_SECONDS = 30;
+const DEFAULT_CONFIRMATION_TIMEOUT_MS = 60_000;
+const CONFIRMATION_POLL_INTERVAL_MS = 1_000;
+const MAX_SUBMISSION_BACKOFF_MS = 5_000;
+
+/**
+ * Soroban error strings for contract-level rejections look like
+ * `HostError: Error(Contract, #6)`, where 6 is the EscrowError
+ * discriminant. This is the documented Soroban diagnostic format for a
+ * function returning `Result<T, ContractError>`.
+ */
+const CONTRACT_ERROR_PATTERN = /Error\(Contract,\s*#(\d+)\)/;
+
+/**
+ * Thin, testable bridge between the backend and the escrow contract
+ * (contracts/escrow/src/lib.rs). One typed method per entrypoint: simulate
+ * first (to catch EscrowError variants pre-submission), sign when
+ * required, submit, return tx hash + result.
+ *
+ * No retry/polling logic and no business-logic decisions here — those are
+ * later issues. This module only needs to prove the backend can build,
+ * simulate, sign, and submit against the real contract.
+ */
+@Injectable()
+export class StellarContractService implements OnModuleInit {
+  private readonly logger = new Logger(StellarContractService.name);
+  private server: SorobanRpc.Server;
+  private contract: Contract;
+  private adminKeypair: Keypair;
+  private networkPassphrase: string;
+  private enabled = false;
+  private confirmationTimeoutMs = DEFAULT_CONFIRMATION_TIMEOUT_MS;
+
+  constructor(private readonly config: ConfigService) {}
+
+  // Fail fast at boot: a missing/mismatched RPC config or a signing key
+  // that doesn't match the contract's admin should never surface only on
+  // the first real admin-gated call.
+  async onModuleInit(): Promise<void> {
+    // Joi may hand this back as a coerced boolean or as the raw string,
+    // depending on config-loading path — normalize defensively.
+    this.enabled = String(this.config.get('SOROBAN_ENABLED')) === 'true';
+    this.confirmationTimeoutMs =
+      Number(
+        this.config.get('SOROBAN_CONFIRMATION_TIMEOUT_MS') ??
+          DEFAULT_CONFIRMATION_TIMEOUT_MS,
+      ) || DEFAULT_CONFIRMATION_TIMEOUT_MS;
+    if (!this.enabled) {
+      this.logger.warn(
+        'SOROBAN_ENABLED is not "true" — Stellar contract integration is disabled; no chain calls will be made.',
+      );
+      return;
+    }
+
+    const rpcUrl = this.requireEnv('SOROBAN_RPC_URL');
+    const networkPassphrase = this.requireEnv('STELLAR_NETWORK_PASSPHRASE');
+    const escrowAddress = this.requireEnv('ESCROW_CONTRACT_ADDRESS');
+    // Validated even though this service doesn't reference it directly —
+    // fail fast here rather than mid-flow in whatever later issue reads it.
+    this.requireEnv('TOKEN_CONTRACT_ADDRESS');
+    const adminSecret = this.requireEnv('PLATFORM_ADMIN_SECRET');
+
+    this.networkPassphrase = networkPassphrase;
+    this.server = new SorobanRpc.Server(rpcUrl);
+    this.contract = new Contract(escrowAddress);
+    this.adminKeypair = Keypair.fromSecret(adminSecret);
+
+    await this.assertAdminKeyMatchesContract();
+
+    this.logger.log(
+      `StellarContractService ready (rpc=${rpcUrl}, escrow=${escrowAddress})`,
+    );
+  }
+
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  // ── Shipper / party actions (require the caller's own signature) ───────
+
+  /** Shipper locks funds for a shipment. `signer` must be the `shipper` address's keypair. */
+  async fundEscrow(
+    signer: Keypair,
+    carrier: string,
+    shipmentId: bigint,
+    amount: bigint,
+  ): Promise<ContractCallResult> {
+    return this.invoke(
+      signer,
+      'fund_escrow',
+      new Address(signer.publicKey()).toScVal(),
+      new Address(carrier).toScVal(),
+      nativeToScVal(shipmentId, { type: 'u64' }),
+      nativeToScVal(amount, { type: 'i128' }),
+    );
+  }
+
+  /**
+   * Builds and simulates a `fund_escrow` call for `shipperPublicKey` but does
+   * NOT sign it — the platform never holds shipper keys (non-custodial
+   * deposit model, issue #1276). Returns the prepared, unsigned transaction
+   * as a base64 XDR envelope for the shipper's own wallet to sign.
+   */
+  async buildFundEscrowTransaction(
+    shipperPublicKey: string,
+    carrierAddress: string,
+    shipmentId: bigint,
+    amount: bigint,
+  ): Promise<string> {
+    this.assertEnabled();
+    const sourceAccount = await this.server.getAccount(shipperPublicKey);
+
+    const rawTx = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(
+        this.contract.call(
+          'fund_escrow',
+          new Address(shipperPublicKey).toScVal(),
+          new Address(carrierAddress).toScVal(),
+          nativeToScVal(shipmentId, { type: 'u64' }),
+          nativeToScVal(amount, { type: 'i128' }),
+        ),
+      )
+      .setTimeout(TX_TIMEOUT_SECONDS)
+      .build();
+
+    const sim = await this.server.simulateTransaction(rawTx);
+    this.throwIfSimulationFailed(sim, 'fund_escrow');
+
+    let prepared;
+    try {
+      prepared = SorobanRpc.assembleTransaction(rawTx, sim).build();
+    } catch (error) {
+      throw new SimulationError(
+        'Failed to assemble "fund_escrow" from its simulation',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+
+    return prepared.toXDR();
+  }
+
+  /**
+   * Submits a `fund_escrow` transaction the shipper's own wallet has already
+   * signed (the counterpart to buildFundEscrowTransaction — see ADR-style
+   * note there on why the backend never signs this one itself).
+   */
+  async submitSignedTransaction(
+    signedXdr: string,
+  ): Promise<ContractCallResult> {
+    this.assertEnabled();
+    const prepared = TransactionBuilder.fromXDR(
+      signedXdr,
+      this.networkPassphrase,
+    ) as Transaction;
+    return this.submitPrepared(prepared, 'fund_escrow');
+  }
+
+  /** Either party raises a dispute. `signer` must be the shipper's or carrier's keypair. */
+  async raiseDispute(
+    signer: Keypair,
+    shipmentId: bigint,
+  ): Promise<ContractCallResult> {
+    return this.invoke(
+      signer,
+      'raise_dispute',
+      new Address(signer.publicKey()).toScVal(),
+      nativeToScVal(shipmentId, { type: 'u64' }),
+    );
+  }
+
+  // ── Admin actions (always signed with the platform admin key) ──────────
+
+  async releasePayment(shipmentId: bigint): Promise<ContractCallResult> {
+    this.assertEnabled();
+    return this.invoke(
+      this.adminKeypair,
+      'release_payment',
+      nativeToScVal(shipmentId, { type: 'u64' }),
+    );
+  }
+
+  async refundPayment(shipmentId: bigint): Promise<ContractCallResult> {
+    this.assertEnabled();
+    return this.invoke(
+      this.adminKeypair,
+      'refund_payment',
+      nativeToScVal(shipmentId, { type: 'u64' }),
+    );
+  }
+
+  /**
+   * Cancel a shipment, retaining `feeAmount` (in the token's base unit) for
+   * the platform and returning the remainder to the shipper.
+   *
+   * A `feeAmount` of `0n` is a full refund and is equivalent to
+   * {@link refundPayment} — the caller may pass it either way. The contract
+   * rejects a fee greater than or equal to the escrowed amount, and rejects
+   * any escrow that is not `Funded` (so a disputed escrow must go through
+   * {@link resolveDispute} instead).
+   */
+  async refundPaymentWithFee(
+    shipmentId: bigint,
+    feeAmount: bigint,
+  ): Promise<ContractCallResult> {
+    this.assertEnabled();
+    if (feeAmount < 0n) {
+      throw new Error(
+        'StellarContractService: refundPaymentWithFee requires a non-negative fee',
+      );
+    }
+    return this.invoke(
+      this.adminKeypair,
+      'refund_payment_with_fee',
+      nativeToScVal(shipmentId, { type: 'u64' }),
+      nativeToScVal(feeAmount, { type: 'i128' }),
+    );
+  }
+
+  /**
+   * The platform fee (in base units) the contract retained the last time this
+   * escrow was settled as a partial refund, or `0n` if it has not been.
+   *
+   * Used by escrow reconciliation to confirm the fee recorded off-chain
+   * matches what actually went to the platform admin.
+   */
+  async getSettlementFee(shipmentId: bigint): Promise<bigint> {
+    const retval = await this.simulateRead(
+      'get_settlement_fee',
+      nativeToScVal(shipmentId, { type: 'u64' }),
+    );
+    return BigInt(scValToNative(retval) as bigint | number);
+  }
+
+  async resolveDispute(
+    shipmentId: bigint,
+    releaseToCarrier: boolean,
+  ): Promise<ContractCallResult> {
+    this.assertEnabled();
+    return this.invoke(
+      this.adminKeypair,
+      'resolve_dispute',
+      nativeToScVal(shipmentId, { type: 'u64' }),
+      nativeToScVal(releaseToCarrier, { type: 'bool' }),
+    );
+  }
+
+  // ── Read-only queries ────────────────────────────────────────────────────
+
+  async getEscrow(shipmentId: bigint): Promise<EscrowRecord> {
+    const retval = await this.simulateRead(
+      'get_escrow',
+      nativeToScVal(shipmentId, { type: 'u64' }),
+    );
+    return StellarContractService.decodeEscrowRecord(retval);
+  }
+
+  async getTransactionStatus(txHash: string): Promise<string> {
+    this.assertEnabled();
+    const result = await this.server.getTransaction(txHash);
+    return result.status;
+  }
+
+  async getBalance(): Promise<bigint> {
+    const retval = await this.simulateRead('get_balance');
+    return BigInt(scValToNative(retval) as bigint | number);
+  }
+
+  // ── Internals ────────────────────────────────────────────────────────────
+
+  private assertEnabled(): void {
+    if (!this.enabled) {
+      throw new Error(
+        'StellarContractService: SOROBAN_ENABLED is not "true" — chain calls are disabled',
+      );
+    }
+  }
+
+  private async assertAdminKeyMatchesContract(): Promise<void> {
+    const retval = await this.simulateRead('get_admin');
+    const onChainAdmin = scValToNative(retval) as string;
+    if (onChainAdmin !== this.adminKeypair.publicKey()) {
+      // Never log the secret — only the (public) mismatch.
+      throw new Error(
+        `StellarContractService: configured PLATFORM_ADMIN_SECRET's public key ` +
+          `(${this.adminKeypair.publicKey()}) does not match the escrow contract's ` +
+          `admin (${onChainAdmin})`,
+      );
+    }
+  }
+
+  /** Simulates a read-only call (no signing, no submission) and returns the raw retval. */
+  private async simulateRead(
+    method: string,
+    ...args: xdr.ScVal[]
+  ): Promise<xdr.ScVal> {
+    this.assertEnabled();
+    const sourceAccount = await this.server.getAccount(
+      this.adminKeypair.publicKey(),
+    );
+    const tx = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(this.contract.call(method, ...args))
+      .setTimeout(TX_TIMEOUT_SECONDS)
+      .build();
+
+    const sim = await this.server.simulateTransaction(tx);
+    this.throwIfSimulationFailed(sim, method);
+
+    if (!SorobanRpc.Api.isSimulationSuccess(sim) || sim.result === undefined) {
+      throw new SimulationError(
+        `Simulating "${method}" returned no result`,
+        JSON.stringify(sim),
+      );
+    }
+
+    return sim.result.retval;
+  }
+
+  /** Builds, simulates, signs (with `signer`), and submits a write call. */
+  private async invoke(
+    signer: Keypair,
+    method: string,
+    ...args: xdr.ScVal[]
+  ): Promise<ContractCallResult> {
+    this.assertEnabled();
+    const sourceAccount = await this.server.getAccount(signer.publicKey());
+
+    const rawTx = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(this.contract.call(method, ...args))
+      .setTimeout(TX_TIMEOUT_SECONDS)
+      .build();
+
+    const sim = await this.server.simulateTransaction(rawTx);
+    this.throwIfSimulationFailed(sim, method);
+
+    let prepared;
+    try {
+      prepared = SorobanRpc.assembleTransaction(rawTx, sim).build();
+    } catch (error) {
+      throw new SimulationError(
+        `Failed to assemble "${method}" from its simulation`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+
+    prepared.sign(signer);
+
+    return this.submitPrepared(prepared, method);
+  }
+
+  /** Shared submit + status-mapping tail for both self-signed and externally-signed calls. */
+  private async submitPrepared(
+    prepared: Transaction,
+    method: string,
+  ): Promise<ContractCallResult> {
+    const deadline = Date.now() + this.confirmationTimeoutMs;
+    let sendResult;
+    try {
+      sendResult = await this.server.sendTransaction(prepared);
+    } catch (error) {
+      throw new SubmissionError(
+        `Submitting "${method}" failed`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+
+    let backoffMs = CONFIRMATION_POLL_INTERVAL_MS;
+    while (sendResult.status === 'TRY_AGAIN_LATER') {
+      if (Date.now() >= deadline) {
+        throw new ChainTimeoutError(
+          `Escrow contract call "${method}" was not accepted before the submission window expired`,
+          sendResult.hash,
+        );
+      }
+      await this.delay(Math.min(backoffMs, deadline - Date.now()));
+      backoffMs = Math.min(backoffMs * 2, MAX_SUBMISSION_BACKOFF_MS);
+      try {
+        sendResult = await this.server.sendTransaction(prepared);
+      } catch (error) {
+        throw new SubmissionError(
+          `Retrying submission of "${method}" failed`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+
+    if (sendResult.status === 'ERROR') {
+      throw new SubmissionError(
+        `Escrow contract call "${method}" was rejected on submission: ${sendResult.status}`,
+        sendResult,
+        true,
+        sendResult.hash,
+      );
+    }
+
+    return this.pollForConfirmation(sendResult.hash, method, deadline);
+  }
+
+  private async pollForConfirmation(
+    txHash: string,
+    method: string,
+    deadline: number,
+  ): Promise<ContractCallResult> {
+    while (Date.now() < deadline) {
+      try {
+        const status = await this.getTransactionStatus(txHash);
+
+        if (status === 'SUCCESS') {
+          return { txHash, status: 'SUCCESS' };
+        }
+
+        if (status === 'FAILED') {
+          throw new SubmissionError(
+            `Escrow contract call "${method}" failed after submission`,
+            { txHash, status },
+            true,
+            txHash,
+          );
+        }
+      } catch (error) {
+        if (error instanceof SubmissionError) {
+          throw error;
+        }
+      }
+
+      await this.delay(
+        Math.min(CONFIRMATION_POLL_INTERVAL_MS, deadline - Date.now()),
+      );
+    }
+
+    throw new ChainTimeoutError(
+      `Escrow contract call "${method}" did not confirm before the polling window expired`,
+      txHash,
+    );
+  }
+
+  private throwIfSimulationFailed(
+    sim: SorobanRpc.Api.SimulateTransactionResponse,
+    method: string,
+  ): void {
+    if (!SorobanRpc.Api.isSimulationError(sim)) {
+      return;
+    }
+
+    const match = CONTRACT_ERROR_PATTERN.exec(sim.error);
+    if (match) {
+      const code = Number(match[1]) as EscrowErrorCode;
+      throw new EscrowContractError(code, sim.error);
+    }
+
+    throw new SimulationError(
+      `Simulating "${method}" failed: ${sim.error}`,
+      sim.error,
+    );
+  }
+
+  private static decodeEscrowRecord(retval: xdr.ScVal): EscrowRecord {
+    const native = scValToNative(retval) as Record<string, unknown>;
+    return {
+      shipmentId: BigInt(native.shipment_id as bigint | number),
+      shipper: native.shipper as string,
+      carrier: native.carrier as string,
+      amount: BigInt(native.amount as bigint | number),
+      status: StellarContractService.decodeStatus(native.status),
+      fundedAt: BigInt(native.funded_at as bigint | number),
+      settledAt: BigInt(native.settled_at as bigint | number),
+    };
+  }
+
+  private static decodeStatus(raw: unknown): EscrowRecord['status'] {
+    // #[contracttype] enums always encode as ScVal::Vec([Symbol(tag), ...
+    // values]), even for unit variants with no associated data — so
+    // EscrowStatus::Funded decodes via scValToNative to the JS array
+    // ["Funded"], not a bare string.
+    // Array.isArray narrows to any[], not unknown[] — cast back explicitly
+    // so the switch below type-checks against unknown, not any.
+    const tag: unknown = Array.isArray(raw) ? (raw[0] as unknown) : raw;
+    switch (tag) {
+      case 'Pending':
+      case 'Funded':
+      case 'Released':
+      case 'Refunded':
+      case 'Disputed':
+        return tag;
+      default:
+        throw new Error(
+          `Unrecognized EscrowStatus value: ${JSON.stringify(raw)}`,
+        );
+    }
+  }
+
+  private requireEnv(key: string): string {
+    const value = this.config.get<string>(key);
+    if (!value) {
+      throw new Error(`StellarContractService: ${key} is not configured`);
+    }
+    return value;
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+}

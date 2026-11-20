@@ -1,0 +1,183 @@
+//! Transitions only the shipper may drive.
+
+use common::TTL_LEDGERS;
+use soroban_sdk::{Address, Env, String};
+
+use crate::errors::ShipmentError;
+use crate::types::{DataKey, Shipment, ShipmentStatus};
+use crate::{events, storage};
+
+/// Shipper creates a new shipment posting.
+pub fn create(
+    env: &Env,
+    shipper: Address,
+    origin: String,
+    destination: String,
+    cargo_description: String,
+    weight_kg: u32,
+    price: i128,
+) -> Result<u64, ShipmentError> {
+    shipper.require_auth();
+    storage::require_not_paused(env)?;
+
+    if weight_kg == 0 || weight_kg > 1_000_000 || price <= 0 {
+        return Err(ShipmentError::InvalidInput);
+    }
+
+    // Blank or oversized free-text fields are rejected: origin and destination
+    // must be 1-255 chars, cargo_description 1-1024 chars.
+    if origin.len() == 0
+        || destination.len() == 0
+        || cargo_description.len() == 0
+        || origin.len() > 255
+        || destination.len() > 255
+        || cargo_description.len() > 1024
+    {
+        return Err(ShipmentError::InvalidInput);
+    }
+
+    let id = storage::next_id(env);
+    let now = env.ledger().timestamp();
+
+    let shipment = Shipment {
+        id,
+        shipper: shipper.clone(),
+        carrier: None,
+        origin,
+        destination,
+        cargo_description,
+        weight_kg,
+        price,
+        status: ShipmentStatus::Created,
+        created_at: now,
+        updated_at: now,
+    };
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::Shipment(id), &shipment);
+    env.storage()
+        .persistent()
+        .extend_ttl(&DataKey::Shipment(id), TTL_LEDGERS, TTL_LEDGERS);
+
+    storage::append_to_list(env, DataKey::ShipperList(shipper), id);
+
+    events::created(env, &shipment);
+    Ok(id)
+}
+
+/// Shipper edits a shipment's terms — only while it's still `Created`, i.e.
+/// before any carrier has committed to it. Subject to the same validation as
+/// [`create`]; `origin` and `carrier` are not editable.
+pub fn update(
+    env: &Env,
+    shipper: Address,
+    shipment_id: u64,
+    destination: String,
+    cargo_description: String,
+    weight_kg: u32,
+    price: i128,
+) -> Result<(), ShipmentError> {
+    shipper.require_auth();
+    storage::require_not_paused(env)?;
+
+    let mut shipment = storage::load(env, shipment_id)?;
+    require_shipper(&shipment, &shipper)?;
+
+    if shipment.status != ShipmentStatus::Created {
+        return Err(ShipmentError::InvalidStatus);
+    }
+
+    if weight_kg == 0 || weight_kg > 1_000_000 || price <= 0 {
+        return Err(ShipmentError::InvalidInput);
+    }
+    // Same free-text bounds as `create`: destination must be 1-255 chars,
+    // cargo_description 1-1024 chars.
+    if destination.len() == 0
+        || cargo_description.len() == 0
+        || destination.len() > 255
+        || cargo_description.len() > 1024
+    {
+        return Err(ShipmentError::InvalidInput);
+    }
+
+    shipment.destination = destination;
+    shipment.cargo_description = cargo_description;
+    shipment.weight_kg = weight_kg;
+    shipment.price = price;
+    shipment.updated_at = env.ledger().timestamp();
+    storage::save(env, &shipment);
+
+    events::updated(env, &shipment);
+    Ok(())
+}
+
+/// Shipper confirms delivery and marks the shipment Completed.
+/// This is the trigger for escrow payment release.
+pub fn confirm_delivery(
+    env: &Env,
+    shipper: Address,
+    shipment_id: u64,
+) -> Result<(), ShipmentError> {
+    shipper.require_auth();
+    storage::require_not_paused(env)?;
+
+    let mut shipment = storage::load(env, shipment_id)?;
+    require_shipper(&shipment, &shipper)?;
+
+    if shipment.status != ShipmentStatus::Delivered {
+        return Err(ShipmentError::InvalidStatus);
+    }
+
+    shipment.status = ShipmentStatus::Completed;
+    shipment.updated_at = env.ledger().timestamp();
+    storage::save(env, &shipment);
+
+    events::completed(env, &shipment);
+    Ok(())
+}
+
+/// Shipper cancels — only allowed from Created or Accepted.
+pub fn cancel(env: &Env, shipper: Address, shipment_id: u64) -> Result<(), ShipmentError> {
+    shipper.require_auth();
+    storage::require_not_paused(env)?;
+
+    let mut shipment = storage::load(env, shipment_id)?;
+    require_shipper(&shipment, &shipper)?;
+
+    if !matches!(
+        shipment.status,
+        ShipmentStatus::Created | ShipmentStatus::Accepted
+    ) {
+        return Err(ShipmentError::InvalidStatus);
+    }
+
+    // Cancelling an `Accepted` shipment has to unwind the carrier assignment,
+    // not just flip the status (#1677). Leaving it in place leaves two live
+    // defects: the id stays in `CarrierList(carrier)` so
+    // `get_shipments_by_carrier` keeps handing back a cancelled job, and
+    // `Shipment::is_party` still treats the ex-carrier as a party to it — which
+    // `dispute::open_dispute` authorises on, so the carrier of a cancelled
+    // shipment could still register dispute evidence against it.
+    let previous_carrier = shipment.carrier.take();
+
+    shipment.status = ShipmentStatus::Cancelled;
+    shipment.updated_at = env.ledger().timestamp();
+    storage::save(env, &shipment);
+
+    if let Some(carrier) = previous_carrier {
+        storage::remove_from_list(env, DataKey::CarrierList(carrier), shipment_id);
+    }
+
+    events::cancelled(env, &shipment);
+    Ok(())
+}
+
+/// Confirm `caller` is the shipment's shipper — the one ownership check
+/// every shipper-gated transition needs.
+fn require_shipper(shipment: &Shipment, caller: &Address) -> Result<(), ShipmentError> {
+    if shipment.shipper != *caller {
+        return Err(ShipmentError::NotShipper);
+    }
+    Ok(())
+}

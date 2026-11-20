@@ -21,9 +21,6 @@ function makeUser(overrides: Partial<User> = {}): User {
     role: UserRole.SHIPPER,
     isEmailVerified: true,
     isActive: true,
-    isTwoFactorEnabled: false,
-    twoFactorSecret: null,
-    recoveryCodes: [],
     walletAddress: null,
     refreshToken: null,
     verificationToken: null,
@@ -218,6 +215,28 @@ describe('AuthService', () => {
       await expect(service.refresh(user.id, 'any-token')).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+
+    it('deduplicates concurrent refresh calls for the same token', async () => {
+      const rawToken = 'raw-refresh-token';
+      const hashedToken = await bcrypt.hash(rawToken, 10);
+      const user = makeUser({ refreshToken: hashedToken });
+
+      usersService.findOne.mockResolvedValue(user);
+      usersService.findByEmail.mockResolvedValue(user);
+      usersService.updateRefreshToken.mockResolvedValue(undefined);
+      jwtService.signAsync
+        .mockResolvedValueOnce('new-access-token')
+        .mockResolvedValueOnce('new-refresh-token');
+
+      const [first, second] = await Promise.all([
+        service.refresh(user.id, rawToken),
+        service.refresh(user.id, rawToken),
+      ]);
+
+      expect(first).toEqual(second);
+      expect(usersService.findOne).toHaveBeenCalledTimes(1);
+      expect(usersService.updateRefreshToken).toHaveBeenCalledTimes(1);
     });
   });
 

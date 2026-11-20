@@ -21,11 +21,12 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     price: 5000,
     currency: 'USD',
     cargoCategory: null,
-    isRFQ: false,
     isInsured: false,
+    onChainShipmentId: null,
     insurancePremium: null,
     status: ShipmentStatus.COMPLETED,
     notes: null,
+    cancellationFee: null,
     pickupDate: null,
     estimatedDeliveryDate: new Date('2024-01-10'),
     actualDeliveryDate: new Date('2024-01-09'),
@@ -37,10 +38,14 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
 
 describe('CarriersService.getMyMetrics()', () => {
   let service: CarriersService;
-  let shipmentRepo: { find: jest.Mock };
+  let shipmentRepo: {
+    createQueryBuilder: jest.Mock;
+  };
 
   beforeEach(async () => {
-    shipmentRepo = { find: jest.fn() };
+    shipmentRepo = {
+      createQueryBuilder: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -52,20 +57,26 @@ describe('CarriersService.getMyMetrics()', () => {
     service = module.get<CarriersService>(CarriersService);
   });
 
+  const mockAggregateResults = (...results: Array<{ count?: string; total?: string | null }>) => {
+    shipmentRepo.createQueryBuilder.mockImplementation(() => ({
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      setParameters: jest.fn().mockReturnThis(),
+      getRawOne: jest.fn().mockResolvedValue(results.shift() ?? { count: '0' }),
+    }));
+  };
+
   it('calculates on-time rate correctly', async () => {
-    shipmentRepo.find.mockResolvedValue([
-      makeShipment({
-        status: ShipmentStatus.COMPLETED,
-        actualDeliveryDate: new Date('2024-01-09'),
-        estimatedDeliveryDate: new Date('2024-01-10'),
-      }),
-      makeShipment({
-        id: 'ship-2',
-        status: ShipmentStatus.COMPLETED,
-        actualDeliveryDate: new Date('2024-01-12'),
-        estimatedDeliveryDate: new Date('2024-01-10'),
-      }),
-    ]);
+    mockAggregateResults(
+      { count: '2' },
+      { count: '2' },
+      { count: '1' },
+      { count: '2' },
+      { count: '1' },
+      { total: '10000' },
+    );
 
     const metrics = await service.getMyMetrics('carrier-1');
 
@@ -75,7 +86,14 @@ describe('CarriersService.getMyMetrics()', () => {
   });
 
   it('returns zero rates when no shipments', async () => {
-    shipmentRepo.find.mockResolvedValue([]);
+    mockAggregateResults(
+      { count: '0' },
+      { count: '0' },
+      { count: '0' },
+      { count: '0' },
+      { count: '0' },
+      { total: '0' },
+    );
 
     const metrics = await service.getMyMetrics('carrier-1');
 
@@ -85,10 +103,14 @@ describe('CarriersService.getMyMetrics()', () => {
   });
 
   it('calculates cancellation rate', async () => {
-    shipmentRepo.find.mockResolvedValue([
-      makeShipment({ status: ShipmentStatus.ACCEPTED }),
-      makeShipment({ id: 'ship-2', status: ShipmentStatus.CANCELLED }),
-    ]);
+    mockAggregateResults(
+      { count: '2' },
+      { count: '1' },
+      { count: '1' },
+      { count: '2' },
+      { count: '1' },
+      { total: '5000' },
+    );
 
     const metrics = await service.getMyMetrics('carrier-1');
 

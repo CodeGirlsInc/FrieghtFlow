@@ -1,141 +1,226 @@
 import {
-  Injectable,
   BadRequestException,
+  ConflictException,
+  Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
-// import { authenticator } from 'otplib';
-import { authenticator } from '@otplib/preset-v11';
-import * as qrcode from 'qrcode';
-import * as bcrypt from 'bcrypt';
-import { Redis } from 'ioredis'; // Assuming BE-02 Redis instance wrapper setup
-import { User } from '../users/entities/user.entity';
-import { TwoFactorRecovery } from '../users/entities/two-factor-recovery.entity';
+import { FindOptionsWhere, MoreThan, Repository } from 'typeorm';
+import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
+import { TwoFactorOtp } from './entities/two-factor-otp.entity';
+
+const OTP_MIN = 100_000;
+const OTP_MAX = 1_000_000;
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_HASH_LENGTH = 64;
+
+type OtpState = Partial<
+  Pick<TwoFactorOtp, 'enabled' | 'otpCodeHash' | 'otpExpiresAt' | 'otpUsed'>
+>;
+type OtpCriteria = string | FindOptionsWhere<TwoFactorOtp>;
+type OtpPatch = OtpState;
 
 @Injectable()
 export class TwoFactorService {
-  private readonly redisClient: Redis;
-
   constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    @InjectRepository(TwoFactorRecovery)
-    private readonly recoveryRepository: Repository<TwoFactorRecovery>,
-  ) {
-    // Standard workspace constructor assignment for Redis connection
-    this.redisClient = new Redis(
-      process.env.REDIS_URL || 'redis://localhost:6379',
+    @InjectRepository(TwoFactorOtp)
+    private readonly otpRepo: Repository<TwoFactorOtp>,
+  ) {}
+
+  async isEnabled(userId: string): Promise<boolean> {
+    const state = await this.findState(userId);
+    return state?.enabled === true;
+  }
+
+  async enable(userId: string): Promise<void> {
+    // Clearing the OTP fields on enrollment prevents a stale code from being
+    // resurrected if an older row is re-enabled.
+    await this.writeState(userId, {
+      enabled: true,
+      otpCodeHash: null,
+      otpExpiresAt: null,
+      otpUsed: false,
+    });
+  }
+
+  async disable(userId: string): Promise<void> {
+    // Do not upsert here. A conditional UPDATE lets a concurrent generation
+    // either happen before this clear (and be cleared) or fail its enabled
+    // predicate, so a disabled user can never retain a live OTP.
+    await this.updateState(
+      { userId },
+      {
+        enabled: false,
+        otpCodeHash: null,
+        otpExpiresAt: null,
+        otpUsed: false,
+      },
     );
   }
 
-  async initiateSetup(userId: number, email: string) {
-    const secret = authenticator.generateSecret();
-    const appName = 'YieldLadder platform';
-    const otpauthUrl = authenticator.keyuri(email, appName, secret);
-    const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
+  async generateOtp(userId: string): Promise<string> {
+    // randomInt uses a cryptographically secure source and an unbiased
+    // rejection-sampling implementation under the hood.
+    const code = randomInt(OTP_MIN, OTP_MAX).toString().padStart(6, '0');
+    const otpCodeHash = this.hashOtp(code);
+    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-    // Cache the temporary secret safely inside Redis with a strict 10 minute TTL
-    const redisKey = `2fa:setup:${userId}`;
-    await this.redisClient.setex(redisKey, 600, secret);
+    const result = await this.updateState(
+      { userId, enabled: true },
+      {
+        otpCodeHash,
+        otpExpiresAt: expiresAt,
+        otpUsed: false,
+      },
+    );
 
-    return { otpauthUrl, qrCodeDataUrl, secret };
-  }
-
-  async confirmEnable(userId: number, otp: string) {
-    const redisKey = `2fa:setup:${userId}`;
-    const secret = await this.redisClient.get(redisKey);
-
-    if (!secret) {
-      throw new BadRequestException(
-        '2FA setup session expired. Please regenerate the QR configuration.',
-      );
-    }
-
-    const isValid = authenticator.verify({ token: otp, secret });
-    if (!isValid) {
-      throw new BadRequestException(
-        'Invalid confirmation code. Verification rejected.',
-      );
-    }
-
-    // Persist configuration settings to user entity
-    await this.userRepository.update(userId, {
-      twoFactorSecret: secret,
-      isTwoFactorEnabled: true,
-    });
-
-    // Clear temporary setup parameters out of cache memory immediately
-    await this.redisClient.del(redisKey);
-
-    // Generate 8 individual secure backup validation tokens
-    const plainRecoveryCodes: string[] = [];
-    const entityPool: Partial<TwoFactorRecovery>[] = [];
-
-    for (let i = 0; i < 8; i++) {
-      // Create readable 8-character structural split code chunks
-      const plainCode = Math.random()
-        .toString(36)
-        .substring(2, 10)
-        .toUpperCase();
-      plainRecoveryCodes.push(plainCode);
-
-      const codeHash = await bcrypt.hash(plainCode, 10);
-      entityPool.push({ userId, codeHash, usedAt: null });
-    }
-
-    await this.recoveryRepository.save(entityPool);
-
-    return { recoveryCodes: plainRecoveryCodes };
-  }
-
-  async verifyTokenOrRecovery(
-    userId: number,
-    inputToken: string,
-  ): Promise<boolean> {
-    const user = await this.userRepository
-      .createQueryBuilder('user')
-      .addSelect('user.twoFactorSecret')
-      .where('user.id = :userId', { userId })
-      .getOne();
-
-    if (!user || !user.twoFactorSecret) {
-      throw new UnauthorizedException(
-        'Multi-factor authorization is not configured for this account.',
-      );
-    }
-
-    // Path A: Validate via standard time-based dynamic OTP first
-    const isTotpValid = authenticator.verify({
-      token: inputToken,
-      secret: user.twoFactorSecret,
-    });
-    if (isTotpValid) return true;
-
-    // Path B: Fall back to un-used emergency recovery tokens
-    // const records = await this.recoveryRepository.find({ where: { userId, usedAt: null } });
-    const records = await this.recoveryRepository.find({
-      where: { userId, usedAt: IsNull() },
-    });
-
-    for (const record of records) {
-      const match = await bcrypt.compare(inputToken, record.codeHash);
-      if (match) {
-        // Invalidate single-use tracking item upon execution match matching Acceptance Criteria
-        await this.recoveryRepository.update(record.id, { usedAt: new Date() });
-        return true;
+    if (result?.affected !== 1) {
+      const state = await this.findState(userId);
+      if (!state?.enabled) {
+        // Clean up a legacy disabled row without touching a concurrent
+        // re-enable: the predicate below only matches enabled=false.
+        await this.updateState(
+          { userId, enabled: false },
+          {
+            otpCodeHash: null,
+            otpExpiresAt: null,
+            otpUsed: false,
+          },
+        );
+        throw new BadRequestException('2FA is not enabled');
       }
+
+      throw new ConflictException('2FA state changed concurrently');
     }
 
-    return false;
+    return code;
   }
 
-  async deactivate(userId: number) {
-    await this.userRepository.update(userId, {
-      twoFactorSecret: null,
-      isTwoFactorEnabled: false,
-    });
-    // Wipe matching system recovery database objects safely
-    await this.recoveryRepository.delete({ userId });
+  async verifyOtp(userId: string, code: string): Promise<void> {
+    const state = await this.findState(userId);
+    if (!state?.otpCodeHash || !state.otpExpiresAt) {
+      throw new UnauthorizedException('No OTP issued');
+    }
+    if (!state.enabled) {
+      throw new UnauthorizedException('2FA is not enabled');
+    }
+    if (state.otpUsed) {
+      throw new UnauthorizedException('OTP already used');
+    }
+
+    const nowTimestamp = Date.now();
+    const now = new Date(nowTimestamp);
+    if (state.otpExpiresAt.getTime() <= nowTimestamp) {
+      await this.clearOtpIfCurrent(userId, {
+        otpCodeHash: state.otpCodeHash,
+        otpExpiresAt: state.otpExpiresAt,
+        otpUsed: state.otpUsed,
+      });
+      throw new UnauthorizedException('OTP expired');
+    }
+
+    const otpCodeHash = this.hashOtp(code);
+    if (!this.hashesMatch(state.otpCodeHash, otpCodeHash)) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    // The complete predicate is evaluated in one SQL UPDATE. A concurrent
+    // disable, replacement, expiry, or second verifier therefore cannot make
+    // a stale read succeed.
+    const result = await this.updateState(
+      {
+        userId,
+        enabled: true,
+        otpCodeHash,
+        otpUsed: false,
+        otpExpiresAt: MoreThan(now),
+      },
+      { otpUsed: true },
+    );
+
+    if (result?.affected !== 1) {
+      const current = await this.findState(userId);
+      if (!current?.otpCodeHash || !current.otpExpiresAt) {
+        throw new UnauthorizedException('No OTP issued');
+      }
+      if (!current.enabled) {
+        throw new UnauthorizedException('2FA is not enabled');
+      }
+      if (current.otpUsed) {
+        throw new UnauthorizedException('OTP already used');
+      }
+      if (current.otpExpiresAt.getTime() <= Date.now()) {
+        await this.clearOtpIfCurrent(userId, {
+          otpCodeHash: current.otpCodeHash,
+          otpExpiresAt: current.otpExpiresAt,
+          otpUsed: current.otpUsed,
+        });
+        throw new UnauthorizedException('OTP expired');
+      }
+      throw new BadRequestException('Invalid OTP');
+    }
+  }
+
+  private async findState(userId: string): Promise<TwoFactorOtp | null> {
+    return this.otpRepo.findOne({ where: { userId } });
+  }
+
+  private hashOtp(code: string): string {
+    return createHash('sha256').update(code, 'utf8').digest('hex');
+  }
+
+  private hashesMatch(storedHash: string, suppliedHash: string): boolean {
+    if (
+      storedHash.length !== OTP_HASH_LENGTH ||
+      suppliedHash.length !== OTP_HASH_LENGTH ||
+      !/^[0-9a-f]{64}$/i.test(storedHash) ||
+      !/^[0-9a-f]{64}$/i.test(suppliedHash)
+    ) {
+      return false;
+    }
+
+    return timingSafeEqual(
+      Buffer.from(storedHash, 'hex'),
+      Buffer.from(suppliedHash, 'hex'),
+    );
+  }
+
+  private async writeState(userId: string, state: OtpState): Promise<void> {
+    const values = { userId, ...state } as Parameters<
+      Repository<TwoFactorOtp>['upsert']
+    >[0];
+
+    await this.otpRepo.upsert(values, ['userId']);
+  }
+
+  private async updateState(
+    criteria: OtpCriteria,
+    patch: OtpPatch,
+  ): Promise<{ affected?: number }> {
+    return this.otpRepo.update(criteria, patch);
+  }
+
+  private async clearOtpIfCurrent(
+    userId: string,
+    expected: {
+      otpCodeHash: string;
+      otpExpiresAt: Date;
+      otpUsed: boolean;
+    },
+  ): Promise<void> {
+    await this.updateState(
+      {
+        userId,
+        enabled: true,
+        otpCodeHash: expected.otpCodeHash,
+        otpExpiresAt: expected.otpExpiresAt,
+        otpUsed: expected.otpUsed,
+      },
+      {
+        otpCodeHash: null,
+        otpExpiresAt: null,
+        otpUsed: false,
+      },
+    );
   }
 }

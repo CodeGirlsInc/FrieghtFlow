@@ -5,7 +5,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -21,14 +21,34 @@ import {
   SHIPMENT_CREATED,
   ShipmentEvent,
 } from '../shipments/events/shipment.events';
-import {
-  MESSAGE_NEW,
-  MessageNewEvent,
-} from '../messaging/messaging.service';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 
 /** Room prefix for per-user rooms */
 const userRoom = (userId: string) => `user:${userId}`;
+
+/**
+ * Origins allowed to open a WebSocket connection to this gateway, in addition
+ * to same-origin requests. Mirrors the HTTP CORS allow-list in `main.ts`
+ * (`FRONTEND_URL` may be a comma-separated list).
+ */
+const allowedOrigins = process.env.FRONTEND_URL?.split(',') || [
+  'http://localhost:3000',
+];
+
+/**
+ * CORS allow-list check for the Socket.IO `cors.origin` callback.
+ *
+ * `origin` is the `Origin` header sent by the browser. Requests that carry no
+ * `Origin` header (same-origin frames, non-browser clients such as mobile apps
+ * or curl) are allowed. Only origins present in the allow-list are permitted —
+ * anything else is rejected.
+ */
+export function isOriginAllowed(
+  origin: string,
+  allowList: readonly string[],
+): boolean {
+  return allowList.includes(origin);
+}
 
 @WebSocketGateway({
   cors: {
@@ -36,14 +56,29 @@ const userRoom = (userId: string) => `user:${userId}`;
       origin: string,
       cb: (err: Error | null, allow: boolean) => void,
     ) => {
-      // Allow same-origin and configured frontend URL
-      cb(null, true);
+      // Reject any origin that isn't in the configured allow-list so a
+      // third-party page can't piggyback on authenticated (cookie-bearing)
+      // WebSocket connections despite credentials: true.
+      if (!origin) {
+        // Same-origin / non-browser client
+        cb(null, true);
+        return;
+      }
+      if (isOriginAllowed(origin, allowedOrigins)) {
+        cb(null, true);
+        return;
+      }
+      cb(new Error(`Origin ${origin} is not allowed by CORS`), false);
     },
     credentials: true,
   },
 })
 export class NotificationsGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnModuleDestroy
 {
   @WebSocketServer()
   private server: Server;
@@ -55,8 +90,41 @@ export class NotificationsGateway
     private readonly configService: ConfigService,
   ) {}
 
+  private revalidationTimer?: NodeJS.Timeout;
+
   afterInit() {
     this.logger.log('WebSocket gateway initialised');
+    // The JWT is verified once at handshake; re-check expiry periodically so
+    // a long-lived socket cannot outlive its token.
+    this.revalidationTimer = setInterval(
+      () => this.disconnectExpiredSockets(),
+      60_000,
+    );
+    this.revalidationTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.revalidationTimer) clearInterval(this.revalidationTimer);
+  }
+
+  private disconnectExpiredSockets() {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    for (const socket of this.server?.sockets?.sockets?.values() ?? []) {
+      const exp = (socket.data as { tokenExp?: number }).tokenExp;
+      if (exp !== undefined && exp <= nowSeconds) {
+        this.disconnect(socket, 'Token expired');
+      }
+    }
+  }
+
+  /** Closes every open socket belonging to a user (e.g. after deactivation). */
+  disconnectUser(userId: string) {
+    this.server.in(userRoom(userId)).disconnectSockets(true);
+  }
+
+  @OnEvent('user.deactivated')
+  onUserDeactivated(payload: { userId: string }) {
+    this.disconnectUser(payload.userId);
   }
 
   // ── Connection lifecycle ────────────────────────────────────────────────────
@@ -85,6 +153,9 @@ export class NotificationsGateway
 
       // Store userId on the socket for later use
       (client.data as { userId: string }).userId = payload.sub;
+      (client.data as { tokenExp?: number }).tokenExp = (
+        payload as JwtPayload & { exp?: number }
+      ).exp;
 
       // Join the user's personal room
       await client.join(userRoom(payload.sub));
@@ -204,18 +275,5 @@ export class NotificationsGateway
     if (evt.shipment.carrierId) {
       this.emitToUser(evt.shipment.carrierId, 'shipment:updated', payload);
     }
-  }
-
-  // ── Messaging events ─────────────────────────────────────────────────────────
-
-  @OnEvent(MESSAGE_NEW)
-  onMessageNew(evt: MessageNewEvent) {
-    this.emitToUser(evt.recipientId, 'message:new', {
-      conversationId: evt.conversationId,
-      messageId: evt.messageId,
-      senderName: evt.senderName,
-      preview: evt.preview,
-      createdAt: evt.createdAt,
-    });
   }
 }

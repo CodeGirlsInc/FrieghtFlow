@@ -7,11 +7,12 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { StringValue } from 'ms';
-import { MailService } from '../mailer/mail.service';
+import { MailerService } from '@nestjs-modules/mailer';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { User } from '../users/entities/user.entity';
 import { JwtPayload } from './strategies/jwt.strategy';
 
@@ -26,20 +27,31 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+// Hash of a throwaway password, compared against when the email is unknown so
+// that "no such account" and "wrong password" cost the same bcrypt work.
+const TIMING_EQUALISATION_HASH = bcrypt.hashSync(
+  'timing-equalisation-password',
+  12,
+);
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly refreshInFlight = new Map<string, Promise<AuthResponse>>();
 
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly mailService: MailService,
+    private readonly mailerService: MailerService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersService.findByEmail(email);
-    if (!user) return null;
+    if (!user) {
+      await this.usersService.verifyPassword(password, TIMING_EQUALISATION_HASH);
+      return null;
+    }
     const isMatch = await this.usersService.verifyPassword(
       password,
       user.passwordHash,
@@ -93,24 +105,44 @@ export class AuthService {
     userId: string,
     rawRefreshToken: string,
   ): Promise<AuthResponse> {
-    const baseUser = await this.usersService.findOne(userId);
-    if (!baseUser) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-    const user = await this.usersService.findByEmail(baseUser.email);
-
-    if (!user || !user.refreshToken) {
-      throw new UnauthorizedException('Invalid refresh token');
+    const cacheKey = `${userId}:${rawRefreshToken}`;
+    const inflight = this.refreshInFlight.get(cacheKey);
+    if (inflight) {
+      return inflight;
     }
 
-    const isValid = await bcrypt.compare(rawRefreshToken, user.refreshToken);
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
+    const work = (async () => {
+      const baseUser = await this.usersService.findOne(userId);
+      if (!baseUser) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      const user = await this.usersService.findByEmail(baseUser.email);
 
-    const tokens = await this.generateTokens(user);
-    await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
-    return this.buildAuthResponse(user, tokens);
+      if (!user || !user.refreshToken) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const isValid = await bcrypt.compare(rawRefreshToken, user.refreshToken);
+      if (!isValid) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const tokens = await this.generateTokens(user);
+      // Compare-and-set: only one instance can rotate this token hash.
+      await this.usersService.updateRefreshToken(
+        user.id,
+        tokens.refreshToken,
+        user.refreshToken,
+      );
+      return this.buildAuthResponse(user, tokens);
+    })();
+
+    this.refreshInFlight.set(cacheKey, work);
+    try {
+      return await work;
+    } finally {
+      this.refreshInFlight.delete(cacheKey);
+    }
   }
 
   async logout(userId: string): Promise<void> {
@@ -184,7 +216,7 @@ export class AuthService {
 
   async updateProfile(
     userId: string,
-    dto: { firstName?: string; lastName?: string; walletAddress?: string },
+    dto: UpdateProfileDto,
   ): Promise<Omit<User, 'passwordHash' | 'refreshToken'>> {
     await this.usersService.update(userId, dto);
     const updated = await this.usersService.findOne(userId);
@@ -222,16 +254,22 @@ export class AuthService {
       'FRONTEND_URL',
       'http://localhost:3000',
     );
-    await this.mailService.send(
-      user.email,
-      'Reset your FreightFlow password',
-      'password-reset',
-      {
-        recipientName: `${user.firstName} ${user.lastName}`,
-        ctaUrl: `${frontendUrl}/reset-password?token=${token}`,
-        ctaLabel: 'Reset Password',
-      },
-    );
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+
+    await this.mailerService.sendMail({
+      to: user.email,
+      subject: 'Reset your FreightFlow password',
+      html: `
+        <h1>Password Reset Request</h1>
+        <p>Hi ${user.firstName},</p>
+        <p>We received a request to reset your FreightFlow password. Click the button below to set a new password:</p>
+        <a href="${resetUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">
+          Reset Password
+        </a>
+        <p>This link expires in <strong>1 hour</strong>.</p>
+        <p>If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.</p>
+      `,
+    });
   }
 
   async sendVerificationEmail(user: User, token: string): Promise<void> {
@@ -239,16 +277,21 @@ export class AuthService {
       'FRONTEND_URL',
       'http://localhost:3000',
     );
-    await this.mailService.send(
-      user.email,
-      'Verify your FreightFlow account',
-      'email-verification',
-      {
-        recipientName: `${user.firstName} ${user.lastName}`,
-        ctaUrl: `${frontendUrl}/auth/verify-email?token=${token}`,
-        ctaLabel: 'Verify Email',
-      },
-    );
+    const verifyUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
+
+    await this.mailerService.sendMail({
+      to: user.email,
+      subject: 'Verify your FreightFlow account',
+      html: `
+        <h1>Welcome to FreightFlow, ${user.firstName}!</h1>
+        <p>Please verify your email address by clicking the link below:</p>
+        <a href="${verifyUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">
+          Verify Email
+        </a>
+        <p>This link expires in 24 hours.</p>
+        <p>If you didn't create an account, you can safely ignore this email.</p>
+      `,
+    });
   }
 
   private async generateTokens(user: User): Promise<AuthTokens> {

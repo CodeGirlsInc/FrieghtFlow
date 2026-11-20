@@ -18,7 +18,11 @@ export class QueryUsersDto {
 
   @ApiPropertyOptional({ description: 'Filter by active/inactive status' })
   @IsOptional()
-  @Transform(({ value }: { value: string }) => value === 'true')
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value; // anything else fails @IsBoolean() with a 400
+  })
   @IsBoolean()
   isActive?: boolean;
 

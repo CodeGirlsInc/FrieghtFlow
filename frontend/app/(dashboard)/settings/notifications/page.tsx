@@ -3,18 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../components/ui/card';
-import { notificationsApi, NotificationPreference } from '../../../../lib/api/notifications.api';
-
-const FALLBACK_PREFERENCES: NotificationPreference[] = [
-  { type: 'shipment_created', label: 'Shipment Created', description: 'When a new shipment is created.', enabled: true },
-  { type: 'shipment_accepted', label: 'Shipment Accepted', description: 'When a carrier accepts your shipment.', enabled: true },
-  { type: 'shipment_in_transit', label: 'Shipment In Transit', description: 'When your shipment is picked up and in transit.', enabled: true },
-  { type: 'shipment_delivered', label: 'Shipment Delivered', description: 'When your shipment is delivered.', enabled: true },
-  { type: 'shipment_disputed', label: 'Dispute Opened', description: 'When a dispute is raised on a shipment.', enabled: true },
-  { type: 'shipment_dispute_resolved', label: 'Dispute Resolved', description: 'When a dispute is resolved.', enabled: true },
-  { type: 'shipment_cancelled', label: 'Shipment Cancelled', description: 'When a shipment is cancelled.', enabled: false },
-  { type: 'document_uploaded', label: 'Document Uploaded', description: 'When a document is added to your shipment.', enabled: false },
-];
+import {
+  notificationsApi,
+  defaultPreferenceList,
+  NotificationPreference,
+  NotificationPreferenceKey,
+} from '../../../../lib/api/notifications.api';
 
 export default function NotificationPreferencesPage() {
   const [prefs, setPrefs] = useState<NotificationPreference[]>([]);
@@ -25,12 +19,12 @@ export default function NotificationPreferencesPage() {
     notificationsApi
       .getPreferences()
       .then(setPrefs)
-      .catch(() => setPrefs(FALLBACK_PREFERENCES))
+      .catch(() => setPrefs(defaultPreferenceList()))
       .finally(() => setLoading(false));
   }, []);
 
   const handleToggle = useCallback(
-    async (type: string, enabled: boolean) => {
+    async (type: NotificationPreferenceKey, enabled: boolean) => {
       setPrefs((prev) =>
         prev.map((p) => (p.type === type ? { ...p, enabled } : p)),
       );

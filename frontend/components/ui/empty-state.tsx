@@ -36,7 +36,15 @@ export function EmptyState({ illustration, title, description, cta }: EmptyState
 
 /* ── Pre-built contextual empty states ── */
 
-export function EmptyShipments({ onCreate }: { onCreate?: () => void }) {
+export function EmptyShipments({
+  onCreate,
+  title = 'No shipments yet',
+  description = 'Create your first shipment to get started.',
+}: {
+  onCreate?: () => void;
+  title?: string;
+  description?: string;
+}) {
   return (
     <EmptyState
       illustration={
@@ -49,8 +57,8 @@ export function EmptyShipments({ onCreate }: { onCreate?: () => void }) {
           <circle cx="56" cy="70" r="5" stroke="currentColor" strokeWidth="2.5" fill="none"/>
         </svg>
       }
-      title="No shipments yet"
-      description="Create your first shipment to get started."
+      title={title}
+      description={description}
       cta={onCreate ? { label: 'Create your first shipment', onClick: onCreate } : undefined}
     />
   );

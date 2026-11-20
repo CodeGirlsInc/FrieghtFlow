@@ -2,327 +2,131 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { toast } from 'sonner';
 import { Shipment, ShipmentStatus, ShipmentStatusHistory } from '../../../../types/shipment.types';
+import { Payment, PaymentStatus } from '../../../../types/payment.types';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
-import { messagingApi } from '../../../../lib/api/messaging.api';
-import { bidApi, Bid, CounterBidPayload } from '../../../../lib/api/bid.api';
+import { getErrorMessage } from '../../../../lib/api/client';
+import { paymentApi } from '../../../../lib/api/payments.api';
+import { formatMoney } from '../../../../lib/format/currency';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { StatusBadge } from '../../../../components/shipment/status-badge';
 import { StatusTimeline } from '../../../../components/shipment/status-timeline';
+import { SubmitReviewForm } from '../../../../components/reviews/SubmitReviewForm';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 
-// ─── Expiry countdown ────────────────────────────────────────────────────────
-function ExpiryCountdown({ expiresAt }: { expiresAt?: string }) {
-  const [label, setLabel] = useState('');
+/**
+ * Cap on a free-text reason/note. The backend (`CancelBody`/`ResolveDisputeBody`
+ * in `shipments.controller.ts`) applies no length limit and the
+ * `shipment_status_history.reason` column is `text`, so this is a client-side
+ * usability bound only — long enough to explain a cancellation or a dispute
+ * decision, short enough that the timeline stays readable.
+ */
+const MAX_REASON_LENGTH = 500;
 
-  useEffect(() => {
-    if (!expiresAt) return;
-    const update = () => {
-      const diff = new Date(expiresAt).getTime() - Date.now();
-      if (diff <= 0) { setLabel('Expired'); return; }
-      const hours = Math.floor(diff / 3_600_000);
-      const mins = Math.floor((diff % 3_600_000) / 60_000);
-      setLabel(`Expires in ${hours}h ${mins}m`);
-    };
-    update();
-    const id = setInterval(update, 60_000);
-    return () => clearInterval(id);
-  }, [expiresAt]);
-
-  if (!expiresAt) return null;
-  return <span className="text-xs text-muted-foreground">{label}</span>;
-}
-
-// ─── Counter offer modal ─────────────────────────────────────────────────────
-function CounterModal({
-  bid,
-  onClose,
-  onSubmit,
+/**
+ * The confirmation step that both destructive, audit-trailed actions share
+ * (FE-190 / FE-191): cancelling a shipment and resolving a dispute. Modelled
+ * on the `ConfirmDialog` in `app/(dashboard)/admin/disputes/page.tsx` so the
+ * two admin paths look and behave alike, with the a11y that dialog is missing
+ * (dialog role, labelled title/description, real `<label>` for the field).
+ */
+function ReasonConfirmDialog({
+  title,
+  description,
+  fieldLabel,
+  placeholder,
+  confirmLabel,
+  destructive = false,
+  loading,
+  reason,
+  onReason,
+  onConfirm,
+  onCancel,
 }: {
-  bid: Bid;
-  onClose: () => void;
-  onSubmit: (payload: CounterBidPayload) => Promise<void>;
+  title: string;
+  description: string;
+  fieldLabel: string;
+  placeholder: string;
+  confirmLabel: string;
+  destructive?: boolean;
+  loading: boolean;
+  reason: string;
+  onReason: (value: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
 }) {
-  const [price, setPrice] = useState(String(bid.proposedPrice));
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const counterPrice = Number(price);
-    if (!counterPrice || counterPrice <= 0) {
-      toast.error('Enter a valid counter price');
-      return;
-    }
-    setLoading(true);
-    try {
-      await onSubmit({ counterPrice, message: message.trim() || undefined });
-      onClose();
-    } catch {
-      toast.error('Failed to submit counter offer');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const trimmed = reason.trim();
+  const tooLong = trimmed.length > MAX_REASON_LENGTH;
+  const fieldId = 'reason-confirm-field';
+  const hintId = 'reason-confirm-hint';
+  const errorId = 'reason-confirm-error';
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="counter-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-    >
-      <Card className="w-full max-w-sm mx-4">
-        <CardHeader>
-          <CardTitle id="counter-modal-title" className="text-base">Counter Offer</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="counter-price" className="block text-sm font-medium mb-1">
-                Your counter price
-              </label>
-              <input
-                id="counter-price"
-                type="number"
-                min="0"
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="counter-message" className="block text-sm font-medium mb-1">
-                Message to carrier <span className="text-muted-foreground font-normal">(optional)</span>
-              </label>
-              <textarea
-                id="counter-message"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                maxLength={500}
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-              />
-              <p className="text-xs text-muted-foreground text-right">{message.length}/500</p>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? 'Submitting…' : 'Submit Counter'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reason-confirm-title"
+        aria-describedby="reason-confirm-description"
+        className="bg-card rounded-lg border border-border shadow-xl w-full max-w-md p-6 space-y-4"
+      >
+        <h3 id="reason-confirm-title" className="font-semibold text-foreground">
+          {title}
+        </h3>
+        <p id="reason-confirm-description" className="text-sm text-muted-foreground">
+          {description}
+        </p>
+        <div className="space-y-1">
+          <label htmlFor={fieldId} className="text-xs font-medium text-foreground">
+            {fieldLabel}
+          </label>
+          <textarea
+            id={fieldId}
+            autoFocus
+            className="w-full text-sm bg-background border border-border rounded-md px-3 py-2 resize-none"
+            rows={3}
+            maxLength={MAX_REASON_LENGTH}
+            placeholder={placeholder}
+            aria-invalid={tooLong}
+            aria-describedby={tooLong ? `${hintId} ${errorId}` : hintId}
+            value={reason}
+            onChange={(e) => onReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') onCancel();
+            }}
+          />
+          <p id={hintId} className="text-xs text-muted-foreground">
+            Required, up to {MAX_REASON_LENGTH} characters. This is recorded on
+            the shipment&apos;s status history and shown to everyone who can view it.
+          </p>
+          {tooLong && (
+            <p id={errorId} role="alert" className="text-xs text-destructive">
+              Please shorten this to {MAX_REASON_LENGTH} characters or fewer.
+            </p>
+          )}
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>Cancel</Button>
+          <Button
+            size="sm"
+            variant={destructive ? 'destructive' : 'default'}
+            onClick={onConfirm}
+            disabled={loading || !trimmed || tooLong}
+          >
+            {loading ? 'Working…' : confirmLabel}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ─── Bids tab ────────────────────────────────────────────────────────────────
-function BidsTab({
-  shipment,
-  onBidAccepted,
-}: {
-  shipment: Shipment;
-  onBidAccepted: () => Promise<void>;
-}) {
-  const [bids, setBids] = useState<Bid[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionBid, setActionBid] = useState<string | null>(null);
-  const [counterBid, setCounterBid] = useState<Bid | null>(null);
-  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
-
-  const loadBids = useCallback(async () => {
-    try {
-      const data = await bidApi.listBids(shipment.id);
-      setBids(data);
-    } catch {
-      toast.error('Failed to load bids');
-    } finally {
-      setLoading(false);
-    }
-  }, [shipment.id]);
-
-  useEffect(() => { loadBids(); }, [loadBids]);
-
-  const act = async (bidId: string, fn: () => Promise<unknown>, successMsg: string) => {
-    setActionBid(bidId);
-    try {
-      await fn();
-      toast.success(successMsg);
-      await loadBids();
-      if (successMsg.toLowerCase().includes('accepted')) await onBidAccepted();
-    } catch {
-      toast.error('Action failed. Please try again.');
-    } finally {
-      setActionBid(null);
-    }
-  };
-
-  const toggleMessage = (bidId: string) => {
-    setExpandedMessages((prev) => {
-      const next = new Set(prev);
-      if (next.has(bidId)) next.delete(bidId); else next.add(bidId);
-      return next;
-    });
-  };
-
-  if (loading) {
-    return (
-      <div className="space-y-3">
-        {[...Array(2)].map((_, i) => (
-          <div key={i} className="h-24 bg-muted rounded animate-pulse" />
-        ))}
-      </div>
-    );
-  }
-
-  if (bids.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground text-center py-8">
-        No bids received yet. Carriers browsing the marketplace will submit bids here.
-      </p>
-    );
-  }
-
-  const fmt = (amount: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: shipment.currency || 'USD' }).format(amount);
-
-  return (
-    <>
-      <div className="space-y-4">
-        {bids.map((bid) => {
-          const initials = `${bid.carrier.firstName[0]}${bid.carrier.lastName[0]}`;
-          const msgLong = (bid.message?.length ?? 0) > 100;
-          const expanded = expandedMessages.has(bid.id);
-          const busy = actionBid === bid.id;
-
-          return (
-            <Card key={bid.id}>
-              <CardContent className="p-4 space-y-3">
-                {/* Carrier info */}
-                <div className="flex items-center gap-3">
-                  <Link
-                    href={`/carriers/${bid.carrierId}`}
-                    className="flex items-center gap-3 hover:opacity-80"
-                    aria-label={`View carrier ${bid.carrier.firstName} ${bid.carrier.lastName}`}
-                  >
-                    <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
-                      {initials}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {bid.carrier.firstName} {bid.carrier.lastName}
-                      </p>
-                      {bid.carrier.rating != null && (
-                        <p className="text-xs text-muted-foreground" aria-label={`Rating: ${bid.carrier.rating} out of 5`}>
-                          {'★'.repeat(Math.round(bid.carrier.rating))}
-                          {'☆'.repeat(5 - Math.round(bid.carrier.rating))}
-                          {' '}({bid.carrier.rating.toFixed(1)})
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                  <div className="ml-auto text-right">
-                    <p className="text-lg font-bold text-foreground">{fmt(bid.proposedPrice)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Posted: {fmt(shipment.price)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Message */}
-                {bid.message && (
-                  <div className="text-sm text-muted-foreground">
-                    {msgLong && !expanded
-                      ? bid.message.slice(0, 100) + '…'
-                      : bid.message}
-                    {msgLong && (
-                      <button
-                        onClick={() => toggleMessage(bid.id)}
-                        className="ml-1 text-primary text-xs hover:underline"
-                      >
-                        {expanded ? 'Show less' : 'Show more'}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Times */}
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>Submitted {new Date(bid.createdAt).toLocaleDateString()}</span>
-                  <ExpiryCountdown expiresAt={bid.expiresAt} />
-                </div>
-
-                {/* Actions — only for pending bids on a pending shipment */}
-                {shipment.status === ShipmentStatus.PENDING && bid.status === 'PENDING' && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      disabled={busy}
-                      onClick={() =>
-                        act(bid.id, () => bidApi.acceptBid(shipment.id, bid.id), 'Bid accepted — carrier assigned!')
-                      }
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => setCounterBid(bid)}
-                    >
-                      Counter Offer
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={busy}
-                      onClick={() =>
-                        act(bid.id, () => bidApi.rejectBid(shipment.id, bid.id), 'Bid rejected')
-                      }
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                )}
-
-                {/* Show COUNTER_OFFERED status label */}
-                {bid.status === 'COUNTER_OFFERED' && (
-                  <p className="text-xs text-amber-600 font-medium">Counter offer sent</p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {counterBid && (
-        <CounterModal
-          bid={counterBid}
-          onClose={() => setCounterBid(null)}
-          onSubmit={async (payload) => {
-            await act(
-              counterBid.id,
-              () => bidApi.counterBid(shipment.id, counterBid.id, payload),
-              'Counter offer submitted',
-            );
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-// ─── Main page ───────────────────────────────────────────────────────────────
-type Tab = 'details' | 'bids';
+/** The reason-requiring actions the detail page gates behind a confirm step. */
+type PendingAction =
+  | { kind: 'cancel' }
+  | { kind: 'resolve'; resolution: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED };
 
 export default function ShipmentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -331,9 +135,12 @@ export default function ShipmentDetailPage() {
 
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [history, setHistory] = useState<ShipmentStatusHistory[]>([]);
+  const [payment, setPayment] = useState<Payment | null>(null);
   const [loading, setLoading] = useState(true);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('details');
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [reason, setReason] = useState('');
 
   const reload = useCallback(async () => {
     const [s, h] = await Promise.all([
@@ -351,16 +158,50 @@ export default function ShipmentDetailPage() {
       .finally(() => setLoading(false));
   }, [reload]);
 
-  const act = async (fn: () => Promise<unknown>, successMsg: string) => {
+  const act = async (fn: () => Promise<unknown>, successMsg: string, onDone?: () => void) => {
     setActionLoading(true);
     try {
       await fn();
       toast.success(successMsg);
       await reload();
-    } catch {
-      toast.error('Action failed. Please try again.');
+      onDone?.();
+    } catch (err) {
+      // Surface the backend's own explanation ('Cannot transition shipment
+      // from "delivered" to "accepted"', typed escrow errors, …) when there
+      // is one; only fall back to the generic text for transport failures.
+      toast.error(getErrorMessage(err) ?? 'Action failed. Please try again.');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // FE-190 / FE-191: both reason-requiring actions open a confirmation step
+  // instead of firing on a single click.
+  const openAction = (action: PendingAction) => {
+    setReason('');
+    setPendingAction(action);
+  };
+
+  const closeAction = () => {
+    setPendingAction(null);
+    setReason('');
+  };
+
+  const confirmAction = () => {
+    if (!pendingAction || !shipment) return;
+    const note = reason.trim();
+    // Belt and braces: the dialog already disables Confirm in this state.
+    if (!note || note.length > MAX_REASON_LENGTH) return;
+    const action = pendingAction;
+    if (action.kind === 'cancel') {
+      act(() => shipmentApi.cancel(shipment.id, note), 'Shipment cancelled', closeAction);
+    } else {
+      const word = action.resolution === ShipmentStatus.COMPLETED ? 'completed' : 'cancelled';
+      act(
+        () => shipmentApi.resolveDispute(shipment.id, action.resolution, note),
+        `Dispute resolved — ${word}`,
+        closeAction,
+      );
     }
   };
 
@@ -387,28 +228,43 @@ export default function ShipmentDetailPage() {
   const isShipper = user?.id === shipment.shipperId;
   const isCarrier = user?.id === shipment.carrierId;
   const isAdmin = user?.role === 'admin';
-  const showBidsTab = isShipper && shipment.status === ShipmentStatus.PENDING;
 
-  const handleMessage = async () => {
-    if (!shipment.carrierId) return;
-    setMsgLoading(true);
-    try {
-      const conv = await messagingApi.getOrCreateConversation(shipment.id);
-      router.push(`/messages?conversationId=${conv.id}`);
-    } catch {
-      toast.error('Could not open conversation');
-    } finally {
-      setMsgLoading(false);
-    }
-  };
-
-  const formattedPrice = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: shipment.currency || 'USD',
-  }).format(Number(shipment.price));
+  // Never throws on an unrecognised currency code — see lib/format/currency.ts.
+  const formattedPrice = formatMoney(shipment.price, shipment.currency);
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {pendingAction?.kind === 'cancel' && (
+        <ReasonConfirmDialog
+          title="Cancel this shipment?"
+          description="This action cannot be undone."
+          fieldLabel="Reason for cancelling"
+          placeholder="Explain why this shipment is being cancelled…"
+          confirmLabel="Cancel shipment"
+          destructive
+          loading={actionLoading}
+          reason={reason}
+          onReason={setReason}
+          onConfirm={confirmAction}
+          onCancel={closeAction}
+        />
+      )}
+      {pendingAction?.kind === 'resolve' && (
+        <ReasonConfirmDialog
+          title={`Resolve as ${pendingAction.resolution === ShipmentStatus.COMPLETED ? 'Completed' : 'Cancelled'}?`}
+          description="This action cannot be undone."
+          fieldLabel="Resolution Note"
+          placeholder="Explain the resolution…"
+          confirmLabel="Confirm"
+          destructive={pendingAction.resolution === ShipmentStatus.CANCELLED}
+          loading={actionLoading}
+          reason={reason}
+          onReason={setReason}
+          onConfirm={confirmAction}
+          onCancel={closeAction}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -428,131 +284,170 @@ export default function ShipmentDetailPage() {
         <StatusBadge status={shipment.status} />
       </div>
 
-      {/* Tabs */}
-      {showBidsTab && (
-        <div className="flex gap-1 border-b">
-          {(['details', 'bids'] as Tab[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
-                activeTab === tab
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Bids tab content */}
-      {showBidsTab && activeTab === 'bids' ? (
-        <BidsTab shipment={shipment} onBidAccepted={reload} />
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Left: details */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Cargo</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <p className="text-muted-foreground">{shipment.cargoDescription}</p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Weight</span>
-                    <p className="font-medium">{Number(shipment.weightKg).toLocaleString()} kg</p>
-                  </div>
-                  {shipment.volumeCbm && (
-                    <div>
-                      <span className="text-muted-foreground">Volume</span>
-                      <p className="font-medium">{Number(shipment.volumeCbm)} m³</p>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-muted-foreground">Price</span>
-                    <p className="font-semibold text-foreground">{formattedPrice}</p>
-                  </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Left: details */}
+        <div className="lg:col-span-2 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Cargo</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p className="text-muted-foreground">{shipment.cargoDescription}</p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Weight</span>
+                  <p className="font-medium">{Number(shipment.weightKg).toLocaleString()} kg</p>
                 </div>
-                {shipment.notes && (
-                  <p className="text-muted-foreground italic text-sm border-t pt-2">
-                    {shipment.notes}
-                  </p>
+                {shipment.volumeCbm && (
+                  <div>
+                    <span className="text-muted-foreground">Volume</span>
+                    <p className="font-medium">{Number(shipment.volumeCbm)} m³</p>
+                  </div>
                 )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Parties</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shipper</span>
-                  <span className="font-medium">
-                    {shipment.shipper.firstName} {shipment.shipper.lastName}
-                  </span>
+                <div>
+                  <span className="text-muted-foreground">Price</span>
+                  <p className="font-semibold text-foreground">{formattedPrice}</p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Carrier</span>
-                  <span className="font-medium">
-                    {shipment.carrier
-                      ? `${shipment.carrier.firstName} ${shipment.carrier.lastName}`
-                      : '—'}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              {shipment.notes && (
+                <p className="text-muted-foreground italic text-sm border-t pt-2">
+                  {shipment.notes}
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {/* Carrier actions */}
-                {shipment.status === ShipmentStatus.PENDING && !isShipper && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Parties</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Shipper</span>
+                <span className="font-medium">
+                  {shipment.shipper.firstName} {shipment.shipper.lastName}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Carrier</span>
+                <span className="font-medium">
+                  {shipment.carrier
+                    ? `${shipment.carrier.firstName} ${shipment.carrier.lastName}`
+                    : '—'}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              {/* Carrier actions — the accept route is carrier/admin only, so the
+                  button is gated on the user's role rather than "not the shipper".
+                  That also keeps it hidden while the session user is still null
+                  (hydration), when a `!isShipper` check would evaluate true for
+                  every visitor and produce a 403 on click. */}
+              {shipment.status === ShipmentStatus.PENDING &&
+                user?.role === 'carrier' &&
+                !isShipper && (
+                <Button
+                  size="sm"
+                  disabled={actionLoading}
+                  onClick={() => act(() => shipmentApi.accept(shipment.id), 'Shipment accepted!')}
+                >
+                  Accept Job
+                </Button>
+              )}
+              {shipment.status === ShipmentStatus.ACCEPTED && isCarrier && (
+                <Button
+                  size="sm"
+                  disabled={actionLoading}
+                  onClick={() => act(() => shipmentApi.pickup(shipment.id), 'Marked as picked up!')}
+                >
+                  Mark Picked Up
+                </Button>
+              )}
+              {shipment.status === ShipmentStatus.IN_TRANSIT && isCarrier && (
+                <Button
+                  size="sm"
+                  disabled={actionLoading}
+                  onClick={() =>
+                    act(() => shipmentApi.markDelivered(shipment.id), 'Marked as delivered!')
+                  }
+                >
+                  Mark Delivered
+                </Button>
+              )}
+
+              {/* Shipper actions */}
+              {shipment.status === ShipmentStatus.DELIVERED && isShipper && (
+                <Button
+                  size="sm"
+                  disabled={actionLoading}
+                  onClick={() =>
+                    act(() => shipmentApi.confirmDelivery(shipment.id), 'Delivery confirmed!')
+                  }
+                >
+                  Confirm Delivery
+                </Button>
+              )}
+
+              {/* Cancel — opens a confirmation step that collects a real reason */}
+              {[ShipmentStatus.PENDING, ShipmentStatus.ACCEPTED].includes(shipment.status) &&
+                (isShipper || isCarrier || isAdmin) && (
                   <Button
                     size="sm"
+                    variant="outline"
                     disabled={actionLoading}
-                    onClick={() => act(() => shipmentApi.accept(shipment.id), 'Shipment accepted!')}
+                    onClick={() => openAction({ kind: 'cancel' })}
                   >
-                    Accept Job
+                    Cancel
                   </Button>
                 )}
-                {shipment.status === ShipmentStatus.ACCEPTED && isCarrier && (
+
+              {/* Dispute */}
+              {[ShipmentStatus.IN_TRANSIT, ShipmentStatus.DELIVERED].includes(shipment.status) &&
+                (isShipper || isCarrier) && (
                   <Button
                     size="sm"
+                    variant="destructive"
                     disabled={actionLoading}
-                    onClick={() => act(() => shipmentApi.pickup(shipment.id), 'Marked as picked up!')}
+                    onClick={() =>
+                      act(
+                        () => shipmentApi.raiseDispute(shipment.id, 'Dispute raised by user'),
+                        'Dispute raised',
+                      )
+                    }
                   >
-                    Mark Picked Up
+                    Raise Dispute
                   </Button>
                 )}
-                {shipment.status === ShipmentStatus.IN_TRANSIT && isCarrier && (
+
+              {/* Admin resolve — same note + confirm requirement as the admin
+                  dispute queue in admin/disputes/page.tsx */}
+              {shipment.status === ShipmentStatus.DISPUTED && isAdmin && (
+                <>
                   <Button
                     size="sm"
                     disabled={actionLoading}
                     onClick={() =>
-                      act(() => shipmentApi.markDelivered(shipment.id), 'Marked as delivered!')
+                      openAction({ kind: 'resolve', resolution: ShipmentStatus.COMPLETED })
                     }
                   >
-                    Mark Delivered
+                    Resolve: Complete
                   </Button>
-                )}
-
-                {/* Shipper actions */}
-                {shipment.status === ShipmentStatus.DELIVERED && isShipper && (
                   <Button
                     size="sm"
+                    variant="outline"
                     disabled={actionLoading}
                     onClick={() =>
-                      act(() => shipmentApi.confirmDelivery(shipment.id), 'Delivery confirmed!')
+                      openAction({ kind: 'resolve', resolution: ShipmentStatus.CANCELLED })
                     }
                   >
-                    Confirm Delivery
+                    Resolve: Cancel
                   </Button>
                 </>
               )}
@@ -562,118 +457,29 @@ export default function ShipmentDetailPage() {
                   This shipment is {shipment.status} — no further actions available.
                 </p>
               )}
-
-              {/* Message button — visible once a carrier is assigned */}
-              {shipment.carrierId && (isShipper || isCarrier) && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={msgLoading}
-                  onClick={handleMessage}
-                >
-                  {msgLoading ? 'Opening…' : isShipper ? 'Message Carrier' : 'Message Shipper'}
-                </Button>
-              )}
             </CardContent>
           </Card>
         </div>
 
-                {/* Cancel */}
-                {[ShipmentStatus.PENDING, ShipmentStatus.ACCEPTED].includes(shipment.status) &&
-                  (isShipper || isCarrier || isAdmin) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actionLoading}
-                      onClick={() =>
-                        act(() => shipmentApi.cancel(shipment.id, 'Cancelled by user'), 'Shipment cancelled')
-                      }
-                    >
-                      Cancel
-                    </Button>
-                  )}
+        {/* Right: timeline */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Status Timeline</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <StatusTimeline history={history} />
+            </CardContent>
+          </Card>
 
-                {/* Dispute */}
-                {[ShipmentStatus.IN_TRANSIT, ShipmentStatus.DELIVERED].includes(shipment.status) &&
-                  (isShipper || isCarrier) && (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={actionLoading}
-                      onClick={() =>
-                        act(
-                          () => shipmentApi.raiseDispute(shipment.id, 'Dispute raised by user'),
-                          'Dispute raised',
-                        )
-                      }
-                    >
-                      Raise Dispute
-                    </Button>
-                  )}
-
-                {/* Admin resolve */}
-                {shipment.status === ShipmentStatus.DISPUTED && isAdmin && (
-                  <>
-                    <Button
-                      size="sm"
-                      disabled={actionLoading}
-                      onClick={() =>
-                        act(
-                          () =>
-                            shipmentApi.resolveDispute(
-                              shipment.id,
-                              ShipmentStatus.COMPLETED,
-                              'Resolved by admin — completed',
-                            ),
-                          'Dispute resolved — completed',
-                        )
-                      }
-                    >
-                      Resolve: Complete
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actionLoading}
-                      onClick={() =>
-                        act(
-                          () =>
-                            shipmentApi.resolveDispute(
-                              shipment.id,
-                              ShipmentStatus.CANCELLED,
-                              'Resolved by admin — cancelled',
-                            ),
-                          'Dispute resolved — cancelled',
-                        )
-                      }
-                    >
-                      Resolve: Cancel
-                    </Button>
-                  </>
-                )}
-
-                {[ShipmentStatus.COMPLETED, ShipmentStatus.CANCELLED].includes(shipment.status) && (
-                  <p className="text-sm text-muted-foreground">
-                    This shipment is {shipment.status} — no further actions available.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right: timeline */}
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Status Timeline</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <StatusTimeline history={history} />
-              </CardContent>
-            </Card>
-          </div>
+          {shipment.status === ShipmentStatus.COMPLETED && isShipper && shipment.carrierId && (
+            <SubmitReviewForm shipmentId={shipment.id} title="Rate your carrier" />
+          )}
+          {shipment.status === ShipmentStatus.COMPLETED && isCarrier && shipment.shipperId && (
+            <SubmitReviewForm shipmentId={shipment.id} title="Rate your shipper" />
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

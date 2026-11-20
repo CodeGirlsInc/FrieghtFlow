@@ -19,9 +19,6 @@ function makeUser(overrides: Partial<User> = {}): User {
     role: UserRole.SHIPPER,
     isEmailVerified: false,
     isActive: true,
-    isTwoFactorEnabled: false,
-    twoFactorSecret: null,
-    recoveryCodes: [],
     walletAddress: null,
     refreshToken: null,
     verificationToken: null,
@@ -196,6 +193,31 @@ describe('UsersService', () => {
   });
 
   // ── setResetToken / clearResetToken ────────────────────────────────────────
+
+  describe('update()', () => {
+    it('updates profile fields including the linked wallet address', async () => {
+      const user = makeUser();
+      repo.findOne!.mockResolvedValue(user);
+      repo.save!.mockResolvedValue({
+        ...user,
+        firstName: 'Jane',
+        walletAddress: 'GABCDE123',
+      });
+
+      const result = await service.update('user-uuid-1', {
+        firstName: 'Jane',
+        walletAddress: 'GABCDE123',
+      } as never);
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          firstName: 'Jane',
+          walletAddress: 'GABCDE123',
+        }),
+      );
+      expect(result.firstName).toBe('Jane');
+    });
+  });
 
   describe('setResetToken()', () => {
     it('stores the token and expiry', async () => {

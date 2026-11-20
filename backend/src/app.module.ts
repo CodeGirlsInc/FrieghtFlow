@@ -7,7 +7,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import * as Joi from 'joi';
+import { ScheduleModule } from '@nestjs/schedule';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ShipmentsModule } from './shipments/shipments.module';
@@ -22,17 +23,13 @@ import { NotificationPreferencesModule } from './notification-preferences/notifi
 import { AdminAuditInterceptor } from './audit-log/admin-audit.interceptor';
 import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
-import { CloudinaryModule } from './cloudinary/cloudinary.module';
-import { AppMailerModule } from './mailer/mailer.module';
-
-const shipmentCreateTracker = (context: ExecutionContext): string => {
-  const request = context.switchToHttp().getRequest<{
-    ip?: string;
-    user?: { id?: string };
-  }>();
-
-  return request.user?.id ?? request.ip ?? 'anonymous';
-};
+import { PaymentsModule } from './payments/payments.module';
+import { StellarModule } from './stellar/stellar.module';
+import {
+  shipmentCreateTracker,
+  forgotPasswordTracker,
+} from './common/throttler-trackers';
+import { appConfigValidationSchema } from './config/app-config.validation';
 
 const throttlerErrorMessage = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -54,37 +51,14 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      validationSchema: Joi.object({
-        DATABASE_HOST: Joi.string().required(),
-        DATABASE_PORT: Joi.number().default(5432),
-        DATABASE_NAME: Joi.string().required(),
-        DATABASE_USERNAME: Joi.string().required(),
-        DATABASE_PASSWORD: Joi.string().required(),
-        NODE_ENV: Joi.string()
-          .valid('development', 'production', 'test')
-          .default('development'),
-        PORT: Joi.number().default(6000),
-        FRONTEND_URL: Joi.string().default('http://localhost:3000'),
-        JWT_SECRET: Joi.string().min(32).required(),
-        JWT_EXPIRES_IN: Joi.string().default('15m'),
-        JWT_REFRESH_SECRET: Joi.string().min(32).required(),
-        JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
-        MAIL_HOST: Joi.string().required(),
-        MAIL_PORT: Joi.number().default(2525),
-        MAIL_USER: Joi.string().required(),
-        MAIL_PASS: Joi.string().required(),
-        MAIL_FROM: Joi.string().default('noreply@freightflow.io'),
-        UPLOAD_DIR: Joi.string().default('./uploads'),
-        CLOUDINARY_CLOUD_NAME: Joi.string().required(),
-        CLOUDINARY_API_KEY: Joi.string().required(),
-        CLOUDINARY_API_SECRET: Joi.string().required(),
-      }),
+      validationSchema: appConfigValidationSchema,
       validationOptions: {
-        allowUnknown: true,
+        allowUnknown: false,
         abortEarly: false,
       },
     }),
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       errorMessage: throttlerErrorMessage,
       throttlers: [
@@ -104,6 +78,12 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
           limit: 10,
           getTracker: (_request, context) => shipmentCreateTracker(context),
         },
+        {
+          name: 'forgotPassword',
+          ttl: 900_000, // 15 minutes
+          limit: 3, // 3 requests per 15 min per target email
+          getTracker: (_request, context) => forgotPasswordTracker(context),
+        },
       ],
     }),
     TypeOrmModule.forRootAsync({
@@ -120,7 +100,6 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
         synchronize: configService.get('NODE_ENV') !== 'production',
       }),
     }),
-    AppMailerModule,
     UsersModule,
     AuthModule,
     ShipmentsModule,
@@ -134,11 +113,16 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
     NotificationPreferencesModule,
     CarriersModule,
     ReviewsModule,
-    CloudinaryModule,
+    PaymentsModule,
+    StellarModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { shipmentApi } from '../../../lib/api/shipment.api';
+import { formatMoney } from '../../../lib/format/currency';
 import { StatusTimeline } from '../../../components/shipment/status-timeline';
 import { StatusBadge } from '../../../components/shipment/status-badge';
 import type { Shipment, ShipmentStatusHistory } from '../../../types/shipment.types';
@@ -74,10 +75,6 @@ export default function TrackingPage() {
     );
   }
 
-  const fmt = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: shipment.currency || 'USD',
-  });
 
   return (
     <div className="min-h-screen bg-background py-10 px-4">
@@ -105,7 +102,9 @@ export default function TrackingPage() {
           </div>
           <div>
             <p className="text-muted-foreground text-xs">Price</p>
-            <p className="font-medium">{fmt.format(Number(shipment.price))}</p>
+            <p className="font-medium">
+              {formatMoney(shipment.price, shipment.currency)}
+            </p>
           </div>
           {shipment.shipper && (
             <div>
