@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -40,6 +40,7 @@ export class EtaController {
   constructor(private readonly etaService: EtaService) {}
 
   @Post('estimate')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Estimate transit time for a route',
     description:
@@ -50,7 +51,7 @@ export class EtaController {
       'rejected with 400 rather than estimated against a default zone.',
   })
   @ApiResponse({
-    status: 201,
+    status: 200,
     description: 'Transit estimate returned',
     type: EtaEstimateResponseDto,
   })
