@@ -177,6 +177,19 @@ jobs:
         continue-on-error: true # non-blocking until pre-existing findings are triaged
         run: cargo audit
 
+      - name: Reject stray source files in contract crates
+        # Only Rust sources belong in a contract crate root; loose TS/JS files
+        # look like delivered on-chain features while compiling to nothing.
+        run: |
+          stray=$(find . -mindepth 2 -maxdepth 2 -type f \
+            \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.go' \) \
+            ! -path './scripts/*')
+          if [ -n "$stray" ]; then
+            echo "Non-Rust source files found inside contract crates:"
+            echo "$stray"
+            exit 1
+          fi
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
