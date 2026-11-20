@@ -249,12 +249,26 @@ export class AuthService {
     return { message: 'Password changed successfully. Please log in again.' };
   }
 
-  async sendPasswordResetEmail(user: User, token: string): Promise<void> {
+  private getPublicFrontendUrl(): string {
+    const publicUrl = this.configService.get<string>('APP_PUBLIC_URL');
+    if (publicUrl) {
+      return publicUrl.replace(/\/$/, '');
+    }
+
     const frontendUrl = this.configService.get<string>(
       'FRONTEND_URL',
       'http://localhost:3000',
     );
-    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+    const firstOrigin = frontendUrl
+      .split(',')
+      .map((origin) => origin.trim())
+      .find(Boolean);
+
+    return (firstOrigin ?? 'http://localhost:3000').replace(/\/$/, '');
+  }
+
+  async sendPasswordResetEmail(user: User, token: string): Promise<void> {
+    const resetUrl = `${this.getPublicFrontendUrl()}/reset-password?token=${token}`;
 
     await this.mailerService.sendMail({
       to: user.email,
@@ -273,11 +287,7 @@ export class AuthService {
   }
 
   async sendVerificationEmail(user: User, token: string): Promise<void> {
-    const frontendUrl = this.configService.get<string>(
-      'FRONTEND_URL',
-      'http://localhost:3000',
-    );
-    const verifyUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
+    const verifyUrl = `${this.getPublicFrontendUrl()}/auth/verify-email?token=${token}`;
 
     await this.mailerService.sendMail({
       to: user.email,
