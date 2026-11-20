@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -39,6 +40,19 @@ export class AddressesController {
   @ApiOperation({ summary: 'List all saved addresses' })
   findAll(@CurrentUser() user: User) {
     return this.addressesService.findAll(user.id);
+  }
+
+  @Get('page')
+  @ApiOperation({ summary: 'List saved addresses with cursor pagination' })
+  findPage(
+    @CurrentUser() user: User,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.addressesService.findPage(user.id, {
+      cursor,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Patch(':id')

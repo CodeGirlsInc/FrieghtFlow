@@ -1,4 +1,6 @@
-// MVP settlement-asset decision (issue #1276): TOKEN_CONTRACT_ADDRESS must be
+// MVP settlement-asset decision (issue #1276): only USD-pegged assets are
+// supported (XLM is not a settlement asset: the funding flow always settles
+// in USDC). TOKEN_CONTRACT_ADDRESS must be
 // a USD-pegged SEP-41 asset (e.g. USDC on Stellar), and Shipment.price (fiat
 // decimal, e.g. 1234.56) converts to the contract's i128 base units via a
 // fixed decimal shift — no live FX. Stellar SAC-wrapped assets and classic
@@ -10,7 +12,19 @@ export const SETTLEMENT_ASSET_DECIMALS = 7;
 
 const BASE_UNITS_PER_ASSET_UNIT = 10 ** SETTLEMENT_ASSET_DECIMALS;
 
-/** Converts a fiat-decimal shipment price (e.g. 1234.56) to the contract's raw i128 base units. */
-export function priceToBaseUnits(price: number): bigint {
-  return BigInt(Math.round(price * BASE_UNITS_PER_ASSET_UNIT));
+const SUPPORTED_SETTLEMENT_ASSETS: Record<string, number> = {
+  USDC: SETTLEMENT_ASSET_DECIMALS,
+};
+
+export function resolveSettlementAssetDecimals(assetCode: string): number {
+  const decimals = SUPPORTED_SETTLEMENT_ASSETS[assetCode];
+  if (decimals === undefined) {
+    throw new Error(`Unsupported settlement asset: ${assetCode}`);
+  }
+  return decimals;
+}
+
+export function priceToBaseUnits(price: number, assetCode = 'USDC'): bigint {
+  const decimals = resolveSettlementAssetDecimals(assetCode);
+  return BigInt(Math.round(price * 10 ** decimals));
 }

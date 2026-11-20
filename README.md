@@ -10,7 +10,8 @@ FrieghtFlow is a decentralized stellar logistics and freight management platform
 4. **Getting Started**
 5. **Usage**
 6. **Project Structure**
-7. **Contributing**
+7. **Smart Contract Documentation**
+8. **Contributing**
 
 ---
 
@@ -130,8 +131,25 @@ FrieghtFlow/
 
 - **backend/** — API controllers, services, modules, tests
 - **frontend/** — Next.js pages, components, hooks, styling
-- **contracts/** — blockchain logic and contract definitions
+- **contracts/** — blockchain logic and contract definitions (see [Smart Contract Documentation](#smart-contract-documentation))
 - **.github/** — workflows for GitHub Actions
+
+---
+
+## Smart Contract Documentation
+
+Each contract crate ships its own README with the same section layout —
+purpose, entrypoints, errors, storage keys, events and trust assumptions:
+
+| Document | Contents |
+| --- | --- |
+| [contracts/identity/README.md](contracts/identity/README.md) | Wallet → identity-hash registry |
+| [contracts/shipment/README.md](contracts/shipment/README.md) | Shipment lifecycle and status machine |
+| [contracts/escrow/README.md](contracts/escrow/README.md) | Token escrow, settlement and disputes |
+| [contracts/document/README.md](contracts/document/README.md) | Document hash and IPFS CID registry |
+| [contracts/reputation/README.md](contracts/reputation/README.md) | Ratings, completion stats and scoring |
+| [contracts/SECURITY-MODEL.md](contracts/SECURITY-MODEL.md) | Threat model, trust boundaries and pre-deployment checklist |
+| [contracts/EVENTS.md](contracts/EVENTS.md) | Workspace event convention |
 
 ---
 

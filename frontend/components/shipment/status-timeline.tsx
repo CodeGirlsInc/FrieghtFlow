@@ -30,6 +30,24 @@ function StatusLabel(status: ShipmentStatus): string {
     .join(' ');
 }
 
+/** Attribution for a transition with no human actor (e.g. an automated one). */
+const SYSTEM_ACTOR = 'System';
+
+/**
+ * Resolves an attribution name for a history entry. `changedBy` is
+ * `eager: false` on the backend relation, so it can be absent or null, and an
+ * actor can arrive with a missing/blank name. In every one of those cases we
+ * fall back to the system attribution rather than rendering a dangling "by".
+ */
+function actorName(changedBy: ShipmentStatusHistory['changedBy']): string {
+  if (!changedBy) return SYSTEM_ACTOR;
+  const name = [changedBy.firstName, changedBy.lastName]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join(' ');
+  return name || SYSTEM_ACTOR;
+}
+
 interface StatusTimelineProps {
   history: ShipmentStatusHistory[];
 }
@@ -67,7 +85,7 @@ export function StatusTimeline({ history }: StatusTimelineProps) {
               })}
             </time>
             <p className="text-xs text-muted-foreground mt-0.5">
-              by {entry.changedBy?.firstName} {entry.changedBy?.lastName}
+              by {actorName(entry.changedBy)}
             </p>
             {entry.reason && (
               <p className="mt-1 text-sm text-muted-foreground italic">

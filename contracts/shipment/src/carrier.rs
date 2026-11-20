@@ -1,0 +1,98 @@
+//! Transitions only the carrier may drive.
+
+use soroban_sdk::{Address, Env};
+
+use crate::errors::ShipmentError;
+use crate::types::{DataKey, Shipment, ShipmentStatus};
+use crate::{events, storage};
+
+/// Carrier accepts an open shipment.
+pub fn accept(env: &Env, carrier: Address, shipment_id: u64) -> Result<(), ShipmentError> {
+    carrier.require_auth();
+    storage::require_not_paused(env)?;
+
+    let mut shipment = storage::load(env, shipment_id)?;
+
+    if shipment.status != ShipmentStatus::Created {
+        return Err(ShipmentError::InvalidStatus);
+    }
+
+    // A shipper cannot accept their own posting. Without this check one address
+    // can carry a shipment from `Created` all the way to delivery by itself,
+    // which is a cheap way to manufacture completed jobs and to inflate the
+    // reputation ratings derived from them (#1676).
+    if shipment.shipper == carrier {
+        return Err(ShipmentError::SelfDealing);
+    }
+
+    shipment.carrier = Some(carrier.clone());
+    shipment.status = ShipmentStatus::Accepted;
+    shipment.updated_at = env.ledger().timestamp();
+    storage::save(env, &shipment);
+
+    storage::append_to_list(env, DataKey::CarrierList(carrier), shipment_id);
+
+    events::accepted(env, &shipment);
+    Ok(())
+}
+
+/// Carrier marks the shipment as picked up and in transit.
+pub fn mark_in_transit(env: &Env, carrier: Address, shipment_id: u64) -> Result<(), ShipmentError> {
+    advance(
+        env,
+        carrier,
+        shipment_id,
+        ShipmentStatus::Accepted,
+        ShipmentStatus::InTransit,
+        events::in_transit,
+    )
+}
+
+/// Carrier marks the cargo as delivered at destination.
+pub fn mark_delivered(env: &Env, carrier: Address, shipment_id: u64) -> Result<(), ShipmentError> {
+    advance(
+        env,
+        carrier,
+        shipment_id,
+        ShipmentStatus::InTransit,
+        ShipmentStatus::Delivered,
+        events::delivered,
+    )
+}
+
+/// Move a shipment from `from` to `to`, checking the caller is its carrier,
+/// then announce it with `emit`.
+fn advance(
+    env: &Env,
+    carrier: Address,
+    shipment_id: u64,
+    from: ShipmentStatus,
+    to: ShipmentStatus,
+    emit: fn(&Env, &Shipment),
+) -> Result<(), ShipmentError> {
+    carrier.require_auth();
+    storage::require_not_paused(env)?;
+
+    let mut shipment = storage::load(env, shipment_id)?;
+
+    if shipment.status != from {
+        return Err(ShipmentError::InvalidStatus);
+    }
+    require_carrier(&shipment, &carrier)?;
+
+    shipment.status = to;
+    shipment.updated_at = env.ledger().timestamp();
+    storage::save(env, &shipment);
+
+    emit(env, &shipment);
+    Ok(())
+}
+
+/// Confirm `caller` is the shipment's assigned carrier — the one
+/// ownership check every carrier-gated transition needs.
+fn require_carrier(shipment: &Shipment, caller: &Address) -> Result<(), ShipmentError> {
+    if shipment.carrier.as_ref() != Some(caller) {
+        return Err(ShipmentError::NotCarrier);
+    }
+    Ok(())
+}

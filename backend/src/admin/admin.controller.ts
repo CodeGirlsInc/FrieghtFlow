@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Param,
   Query,
   UseGuards,
@@ -9,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,6 +19,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import type { AdminAuditRequest } from './admin.service';
 import { CarrierCertificationsService } from '../carriers/carrier-certifications.service';
 import { QueryUsersDto } from './dto/query-users.dto';
 import { QueryAdminShipmentsDto } from './dto/query-admin-shipments.dto';
@@ -99,8 +102,11 @@ export class AdminController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ChangeRoleDto,
     @CurrentUser() admin: User,
+    @Req() request?: AdminAuditRequest,
   ) {
-    return this.adminService.changeUserRole(id, dto.role, admin.id);
+    return request
+      ? this.adminService.changeUserRole(id, dto.role, admin.id, request)
+      : this.adminService.changeUserRole(id, dto.role, admin.id);
   }
 
   // ── Shipments ────────────────────────────────────────────────────────────────
@@ -114,17 +120,67 @@ export class AdminController {
     return this.adminService.listShipments(query);
   }
 
+  // ── Escrow reconciliation ────────────────────────────────────────────────────
+
+  @Get('escrow/:shipmentId/reconcile')
+  @ApiOperation({
+    summary: 'Compare off-chain payment state against live on-chain escrow',
+  })
+  @ApiResponse({ status: 200, description: 'Reconciliation result' })
+  @ApiResponse({ status: 404, description: 'Shipment or payment not found' })
+  reconcileEscrow(@Param('shipmentId', ParseUUIDPipe) shipmentId: string) {
+    return this.adminService.reconcileEscrow(shipmentId);
+  }
+
+  @Post('escrow/:shipmentId/release')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Manually trigger escrow release (admin reconciliation)',
+  })
+  @ApiResponse({ status: 200, description: 'Release submitted to chain' })
+  @ApiResponse({ status: 404, description: 'Payment not found' })
+  releaseEscrow(
+    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
+    @CurrentUser() admin: User,
+    @Req() request?: AdminAuditRequest,
+  ) {
+    return request
+      ? this.adminService.adminReleaseEscrow(shipmentId, admin.id, request)
+      : this.adminService.adminReleaseEscrow(shipmentId, admin.id);
+  }
+
+  @Post('escrow/:shipmentId/refund')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Manually trigger escrow refund (admin reconciliation)',
+  })
+  @ApiResponse({ status: 200, description: 'Refund submitted to chain' })
+  @ApiResponse({ status: 404, description: 'Payment not found' })
+  refundEscrow(
+    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
+    @CurrentUser() admin: User,
+    @Req() request?: AdminAuditRequest,
+  ) {
+    return request
+      ? this.adminService.adminRefundEscrow(shipmentId, admin.id, request)
+      : this.adminService.adminRefundEscrow(shipmentId, admin.id);
+  }
+
   // ── Certifications ───────────────────────────────────────────────────────────
 
   @Patch('certifications/:id/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify or unverify a carrier certification' })
-  @ApiResponse({ status: 200, description: 'Certification verification updated' })
+  @ApiResponse({
+    status: 200,
+    description: 'Certification verification updated',
+  })
   @ApiResponse({ status: 404, description: 'Certification not found' })
   verifyCertification(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCertificationVerificationDto,
+    @CurrentUser() admin: User,
   ) {
-    return this.certificationsService.updateVerification(id, dto);
+    return this.certificationsService.updateVerification(id, dto, admin.id);
   }
 }

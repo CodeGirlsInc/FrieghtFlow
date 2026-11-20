@@ -34,6 +34,8 @@ export class SubmissionError extends StellarIntegrationError {
   constructor(
     message: string,
     readonly rawResponse?: unknown,
+    readonly definitiveFailure = false,
+    readonly txHash?: string,
   ) {
     super(message);
   }
@@ -41,7 +43,10 @@ export class SubmissionError extends StellarIntegrationError {
 
 /** The chain didn't confirm within the time this call was willing to wait. */
 export class ChainTimeoutError extends StellarIntegrationError {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly txHash?: string,
+  ) {
     super(message);
   }
 }

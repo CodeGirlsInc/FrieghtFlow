@@ -18,43 +18,51 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { Public } from '../auth/decorators/public.decorator';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
 import { QueryShipmentDto } from './dto/query-shipment.dto';
 import { BatchCreateShipmentsDto } from './dto/batch-create-shipments.dto';
+import { BatchCreateResultDto } from './dto/batch-create-result.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/enums/role.enum';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { User } from '../users/entities/user.entity';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Response } from 'express';
+import { pipeline } from 'node:stream/promises';
 import { ExportShipmentsDto } from './dto/export-shipments.dto';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 
 class DisputeBody {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 2000 })
+  @IsOptional()
   @IsString()
-  reason: string;
+  @MaxLength(2000)
+  reason?: string;
 }
 
 class ResolveDisputeBody {
   @ApiPropertyOptional()
+  @IsOptional()
   @IsEnum([ShipmentStatus.COMPLETED, ShipmentStatus.CANCELLED])
-  resolution: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED;
+  resolution?: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED;
 
-  @ApiPropertyOptional()
-  @IsString()
-  reason: string;
-}
-
-class CancelBody {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  reason?: string;
+}
+
+class CancelBody {
+  @ApiPropertyOptional({ maxLength: 2000 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
   reason?: string;
 }
 
@@ -92,17 +100,18 @@ export class ShipmentsController {
   @ApiOperation({
     summary: 'Create multiple shipments in a batch (max 50)',
     description:
-      'Creates up to 50 shipments in a single transaction. If any shipment fails validation, the entire batch is rolled back.',
+      'Creates up to 50 shipments with per-item validation reporting. Each shipment is processed individually, and the response includes success/failure status for each item.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Batch shipments created successfully',
+    description: 'Batch processed with per-item results',
+    type: BatchCreateResultDto,
   })
   @ApiResponse({ status: 400, description: 'Validation error in batch data' })
   batchCreate(
     @CurrentUser() user: User,
     @Body() dto: BatchCreateShipmentsDto,
-  ) {
+  ): Promise<BatchCreateResultDto> {
     return this.shipmentsService.batchCreate(user.id, dto);
   }
 
@@ -160,7 +169,9 @@ export class ShipmentsController {
   @Get('analytics')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SHIPPER)
-  @ApiOperation({ summary: 'Shipment analytics — admin sees all, shipper sees own' })
+  @ApiOperation({
+    summary: 'Shipment analytics — admin sees all, shipper sees own',
+  })
   getAnalytics(@CurrentUser() user: User, @Query() query: AnalyticsQueryDto) {
     return this.shipmentsService.getAnalytics(user, query);
   }
@@ -200,24 +211,41 @@ export class ShipmentsController {
       `attachment; filename="${exportResult.fileName}"`,
     );
 
-    await new Promise<void>((resolve, reject) => {
-      exportResult.stream.once('error', reject);
-      res.once('close', resolve);
-      exportResult.stream.pipe(res);
-    });
+    // pipeline forwards stream errors and destroys the export stream if the
+    // response closes early, releasing the database query/connection.
+    await pipeline(exportResult.stream, res);
   }
 
+  /**
+   * Public shipment tracking.
+   *
+   * Marked `@Public()` because the frontend serves this on an unauthenticated
+   * `/track/[trackingNumber]` page. Without it the global `JwtAuthGuard` covered
+   * the route and anonymous visitors received 401 (issue #1669) — the route was
+   * described as "public-style" but carried no decorator, and the tracking page's
+   * second call, `GET /shipments/:id/history`, requires a logged-in party, so even
+   * an authenticated stranger got 403.
+   *
+   * Because this is now reachable without credentials it carries its own throttle
+   * and is backed by `findByTracking`, which returns a restricted projection
+   * (status, route, ETA) with no price, email or wallet. The full record stays
+   * behind authentication on `GET /shipments/:id`.
+   */
   @Get('track/:trackingNumber')
-  @ApiOperation({ summary: 'Track shipment by tracking number (public-style)' })
+  @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Track shipment by tracking number (public)' })
   @ApiParam({ name: 'trackingNumber', example: 'FF-ABC123-DEF456' })
   findByTracking(@Param('trackingNumber') trackingNumber: string) {
     return this.shipmentsService.findByTracking(trackingNumber);
   }
 
   @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get shipment by ID' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.shipmentsService.findOne(id);
+  findOne(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.shipmentsService.findOne(id, user);
   }
 
   @Patch(':id')
@@ -229,7 +257,7 @@ export class ShipmentsController {
     @CurrentUser() user: User,
     @Body() dto: UpdateShipmentDto,
   ) {
-    return this.shipmentsService.update(id, user.id, dto);
+    return this.shipmentsService.update(id, user.id, dto, user.role);
   }
 
   @Patch(':id/cancel')
@@ -270,8 +298,10 @@ export class ShipmentsController {
   }
 
   @Get(':id/history')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get status history for a shipment' })
-  getHistory(@Param('id', ParseUUIDPipe) id: string) {
-    return this.shipmentsService.getHistory(id);
+  getHistory(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.shipmentsService.getHistory(id, user);
   }
 }

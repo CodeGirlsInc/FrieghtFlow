@@ -13,6 +13,7 @@ import { StellarContractService } from '../stellar/stellar-contract.service';
 import {
   EscrowContractRejectedError,
   ForbiddenPaymentActionError,
+  InvalidCancellationFeeError,
   MissingWalletAddressError,
   PaymentAlreadyFundedError,
   PaymentAlreadyInFlightError,
@@ -20,6 +21,7 @@ import {
 } from './errors/payment-flow.errors';
 import {
   EscrowContractError,
+  ChainTimeoutError,
   SimulationError,
 } from '../stellar/errors/stellar-integration.errors';
 import { EscrowErrorCode } from '../stellar/errors/escrow-error-code.enum';
@@ -40,6 +42,16 @@ const mockStellarContractService = () => ({
   buildFundEscrowTransaction: jest.fn(),
   submitSignedTransaction: jest.fn(),
   fundEscrow: jest.fn(),
+  releasePayment: jest.fn(),
+  refundPayment: jest
+    .fn()
+    .mockResolvedValue({ txHash: 'refund-hash', status: 'SUCCESS' }),
+  refundPaymentWithFee: jest
+    .fn()
+    .mockResolvedValue({ txHash: 'refund-fee-hash', status: 'SUCCESS' }),
+  getSettlementFee: jest.fn().mockResolvedValue(0n),
+  raiseDispute: jest.fn(),
+  resolveDispute: jest.fn(),
 });
 const mockConfigService = (values: Record<string, string> = {}) => ({
   get: jest.fn((key: string): string | undefined => values[key]),
@@ -163,8 +175,10 @@ describe('PaymentsService', () => {
       ).rejects.toThrow(MissingWalletAddressError);
     });
 
-    it('creates the payment row and returns unsigned XDR on first funding attempt', async () => {
-      shipmentRepo.findOne.mockResolvedValue(makeShipment());
+    it('funds escrow at the accepted lower bid price', async () => {
+      shipmentRepo.findOne.mockResolvedValue(
+        makeShipment({ price: 80, listedPrice: 100 }),
+      );
       userRepo.findOne.mockImplementation(({ where: { id } }) =>
         Promise.resolve(
           id === 'shipper-1'
@@ -194,7 +208,7 @@ describe('PaymentsService', () => {
         shipperKeypair.publicKey(),
         'GCARRIER',
         1n,
-        1_000_000_000n, // 100 * 10^7
+        800_000_000n, // 80 * 10^7
       );
     });
 
@@ -288,6 +302,34 @@ describe('PaymentsService', () => {
   });
 
   describe('submitFunding', () => {
+    it('blocks cancellation while the claimed funding transaction is still pending', async () => {
+      shipmentRepo.findOne.mockResolvedValue(makeShipment());
+      const payment = makePayment();
+      paymentRepo.findOne.mockResolvedValue(payment);
+      paymentRepo.update.mockImplementation(async (criteria, values) => {
+        if (typeof criteria === 'object' && values?.status) {
+          payment.status = values.status;
+          return { affected: 1 };
+        }
+        return { affected: 1 };
+      });
+      let finishChain!: (value: { txHash: string; status: string }) => void;
+      stellarContractService.submitSignedTransaction.mockReturnValue(
+        new Promise((resolve) => { finishChain = resolve; }),
+      );
+
+      const submission = service.submitFunding(
+        'shipment-1', 'payment-1', 'shipper-1', 'signed-xdr',
+      );
+      // The funding call is now outstanding and the atomic claim has persisted.
+      await expect(service.assertCanCancelShipment('shipment-1')).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({ code: 'PAYMENT_FUNDING_IN_PROGRESS' }),
+      });
+      finishChain({ txHash: 'funded-tx', status: 'SUCCESS' });
+      await expect(submission).resolves.toMatchObject({ status: PaymentStatus.FUNDED });
+    });
+
     it('claims the payment, submits, and marks it FUNDED', async () => {
       shipmentRepo.findOne.mockResolvedValue(makeShipment());
       paymentRepo.findOne.mockResolvedValue(makePayment());
@@ -410,6 +452,24 @@ describe('PaymentsService', () => {
         failureReason: 'ESCROW_CONTRACT_REJECTED',
       });
     });
+
+    it('maps a chain timeout to the submission error code', async () => {
+      shipmentRepo.findOne.mockResolvedValue(makeShipment());
+      paymentRepo.findOne.mockResolvedValue(makePayment());
+      paymentRepo.update.mockResolvedValueOnce({ affected: 1 });
+      stellarContractService.submitSignedTransaction.mockRejectedValue(
+        new ChainTimeoutError('network never confirmed the tx'),
+      );
+
+      await expect(
+        service.submitFunding(
+          'shipment-1',
+          'payment-1',
+          'shipper-1',
+          'signed-xdr',
+        ),
+      ).rejects.toMatchObject({ code: 'ESCROW_SUBMISSION_FAILED' });
+    });
   });
 
   describe('testSignAndSubmitFunding', () => {
@@ -465,6 +525,238 @@ describe('PaymentsService', () => {
         1n,
         expect.any(BigInt),
       );
+    });
+  });
+
+  // ── Issue #1543: partial cancellation settlement ─────────────────────────
+  //
+  // A cancellation must actually move the money: with a fee, the shipper gets
+  // `amount - fee` on chain and the platform keeps `fee`. A zero fee must stay
+  // on the original full-refund path. And a chain call must only happen when
+  // escrow is genuinely held and genuinely refundable.
+  describe('refundEscrowForShipment', () => {
+    const funded = (overrides: Partial<Payment> = {}) =>
+      makePayment({ status: PaymentStatus.FUNDED, ...overrides });
+
+    it('splits the escrow when a fee is charged', async () => {
+      paymentRepo.findOne.mockResolvedValue(funded({ amount: 100 }));
+
+      const result = await service.refundEscrowForShipment('shipment-1', 10);
+
+      // 10 USDC → 10 * 10^7 base units.
+      expect(stellarContractService.refundPaymentWithFee).toHaveBeenCalledWith(
+        1n,
+        100_000_000n,
+      );
+      expect(stellarContractService.refundPayment).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        txHash: 'refund-fee-hash',
+        status: 'SUCCESS',
+        feeAmount: 100_000_000n,
+        refundAmount: 900_000_000n,
+      });
+    });
+
+    it('marks the payment REFUNDED and records settlement after a fee split', async () => {
+      paymentRepo.findOne.mockResolvedValue(funded({ amount: 100 }));
+
+      await service.refundEscrowForShipment('shipment-1', 25);
+
+      expect(paymentRepo.update).toHaveBeenCalledWith('payment-1', {
+        status: PaymentStatus.REFUNDED,
+        settledAt: expect.any(Date),
+        stellarTxHash: 'refund-fee-hash',
+      });
+    });
+
+    it('uses the plain full-refund path for a zero fee', async () => {
+      paymentRepo.findOne.mockResolvedValue(funded({ amount: 100 }));
+
+      const result = await service.refundEscrowForShipment('shipment-1', 0);
+
+      expect(stellarContractService.refundPayment).toHaveBeenCalledWith(1n);
+      expect(stellarContractService.refundPaymentWithFee).not.toHaveBeenCalled();
+      expect(result).toEqual(
+        expect.objectContaining({ feeAmount: 0n, refundAmount: 1_000_000_000n }),
+      );
+    });
+
+    it('defaults to a zero fee when no fee is supplied', async () => {
+      paymentRepo.findOne.mockResolvedValue(funded());
+
+      await service.refundEscrowForShipment('shipment-1');
+
+      expect(stellarContractService.refundPayment).toHaveBeenCalledWith(1n);
+    });
+
+    it('converts the fee into the payment’s settlement asset base units', async () => {
+      paymentRepo.findOne.mockResolvedValue(
+        funded({ amount: 50, assetCode: 'XLM' }),
+      );
+
+      await service.refundEscrowForShipment('shipment-1', 5);
+
+      // XLM and USDC are both 7dp here, so the conversion is the same shift —
+      // what matters is that the payment's own assetCode drives it.
+      expect(stellarContractService.refundPaymentWithFee).toHaveBeenCalledWith(
+        1n,
+        50_000_000n,
+      );
+    });
+
+    it('does nothing when the shipment was never funded', async () => {
+      paymentRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.refundEscrowForShipment('shipment-1', 10),
+      ).resolves.toBeUndefined();
+
+      expect(stellarContractService.refundPaymentWithFee).not.toHaveBeenCalled();
+      expect(stellarContractService.refundPayment).not.toHaveBeenCalled();
+      expect(paymentRepo.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['still pending', PaymentStatus.PENDING],
+      ['mid-funding', PaymentStatus.FUNDING],
+      ['already released', PaymentStatus.RELEASED],
+      ['already refunded', PaymentStatus.REFUNDED],
+      ['cancelled', PaymentStatus.CANCELLED],
+    ])(
+      'makes no chain call when the payment is %s',
+      async (_label, status) => {
+        paymentRepo.findOne.mockResolvedValue(funded({ status }));
+
+        await expect(
+          service.refundEscrowForShipment('shipment-1', 10),
+        ).resolves.toBeUndefined();
+
+        expect(
+          stellarContractService.refundPaymentWithFee,
+        ).not.toHaveBeenCalled();
+        expect(stellarContractService.refundPayment).not.toHaveBeenCalled();
+        expect(paymentRepo.update).not.toHaveBeenCalled();
+      },
+    );
+
+    // A disputed escrow is mid-dispute on chain; refund_payment_with_fee
+    // rejects it. Cancelling that way must be a no-op, leaving the escrow for
+    // resolveEscrowDisputeForShipment to settle in full.
+    it('does not settle a disputed escrow through the cancellation path', async () => {
+      paymentRepo.findOne.mockResolvedValue(
+        funded({ status: PaymentStatus.DISPUTED }),
+      );
+
+      await expect(
+        service.refundEscrowForShipment('shipment-1', 10),
+      ).resolves.toBeUndefined();
+
+      expect(stellarContractService.refundPaymentWithFee).not.toHaveBeenCalled();
+      expect(stellarContractService.refundPayment).not.toHaveBeenCalled();
+      // The row must not be flipped to REFUNDED behind the dispute flow's
+      // back, or local state would claim a settlement that never happened.
+      expect(paymentRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a fee that would consume the whole escrow before calling the chain', async () => {
+      paymentRepo.findOne.mockResolvedValue(funded({ amount: 100 }));
+
+      await expect(
+        service.refundEscrowForShipment('shipment-1', 100),
+      ).rejects.toThrow(InvalidCancellationFeeError);
+
+      expect(stellarContractService.refundPaymentWithFee).not.toHaveBeenCalled();
+      // Left FUNDED so the shipment is not cancelled into a half-settled state.
+      expect(paymentRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a fee larger than the escrow', async () => {
+      paymentRepo.findOne.mockResolvedValue(funded({ amount: 100 }));
+
+      await expect(
+        service.refundEscrowForShipment('shipment-1', 150),
+      ).rejects.toThrow(InvalidCancellationFeeError);
+      expect(paymentRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts the largest fee the contract allows (one base unit short)', async () => {
+      // 1 base unit of a 100 USDC escrow = 0.0000001, not expressible in
+      // the fiat amount, so use a small escrow where it is.
+      paymentRepo.findOne.mockResolvedValue(funded({ amount: 0.0000002 }));
+
+      await service.refundEscrowForShipment('shipment-1', 0.0000001);
+
+      expect(stellarContractService.refundPaymentWithFee).toHaveBeenCalledWith(
+        1n,
+        1n,
+      );
+    });
+
+    it('propagates a contract rejection without marking the payment refunded', async () => {
+      paymentRepo.findOne.mockResolvedValue(funded());
+      stellarContractService.refundPaymentWithFee.mockRejectedValue(
+        new EscrowContractError(
+          EscrowErrorCode.InvalidStatus,
+          'HostError: Error(Contract, #6)',
+        ),
+      );
+
+      await expect(
+        service.refundEscrowForShipment('shipment-1', 10),
+      ).rejects.toThrow(EscrowContractError);
+      expect(paymentRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('propagates a submission failure without marking the payment refunded', async () => {
+      paymentRepo.findOne.mockResolvedValue(funded());
+      stellarContractService.refundPaymentWithFee.mockRejectedValue(
+        new ChainTimeoutError('timed out'),
+      );
+
+      await expect(
+        service.refundEscrowForShipment('shipment-1', 10),
+      ).rejects.toThrow(ChainTimeoutError);
+      expect(paymentRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('settlement and cancellation guards', () => {
+    it('rejects release when no payment row exists', async () => {
+      paymentRepo.findOne.mockResolvedValue(null);
+      await expect(service.releaseEscrowForShipment('shipment-1')).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({ code: 'ESCROW_NOT_FUNDED' }),
+      });
+      expect(stellarContractService.releasePayment).not.toHaveBeenCalled();
+    });
+
+    it('rejects release while payment is pending', async () => {
+      paymentRepo.findOne.mockResolvedValue(makePayment({ status: PaymentStatus.PENDING }));
+      await expect(service.releaseEscrowForShipment('shipment-1')).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({ code: 'ESCROW_NOT_FUNDED' }),
+      });
+      expect(stellarContractService.releasePayment).not.toHaveBeenCalled();
+    });
+
+    it('releases a funded escrow', async () => {
+      paymentRepo.findOne.mockResolvedValue(makePayment({ status: PaymentStatus.FUNDED }));
+      await service.releaseEscrowForShipment('shipment-1');
+      expect(stellarContractService.releasePayment).toHaveBeenCalledWith(1n);
+    });
+
+    it('returns 409 when cancellation observes a funding claim', async () => {
+      paymentRepo.findOne.mockResolvedValue(makePayment({ status: PaymentStatus.FUNDING }));
+      await expect(service.assertCanCancelShipment('shipment-1')).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({ code: 'PAYMENT_FUNDING_IN_PROGRESS' }),
+      });
+    });
+
+    it('requires a funded escrow for pickup when Soroban is enabled', async () => {
+      config.get.mockImplementation((key: string) => key === 'SOROBAN_ENABLED' ? 'true' : undefined);
+      paymentRepo.findOne.mockResolvedValue(makePayment({ status: PaymentStatus.PENDING }));
+      await expect(service.assertFundedForPickup('shipment-1')).rejects.toMatchObject({ status: 409 });
     });
   });
 });
