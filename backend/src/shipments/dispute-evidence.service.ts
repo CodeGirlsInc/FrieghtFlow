@@ -1,4 +1,14 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Shipment } from './entities/shipment.entity';
+import { ShipmentStatus } from '../common/enums/shipment-status.enum';
+import { UserRole } from '../common/enums/role.enum';
 
 export interface DisputeEvidence {
   id: string;
@@ -9,13 +19,6 @@ export interface DisputeEvidence {
   createdAt: Date;
 }
 
-interface Shipment {
-  id: string;
-  status: string;
-  senderId: string;
-  carrierId: string;
-}
-
 type SubmitEvidenceDto = Pick<DisputeEvidence, 'fileUrl' | 'description'>;
 
 @Injectable()
@@ -23,24 +26,42 @@ export class DisputeEvidenceService {
   private readonly evidence = new Map<string, DisputeEvidence[]>();
   private idSeq = 1;
 
-  // Injected shipment repo in production; simplified here
-  private getShipment(shipmentId: string): Shipment {
-    // Placeholder — replace with actual repo lookup
-    throw new NotFoundException(`Shipment ${shipmentId} not found`);
+  constructor(
+    @InjectRepository(Shipment)
+    private readonly shipmentRepo: Repository<Shipment>,
+  ) {}
+
+  private async getShipment(shipmentId: string): Promise<Shipment> {
+    const shipment = await this.shipmentRepo.findOne({
+      where: { id: shipmentId },
+    });
+    if (!shipment) {
+      throw new NotFoundException(`Shipment ${shipmentId} not found`);
+    }
+    return shipment;
   }
 
-  private assertAccess(shipment: Shipment, userId: string): void {
-    if (shipment.senderId !== userId && shipment.carrierId !== userId) {
-      throw new ForbiddenException('Not a party to this shipment');
+  private assertAccess(shipment: Shipment, userId: string, isAdmin: boolean): void {
+    if (!isAdmin) {
+      const isParty =
+        shipment.shipperId === userId || shipment.carrierId === userId;
+      if (!isParty) {
+        throw new ForbiddenException('Not a party to this shipment');
+      }
     }
-    if (shipment.status !== 'DISPUTED') {
-      throw new ForbiddenException('Shipment is not in DISPUTED status');
+    if (shipment.status !== ShipmentStatus.DISPUTED) {
+      throw new BadRequestException('Shipment is not in DISPUTED status');
     }
   }
 
-  submit(shipmentId: string, userId: string, dto: SubmitEvidenceDto): DisputeEvidence {
-    const shipment = this.getShipment(shipmentId);
-    this.assertAccess(shipment, userId);
+  async submit(
+    shipmentId: string,
+    userId: string,
+    isAdmin: boolean,
+    dto: SubmitEvidenceDto,
+  ): Promise<DisputeEvidence> {
+    const shipment = await this.getShipment(shipmentId);
+    this.assertAccess(shipment, userId, isAdmin);
 
     const record: DisputeEvidence = {
       id: String(this.idSeq++),
@@ -56,9 +77,19 @@ export class DisputeEvidenceService {
     return record;
   }
 
-  findAll(shipmentId: string, userId: string, isAdmin: boolean): DisputeEvidence[] {
-    const shipment = this.getShipment(shipmentId);
-    if (!isAdmin) this.assertAccess(shipment, userId);
+  async findAll(
+    shipmentId: string,
+    userId: string,
+    isAdmin: boolean,
+  ): Promise<DisputeEvidence[]> {
+    const shipment = await this.getShipment(shipmentId);
+    if (!isAdmin) {
+      const isParty =
+        shipment.shipperId === userId || shipment.carrierId === userId;
+      if (!isParty) {
+        throw new ForbiddenException('Not a party to this shipment');
+      }
+    }
     return this.evidence.get(shipmentId) ?? [];
   }
 }
