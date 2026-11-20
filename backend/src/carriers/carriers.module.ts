@@ -5,11 +5,24 @@ import { CarrierCertification } from './entities/carrier-certification.entity';
 import { CarriersService } from './carriers.service';
 import { CarrierCertificationsService } from './carrier-certifications.service';
 import { CarriersController } from './carriers.controller';
+import { AuditLogModule } from '../audit-log/audit-log.module';
+import { DocumentsModule } from '../documents/documents.module';
+import { CarrierCertificationExpiryScheduler } from './carrier-certification-expiry.scheduler';
+import { CarrierEarningsService } from './carrier-earnings.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Shipment, CarrierCertification])],
+  imports: [
+    TypeOrmModule.forFeature([Shipment, CarrierCertification]),
+    AuditLogModule,
+    DocumentsModule,
+  ],
   controllers: [CarriersController],
-  providers: [CarriersService, CarrierCertificationsService],
-  exports: [CarrierCertificationsService],
+  providers: [
+    CarriersService,
+    CarrierCertificationsService,
+    CarrierCertificationExpiryScheduler,
+    CarrierEarningsService,
+  ],
+  exports: [CarrierCertificationsService, CarrierEarningsService],
 })
 export class CarriersModule {}
