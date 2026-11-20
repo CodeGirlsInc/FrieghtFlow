@@ -135,12 +135,12 @@ export class ShipmentsService {
         roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
       },
       [ShipmentStatus.IN_TRANSIT]: {
-        next: [ShipmentStatus.DELIVERED, ShipmentStatus.DISPUTED],
-        roles: [UserRole.CARRIER, UserRole.ADMIN],
+        next: [ShipmentStatus.DELIVERED, ShipmentStatus.CANCELLED, ShipmentStatus.DISPUTED],
+        roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
       },
       [ShipmentStatus.DELIVERED]: {
         next: [ShipmentStatus.COMPLETED, ShipmentStatus.DISPUTED],
-        roles: [UserRole.SHIPPER, UserRole.ADMIN],
+        roles: [UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN],
       },
       [ShipmentStatus.DISPUTED]: {
         next: [ShipmentStatus.COMPLETED, ShipmentStatus.CANCELLED],
