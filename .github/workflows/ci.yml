@@ -91,7 +91,6 @@ jobs:
   frontend-e2e:
     name: Frontend E2E (Playwright)
     runs-on: ubuntu-latest
-    if: ${{ secrets.E2E_SHIPPER_EMAIL != '' && secrets.E2E_CARRIER_EMAIL != '' }}
     defaults:
       run:
         working-directory: frontend
@@ -110,10 +109,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check E2E credentials
+        id: gate
+        # secrets context is not available in jobs.<id>.if, so we gate on a
+        # step output instead.  The job always starts; steps after this one
+        # are skipped when credentials are absent.
+        run: |
+          if [ -n "$E2E_SHIPPER_EMAIL" ] && [ -n "$E2E_CARRIER_EMAIL" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          E2E_SHIPPER_EMAIL: ${{ secrets.E2E_SHIPPER_EMAIL }}
+          E2E_CARRIER_EMAIL: ${{ secrets.E2E_CARRIER_EMAIL }}
+
       - name: Install browser
+        if: steps.gate.outputs.enabled == 'true'
         run: npm run e2e:install
 
       - name: Run critical lifecycle test
+        if: steps.gate.outputs.enabled == 'true'
         run: npm run e2e
         env:
           E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'http://127.0.0.1:3000' }}
@@ -138,10 +154,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Setup Rust toolchain (pinned by contracts/rust-toolchain.toml)
+        run: rustup show
 
       - name: Cache Cargo registry
         uses: actions/cache@v4
@@ -171,3 +185,6 @@ jobs:
 
       - name: Tests
         run: cargo test --all
+
+      - name: WASM size budget
+        run: ./scripts/check-wasm-size.sh
