@@ -61,4 +61,48 @@ describe('notification store', () => {
     expect(useNotificationStore.getState().notifications).toHaveLength(0);
     expect(window.localStorage.getItem('ff-notification-bell:user-1')).toBeNull();
   });
+
+  it('derives the unread badge from the stored unread items — never past the 20 stored (#1835)', () => {
+    const addNotification = useNotificationStore.getState().addNotification;
+    for (let i = 0; i < 25; i++) {
+      addNotification(sampleNotification(`TRK-${i}`));
+    }
+    const { notifications, unreadCount } = useNotificationStore.getState();
+    expect(notifications).toHaveLength(20);
+    expect(unreadCount).toBe(20);
+  });
+
+  it('persists the bell to localStorage keyed by user id (#1836)', () => {
+    useAuthStore.setState({ user: makeUser('user-1'), isAuthenticated: true });
+    useNotificationStore.getState().addNotification(sampleNotification('TRK-1'));
+    expect(window.localStorage.getItem('ff-notification-bell:user-1')).toContain('TRK-1');
+  });
+
+  it('rehydrates the bell when the user changes back (reload simulation) (#1836)', () => {
+    useAuthStore.setState({ user: makeUser('user-1'), isAuthenticated: true });
+    useNotificationStore.getState().addNotification(sampleNotification('TRK-1'));
+    // Simulate a reload: the bell starts empty, then the user signs in again.
+    useNotificationStore.setState({ notifications: [], unreadCount: 0 });
+    useAuthStore.setState({ user: makeUser('user-1'), isAuthenticated: true });
+    expect(useNotificationStore.getState().notifications.map((n) => n.trackingNumber)).toEqual(['TRK-1']);
+  });
+
+  it('keeps the persisted items scoped per user (#1836)', () => {
+    useAuthStore.setState({ user: makeUser('user-a'), isAuthenticated: true });
+    useNotificationStore.getState().addNotification(sampleNotification('TRK-A'));
+    useAuthStore.setState({ user: makeUser('user-b'), isAuthenticated: true });
+    expect(window.localStorage.getItem('ff-notification-bell:user-a')).toContain('TRK-A');
+    expect(window.localStorage.getItem('ff-notification-bell:user-b')).toBeNull();
+  });
+
+  it('clears the persisted bell on logout (#1834, #1836)', () => {
+    useAuthStore.setState({ user: makeUser('user-1'), isAuthenticated: true });
+    useNotificationStore.getState().addNotification(sampleNotification('TRK-1'));
+    expect(window.localStorage.getItem('ff-notification-bell:user-1')).toContain('TRK-1');
+
+    useAuthStore.setState({ user: null, isAuthenticated: false });
+
+    expect(useNotificationStore.getState().notifications).toHaveLength(0);
+    expect(window.localStorage.getItem('ff-notification-bell:user-1')).toBeNull();
+  });
 });

@@ -32,13 +32,52 @@ function createNotificationId(shipmentId: string): string {
     : `${shipmentId}-${Date.now()}-${++fallbackNotificationId}`;
 }
 
-// ── Sign-out clearing (#1834) ────────────────────────────────────────────────
+// ── localStorage persistence (#1836) ────────────────────────────────────────
 
 const STORAGE_KEY_PREFIX = 'ff-notification-bell:';
 
 function storageKeyForUser(userId: string): string {
   return `${STORAGE_KEY_PREFIX}${userId}`;
 }
+
+function readPersistedNotifications(userId: string): ShipmentNotification[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(storageKeyForUser(userId));
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.slice(0, 20) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePersistedNotifications(
+  userId: string | null,
+  notifications: ShipmentNotification[],
+): void {
+  if (typeof window === 'undefined' || !userId) return;
+  try {
+    if (notifications.length === 0) {
+      window.localStorage.removeItem(storageKeyForUser(userId));
+    } else {
+      window.localStorage.setItem(storageKeyForUser(userId), JSON.stringify(notifications.slice(0, 20)));
+    }
+  } catch {
+    // Storage can be unavailable (private mode); the in-memory bell still works.
+  }
+}
+
+function currentUserId(): string | null {
+  return useAuthStore.getState().user?.id ?? null;
+}
+
+/** The badge mirrors the stored list, so it can never exceed the number of stored unread items (#1835). */
+function deriveUnreadCount(notifications: ShipmentNotification[]): number {
+  return notifications.filter((n) => !n.read).length;
+}
+
+// ── Sign-out clearing (#1834) ────────────────────────────────────────────────
 
 /** The last user the store saw signed in — used to clear their storage on logout. */
 let lastUserId: string | null = null;
@@ -63,27 +102,49 @@ useAuthStore.subscribe((state) => {
   clearAll();
 });
 
-export const useNotificationStore = create<NotificationState>((set) => ({
-  notifications: [],
-  unreadCount: 0,
+// #1836: hydrate the bell from localStorage when the user changes (login,
+// page load's fetchCurrentUser). Keys are scoped per user, so one user's
+// notifications are never shown to another.
+useAuthStore.subscribe((state) => {
+  const userId = state.user?.id;
+  if (!userId) return;
+  const persisted = readPersistedNotifications(userId);
+  if (persisted.length > 0) {
+    useNotificationStore.setState({
+      notifications: persisted,
+      unreadCount: deriveUnreadCount(persisted),
+    });
+  }
+});
 
-  addNotification: (n) =>
-    set((state) => {
+export const useNotificationStore = create<NotificationState>((set, get) => {
+  const userId = currentUserId();
+  const initialNotifications = userId ? readPersistedNotifications(userId) : [];
+  return {
+    notifications: initialNotifications,
+    unreadCount: deriveUnreadCount(initialNotifications),
+
+    addNotification: (n) => {
       const notification: ShipmentNotification = {
         ...n,
         id: createNotificationId(n.shipmentId),
         read: false,
       };
       // Keep only the most recent 20 notifications
-      const notifications = [notification, ...state.notifications].slice(0, 20);
-      return { notifications, unreadCount: state.unreadCount + 1 };
-    }),
+      const notifications = [notification, ...get().notifications].slice(0, 20);
+      writePersistedNotifications(currentUserId(), notifications);
+      set({ notifications, unreadCount: deriveUnreadCount(notifications) });
+    },
 
-  markAllRead: () =>
-    set((state) => ({
-      notifications: state.notifications.map((n) => ({ ...n, read: true })),
-      unreadCount: 0,
-    })),
+    markAllRead: () => {
+      const notifications = get().notifications.map((n) => ({ ...n, read: true }));
+      writePersistedNotifications(currentUserId(), notifications);
+      set({ notifications, unreadCount: deriveUnreadCount(notifications) });
+    },
 
-  clearAll: () => set({ notifications: [], unreadCount: 0 }),
-}));
+    clearAll: () => {
+      writePersistedNotifications(currentUserId(), []);
+      set({ notifications: [], unreadCount: 0 });
+    },
+  };
+});
