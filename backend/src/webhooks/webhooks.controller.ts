@@ -21,7 +21,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
-import { WebhooksService } from './webhooks.service';
+import {
+  DEFAULT_MAX_ACTIVE_WEBHOOKS_PER_USER,
+  WebhooksService,
+} from './webhooks.service';
 
 @ApiTags('webhooks')
 @ApiBearerAuth()
@@ -31,18 +34,23 @@ export class WebhooksController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SHIPPER, UserRole.ADMIN)
+  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({
     summary: 'Register a webhook URL for shipment status changes',
+    description: `Shippers receive events for their own shipments. Carriers receive events for shipments assigned to them. Admins receive all events. A user may have at most ${DEFAULT_MAX_ACTIVE_WEBHOOKS_PER_USER} active webhooks by default (configure with WEBHOOK_MAX_PER_USER).`,
   })
   @ApiResponse({ status: 201, description: 'Webhook created' })
+  @ApiResponse({
+    status: 409,
+    description: 'The per-user active webhook limit has been reached',
+  })
   create(@CurrentUser() user: User, @Body() dto: CreateWebhookDto) {
     return this.webhooksService.create(user.id, dto);
   }
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SHIPPER, UserRole.ADMIN)
+  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({ summary: 'List my registered webhooks' })
   findAll(@CurrentUser() user: User) {
     return this.webhooksService.findAllForUser(user.id);
@@ -51,7 +59,7 @@ export class WebhooksController {
   @Delete(':id')
   @HttpCode(204)
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SHIPPER, UserRole.ADMIN)
+  @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete one of my registered webhooks' })
   @ApiResponse({ status: 204, description: 'Webhook deleted' })
   async remove(
