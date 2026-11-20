@@ -10,9 +10,15 @@ import type { Request, Response } from 'express';
 
 /**
  * One error contract for the whole API:
- * `{ statusCode, code, message, details?, path, timestamp }`.
- * Unexpected errors are logged and returned as a generic 500 without leaking
- * internals.
+ * `{ statusCode, code, message, details?, path, timestamp }`
+ *
+ * Database constraint errors are mapped to safe HTTP responses:
+ * - 23505 (unique violation)  → 409 CONFLICT
+ * - 23503 (FK violation)      → 409 CONFLICT
+ * - 22P02 (invalid uuid input) → 400 BAD_REQUEST
+ *
+ * No SQL text or table names are included in the response body.
+ * Unexpected errors are logged and returned as a generic 500.
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -41,9 +47,31 @@ export class AllExceptionsFilter implements ExceptionFilter {
         if (parsed.details !== undefined) details = parsed.details;
       }
     } else {
-      this.logger.error(
-        exception instanceof Error ? exception.stack : String(exception),
-      );
+      // Map well-known Postgres error codes to safe HTTP responses.
+      const pgCode = this.extractPgCode(exception);
+      if (pgCode === '23505') {
+        // Unique constraint violation
+        statusCode = HttpStatus.CONFLICT;
+        code = 'CONFLICT';
+        message = 'Resource already exists';
+        this.logger.warn(`Unique violation at ${request.url}`);
+      } else if (pgCode === '23503') {
+        // Foreign key constraint violation
+        statusCode = HttpStatus.CONFLICT;
+        code = 'CONFLICT';
+        message = 'Referenced resource not found or constraint violated';
+        this.logger.warn(`FK violation at ${request.url}`);
+      } else if (pgCode === '22P02') {
+        // Invalid input syntax (e.g. malformed UUID)
+        statusCode = HttpStatus.BAD_REQUEST;
+        code = 'BAD_REQUEST';
+        message = 'Invalid input format';
+        this.logger.warn(`Invalid input syntax at ${request.url}`);
+      } else {
+        this.logger.error(
+          exception instanceof Error ? exception.stack : String(exception),
+        );
+      }
     }
 
     if (response.headersSent) return;
@@ -56,5 +84,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
       path: request.url,
       timestamp: new Date().toISOString(),
     });
+  }
+
+  private extractPgCode(exception: unknown): string | undefined {
+    if (typeof exception !== 'object' || exception === null) return undefined;
+    const e = exception as {
+      code?: unknown;
+      driverError?: { code?: unknown };
+    };
+    const raw = e.code ?? e.driverError?.code;
+    return typeof raw === 'string' ? raw : undefined;
   }
 }
