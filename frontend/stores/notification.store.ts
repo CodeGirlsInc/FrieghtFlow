@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { useAuthStore } from './auth.store';
 
 export interface ShipmentNotification {
   id: string;
@@ -30,6 +31,37 @@ function createNotificationId(shipmentId: string): string {
     ? `${shipmentId}-${uuid}`
     : `${shipmentId}-${Date.now()}-${++fallbackNotificationId}`;
 }
+
+// ── Sign-out clearing (#1834) ────────────────────────────────────────────────
+
+const STORAGE_KEY_PREFIX = 'ff-notification-bell:';
+
+function storageKeyForUser(userId: string): string {
+  return `${STORAGE_KEY_PREFIX}${userId}`;
+}
+
+/** The last user the store saw signed in — used to clear their storage on logout. */
+let lastUserId: string | null = null;
+
+useAuthStore.subscribe((state) => {
+  if (state.user) lastUserId = state.user.id;
+});
+
+useAuthStore.subscribe((state) => {
+  if (state.user !== null) return;
+  const { notifications, clearAll } = useNotificationStore.getState();
+  if (notifications.length === 0) return;
+  // The user is signing out — drop this user's persisted copy so the bell
+  // cannot resurrect their notifications on the next visit.
+  if (typeof window !== 'undefined' && lastUserId) {
+    try {
+      window.localStorage.removeItem(storageKeyForUser(lastUserId));
+    } catch {
+      // Storage can be unavailable; the in-memory clear still applies.
+    }
+  }
+  clearAll();
+});
 
 export const useNotificationStore = create<NotificationState>((set) => ({
   notifications: [],
