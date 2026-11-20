@@ -85,6 +85,8 @@ export class DocumentsController {
   @Post('certification')
   @UseGuards(RolesGuard)
   @Roles(UserRole.CARRIER)
+  // Apply the same throttle and cleanup interceptor as the main upload route.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Upload a platform-owned carrier certification document',
   })
@@ -101,7 +103,7 @@ export class DocumentsController {
   @ApiResponse({ status: 201, description: 'Certification document uploaded' })
   @ApiResponse({ status: 400, description: 'Invalid file' })
   @ApiResponse({ status: 403, description: 'Carrier role required' })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(UploadCleanupInterceptor, FileInterceptor('file'))
   async uploadCertification(
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: User,
@@ -121,6 +123,11 @@ export class DocumentsController {
   private assertAllowedFile(file: Express.Multer.File | undefined): void {
     if (!file) {
       throw new BadRequestException('No file provided');
+    }
+    // Reject zero-byte files explicitly before the magic-byte check so the
+    // content check always has bytes to inspect.
+    if (file.size === 0 || (file.buffer?.length ?? 0) === 0) {
+      throw new BadRequestException('File is empty');
     }
     if (!isAllowedDocumentMimeType(file.mimetype)) {
       throw new BadRequestException(
