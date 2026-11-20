@@ -12,6 +12,7 @@ import {
   ShipmentEvent,
 } from '../shipments/events/shipment.events';
 import { Shipment } from '../shipments/entities/shipment.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class NotificationsService {
@@ -32,6 +33,23 @@ export class NotificationsService {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Failed to send email to ${to}: ${msg}`);
     }
+  }
+
+  /**
+   * Returns false for recipients that should not receive shipment emails:
+   * - Deactivated users (isActive === false): receive no emails at all.
+   * - Unverified email addresses (isEmailVerified === false): receive only
+   *   account-security mail (password reset, verification). Sending shipment
+   *   detail to an unverified address leaks data to a potentially wrong owner.
+   */
+  private recipientAllowedForShipmentEmail(user: User): boolean {
+    if (user.isActive === false) {
+      return false;
+    }
+    if (user.isEmailVerified === false) {
+      return false;
+    }
+    return true;
   }
 
   private shipmentSummary(s: Shipment): string {
