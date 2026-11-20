@@ -8,12 +8,17 @@ export class UpdateShipmentDto {
   @MaxLength(2000)
   notes?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description: 'Pickup date (ISO 8601). Must be in the future.',
+  })
   @IsOptional()
   @IsDateString()
   pickupDate?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description:
+      'Estimated delivery date (ISO 8601). Must be on or after pickupDate.',
+  })
   @IsOptional()
   @IsDateString()
   estimatedDeliveryDate?: string;
