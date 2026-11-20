@@ -5,17 +5,17 @@ import {
   Delete,
   Param,
   Body,
-  Query,
   UseInterceptors,
   UploadedFile,
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
-  BadRequestException,
-  StreamableFile,
   Res,
+  BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -26,22 +26,18 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { DocumentsService } from './documents.service';
+import {
+  contentMatchesMimeType,
+  isAllowedDocumentMimeType,
+  unsupportedDocumentMimeTypeMessage,
+} from './document-upload.constants';
+import { UploadCleanupInterceptor } from './upload-cleanup.interceptor';
 import { UploadDocumentDto } from './dto/upload-document.dto';
-import { ListDocumentsQueryDto } from './dto/list-documents-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
-
-const ALLOWED_MIMETYPES = new Set([
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-]);
+import { UserRole } from '../common/enums/role.enum';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @ApiTags('documents')
 @ApiBearerAuth()
@@ -50,6 +46,8 @@ export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Post('upload')
+  // Uploads are expensive: far stricter than the global 60 requests/minute.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Upload a document for a shipment' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -67,37 +65,78 @@ export class DocumentsController {
   @ApiResponse({ status: 201, description: 'Document uploaded successfully' })
   @ApiResponse({ status: 400, description: 'Invalid file or payload' })
   @ApiResponse({ status: 403, description: 'Not a party to this shipment' })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(UploadCleanupInterceptor, FileInterceptor('file'))
   async upload(
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: UploadDocumentDto,
     @CurrentUser() user: User,
   ) {
+    try {
+      this.assertAllowedFile(file);
+      return await this.documentsService.upload(file, dto, user);
+    } catch (error: unknown) {
+      this.documentsService.cleanupUpload(file);
+      throw error;
+    }
+  }
+
+  @Post('certification')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.CARRIER)
+  // Apply the same throttle and cleanup interceptor as the main upload route.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Upload a platform-owned carrier certification document',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Certification document uploaded' })
+  @ApiResponse({ status: 400, description: 'Invalid file' })
+  @ApiResponse({ status: 403, description: 'Carrier role required' })
+  @UseInterceptors(UploadCleanupInterceptor, FileInterceptor('file'))
+  async uploadCertification(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: User,
+  ) {
+    try {
+      this.assertAllowedFile(file);
+      return await this.documentsService.uploadCertificationDocument(
+        file,
+        user,
+      );
+    } catch (error: unknown) {
+      this.documentsService.cleanupUpload(file);
+      throw error;
+    }
+  }
+
+  private assertAllowedFile(file: Express.Multer.File | undefined): void {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
-    if (!ALLOWED_MIMETYPES.has(file.mimetype)) {
+    // Reject zero-byte files explicitly before the magic-byte check so the
+    // content check always has bytes to inspect.
+    if (file.size === 0 || (file.buffer?.length ?? 0) === 0) {
+      throw new BadRequestException('File is empty');
+    }
+    if (!isAllowedDocumentMimeType(file.mimetype)) {
       throw new BadRequestException(
-        `Unsupported file type: ${file.mimetype}. Allowed: PDF, images, Word, Excel`,
+        unsupportedDocumentMimeTypeMessage(file.mimetype),
       );
     }
-    return this.documentsService.upload(file, dto, user);
-  }
-
-  @Get()
-  @ApiOperation({ summary: 'List authenticated user documents (paginated)' })
-  @ApiResponse({ status: 200, description: 'Paginated document list' })
-  listUserDocuments(
-    @Query() query: ListDocumentsQueryDto,
-    @CurrentUser() user: User,
-  ) {
-    return this.documentsService.listUserDocuments(
-      user,
-      query.page,
-      query.limit,
-      query.documentType,
-      query.shipmentId,
-    );
+    if (!contentMatchesMimeType(file.buffer, file.mimetype)) {
+      throw new BadRequestException(
+        `File content does not match the declared type ${file.mimetype}`,
+      );
+    }
   }
 
   @Get('shipment/:shipmentId')
@@ -113,7 +152,6 @@ export class DocumentsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get document metadata by ID' })
   @ApiResponse({ status: 200, description: 'Document metadata' })
-  @ApiResponse({ status: 403, description: 'Not owner or admin' })
   @ApiResponse({ status: 404, description: 'Document not found' })
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     return this.documentsService.findOne(id, user);
@@ -122,29 +160,23 @@ export class DocumentsController {
   @Get(':id/download')
   @ApiOperation({ summary: 'Download a document file' })
   @ApiResponse({ status: 200, description: 'File stream' })
-  @ApiResponse({ status: 403, description: 'Not owner or admin' })
   @ApiResponse({ status: 404, description: 'File not found' })
   async download(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
-    @Res({ passthrough: true }) res: Response,
+    @Res() res: Response,
   ) {
-    const { stream, mimetype, originalName } =
-      await this.documentsService.download(id, user);
-
-    res.set({
-      'Content-Type': mimetype,
-      'Content-Disposition': `attachment; filename="${originalName}"`,
-    });
-
-    return new StreamableFile(stream);
+    const { filePath, originalName } = await this.documentsService.getFilePath(
+      id,
+      user,
+    );
+    res.download(filePath, originalName);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a document (uploader or admin only)' })
   @ApiResponse({ status: 204, description: 'Document deleted' })
-  @ApiResponse({ status: 403, description: 'Not owner or admin' })
   async remove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
