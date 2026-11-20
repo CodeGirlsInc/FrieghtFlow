@@ -3,7 +3,15 @@
 import { useEffect, useState } from 'react';
 
 export function ThemeToggle() {
-  const [dark, setDark] = useState(false);
+  // The inline script in app/layout.tsx already applies the `dark` class
+  // to <html> synchronously before hydration, so read it directly here
+  // instead of defaulting to `false`. Otherwise, on a page that's
+  // already in dark mode, this initial render (and the hydrated render
+  // that must match it) shows the light-mode moon icon for one
+  // frame/tick before the effect below corrects it.
+  const [dark, setDark] = useState(
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
+  );
 
   // Apply theme before first paint to avoid flash
   useEffect(() => {
@@ -26,6 +34,13 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+      // The server can't know the user's stored/preferred theme, so its
+      // markup always renders the light-mode icon; the client's first
+      // render intentionally differs when the inline script in
+      // app/layout.tsx has already applied `dark` to <html>. That's the
+      // fix for the bug this component had (see the useState above), not
+      // a bug itself.
+      suppressHydrationWarning
     >
       {dark ? (
         // Sun icon

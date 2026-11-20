@@ -69,21 +69,52 @@ function buildMonthlySpend(shipments: Shipment[]) {
   });
 }
 
+// A hard cap on how many pages this dashboard will fetch, so a very
+// large account can't make it page forever — 50 * 200 = 10,000
+// shipments, comfortably past any realistic reporting window.
+const MAX_PAGES = 50;
+const PAGE_SIZE = 200;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AnalyticsDashboardPage() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [truncated, setTruncated] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    // Fetch a large batch to cover 12 weeks of history
-    shipmentApi
-      .list({ limit: 200 })
-      .then((res) => setShipments(res.data))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    async function loadAll() {
+      setLoading(true);
+      setError(false);
+      try {
+        const first = await shipmentApi.list({ page: 1, limit: PAGE_SIZE });
+        if (cancelled) return;
+
+        const all = [...first.data];
+        const totalPages = Math.min(first.totalPages, MAX_PAGES);
+
+        for (let page = 2; page <= totalPages; page++) {
+          const next = await shipmentApi.list({ page, limit: PAGE_SIZE });
+          if (cancelled) return;
+          all.push(...next.data);
+        }
+
+        setShipments(all);
+        setTruncated(first.totalPages > MAX_PAGES);
+      } catch {
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadAll();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const weeklyData = useMemo(() => buildWeeklyData(shipments), [shipments]);
@@ -115,6 +146,13 @@ export default function AnalyticsDashboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
         <p className="text-muted-foreground text-sm mt-1">Shipment activity and spend overview.</p>
+        {truncated && (
+          <p className="text-amber-600 text-xs mt-1">
+            You have more than {MAX_PAGES * PAGE_SIZE} shipments on record — this dashboard is
+            only showing the first {MAX_PAGES * PAGE_SIZE} and doesn&apos;t cover your full
+            history.
+          </p>
+        )}
       </div>
 
       {isEmpty ? (
