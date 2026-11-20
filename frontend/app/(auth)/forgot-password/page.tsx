@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import Link from 'next/link';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -17,12 +16,7 @@ import {
   CardTitle,
 } from '../../../components/ui/card';
 import { forgotPassword } from '../../../lib/api/auth.api';
-
-const schema = z.object({
-  email: z.string().email('Invalid email address'),
-});
-
-type FormData = z.infer<typeof schema>;
+import { forgotPasswordSchema, type ForgotPasswordFormData } from '../../../lib/validation/auth';
 
 export default function ForgotPasswordPage() {
   const [submitted, setSubmitted] = useState(false);
@@ -32,9 +26,9 @@ export default function ForgotPasswordPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<ForgotPasswordFormData>({ resolver: zodResolver(forgotPasswordSchema) });
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: ForgotPasswordFormData) => {
     setLoading(true);
     try {
       await forgotPassword(data.email);

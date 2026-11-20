@@ -8,7 +8,10 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -53,15 +56,19 @@ export class BidsController {
   getBids(
     @Param('id', ParseUUIDPipe) shipmentId: string,
     @CurrentUser() user: User,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
-    return this.bidsService.getBids(shipmentId, user.id);
+    return this.bidsService.getBids(shipmentId, user.id, page, limit);
   }
 
   @Patch(':bidId/accept')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER)
-  @ApiOperation({ summary: 'Shipper accepts a bid — assigns carrier, rejects others' })
+  @ApiOperation({
+    summary: 'Shipper accepts a bid — assigns carrier, rejects others',
+  })
   @ApiParam({ name: 'id', description: 'Shipment ID' })
   @ApiParam({ name: 'bidId', description: 'Bid ID' })
   acceptBid(

@@ -5,7 +5,6 @@ import {
   ManyToOne,
   JoinColumn,
   CreateDateColumn,
-  DeleteDateColumn,
   Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
@@ -18,12 +17,12 @@ export class Document {
   id: string;
 
   @Index()
-  @ManyToOne(() => Shipment, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => Shipment, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'shipment_id' })
-  shipment: Shipment;
+  shipment: Shipment | null;
 
-  @Column({ name: 'shipment_id' })
-  shipmentId: string;
+  @Column({ name: 'shipment_id', type: 'uuid', nullable: true })
+  shipmentId: string | null;
 
   @ManyToOne(() => User, { nullable: false })
   @JoinColumn({ name: 'uploader_id' })
@@ -60,16 +59,12 @@ export class Document {
   @Column({ name: 'ipfs_cid', nullable: true, type: 'varchar' })
   ipfsCid: string | null;
 
-  /** Cloudinary secure_url */
-  @Column({ name: 'stored_url', nullable: true })
-  storedUrl: string | null;
+  @Column({ name: 'on_chain_document_id', type: 'bigint', nullable: true })
+  onChainDocumentId: number | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
-
-  @DeleteDateColumn({ name: 'deleted_at' })
-  deletedAt: Date | null;
 }

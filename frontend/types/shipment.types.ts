@@ -39,7 +39,15 @@ export interface ShipmentStatusHistory {
   fromStatus: ShipmentStatus | null;
   toStatus: ShipmentStatus;
   changedById: string;
-  changedBy: Pick<User, 'id' | 'firstName' | 'lastName'>;
+  /**
+   * Optional/nullable on purpose. The backend column is `nullable: false`, but
+   * `ShipmentStatusHistory.changedBy` is declared `eager: false`, so any query
+   * that forgets `relations: ['changedBy']` (or any DTO/serializer that
+   * projects a subset of the entity) legitimately returns an entry with no
+   * `changedBy` key at all. Callers must handle the automated/system
+   * transition case rather than trusting the relation to be there.
+   */
+  changedBy?: Pick<User, 'id' | 'firstName' | 'lastName'> | null;
   reason: string | null;
   changedAt: string;
 }

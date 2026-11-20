@@ -7,7 +7,6 @@ import {
   Index,
 } from 'typeorm';
 import { UserRole } from '../../common/enums/role.enum';
-import { TwoFactorRecovery } from './two-factor-recovery.entity';
 
 @Entity('users')
 export class User {
@@ -51,7 +50,12 @@ export class User {
   })
   refreshToken: string | null;
 
-  @Column({ name: 'verification_token', nullable: true, type: 'varchar' })
+  @Column({
+    name: 'verification_token',
+    nullable: true,
+    type: 'varchar',
+    select: false,
+  })
   verificationToken: string | null;
 
   @Column({
@@ -81,13 +85,4 @@ export class User {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
-
-  @Column({ default: false })
-  isTwoFactorEnabled: boolean;
-
-  @Column({ nullable: true, select: false })
-  twoFactorSecret: string;
-
-  @OneToMany(() => TwoFactorRecovery, (recovery) => recovery.user)
-  recoveryCodes: TwoFactorRecovery[];
 }

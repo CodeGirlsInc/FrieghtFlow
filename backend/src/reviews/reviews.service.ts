@@ -21,24 +21,35 @@ export class ReviewsService {
     private readonly shipmentRepo: Repository<Shipment>,
   ) {}
 
-  async create(shipmentId: string, reviewer: User, dto: CreateReviewDto): Promise<Review> {
-    const shipment = await this.shipmentRepo.findOne({ where: { id: shipmentId } });
+  async create(
+    shipmentId: string,
+    reviewer: User,
+    dto: CreateReviewDto,
+  ): Promise<Review> {
+    const shipment = await this.shipmentRepo.findOne({
+      where: { id: shipmentId },
+    });
     if (!shipment) throw new BadRequestException('Shipment not found');
 
     if (shipment.status !== ShipmentStatus.COMPLETED) {
-      throw new BadRequestException('Reviews can only be left for completed shipments');
+      throw new BadRequestException(
+        'Reviews can only be left for completed shipments',
+      );
     }
 
     const isShipper = shipment.shipperId === reviewer.id;
     const isCarrier = shipment.carrierId === reviewer.id;
     if (!isShipper && !isCarrier) {
-      throw new ForbiddenException('Only parties to the shipment can leave a review');
+      throw new ForbiddenException(
+        'Only parties to the shipment can leave a review',
+      );
     }
 
     const existing = await this.reviewRepo.findOne({
       where: { shipmentId, reviewerId: reviewer.id },
     });
-    if (existing) throw new ConflictException('You have already reviewed this shipment');
+    if (existing)
+      throw new ConflictException('You have already reviewed this shipment');
 
     // Shipper reviews carrier, carrier reviews shipper
     const revieweeId = isShipper ? shipment.carrierId! : shipment.shipperId;
@@ -54,7 +65,9 @@ export class ReviewsService {
     return this.reviewRepo.save(review);
   }
 
-  async getAverageRating(userId: string): Promise<{ averageRating: number; totalReviews: number }> {
+  async getAverageRating(
+    userId: string,
+  ): Promise<{ averageRating: number; totalReviews: number }> {
     const result = await this.reviewRepo
       .createQueryBuilder('r')
       .where('r.reviewee_id = :userId', { userId })
@@ -63,7 +76,9 @@ export class ReviewsService {
       .getRawOne<{ avg: string | null; count: string }>();
 
     return {
-      averageRating: result?.avg ? Math.round(Number(result.avg) * 100) / 100 : 0,
+      averageRating: result?.avg
+        ? Math.round(Number(result.avg) * 100) / 100
+        : 0,
       totalReviews: Number(result?.count ?? 0),
     };
   }
