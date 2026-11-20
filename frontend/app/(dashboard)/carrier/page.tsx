@@ -220,9 +220,14 @@ export default function CarrierDashboardPage() {
             Welcome back, {user.firstName}. Here&apos;s your overview.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/marketplace">Browse Marketplace</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/carrier/certifications">Certifications</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/marketplace">Browse Marketplace</Link>
+          </Button>
+        </div>
       </div>
 
       {/* Summary cards */}

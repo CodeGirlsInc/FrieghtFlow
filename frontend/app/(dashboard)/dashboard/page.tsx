@@ -10,6 +10,7 @@ import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { ShipmentCardSkeleton, StatsCardSkeleton } from '../../../components/ui/skeleton';
 import { EmptyShipments } from '../../../components/ui/empty-state';
 import { Shipment, ShipmentStatus } from '../../../types/shipment.types';
+import { useVerificationResend } from '../../../hooks/useVerificationResend';
 
 interface Stats {
   active: number;
@@ -22,6 +23,11 @@ export default function DashboardPage() {
   const [recentShipments, setRecentShipments] = useState<Shipment[]>([]);
   const [stats, setStats] = useState<Stats>({ active: 0, completed: 0, pending: 0 });
   const [dataLoading, setDataLoading] = useState(true);
+  const {
+    resend: resendVerification,
+    disabled: resendDisabled,
+    label: resendLabel,
+  } = useVerificationResend();
 
   useEffect(() => {
     if (!user) fetchCurrentUser();
@@ -95,10 +101,21 @@ export default function DashboardPage() {
 
       {/* Email verification banner */}
       {!user.isEmailVerified && (
-        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
-          <strong>Verify your email:</strong> We sent a verification link to{' '}
-          <span className="font-medium">{user.email}</span>. Please check your inbox to
-          unlock all features.
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
+          <p>
+            <strong>Verify your email:</strong> We sent a verification link to{' '}
+            <span className="font-medium">{user.email}</span>. Please check your inbox
+            to unlock all features.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={resendDisabled}
+            onClick={resendVerification}
+          >
+            {resendLabel}
+          </Button>
         </div>
       )}
 

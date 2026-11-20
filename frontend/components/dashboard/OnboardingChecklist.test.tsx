@@ -20,7 +20,7 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 const shipperProfile = {
-  role: 'SHIPPER' as const,
+  role: 'shipper' as const,
   emailVerified: true,
   profileComplete: false,
   hasShipment: false,
@@ -55,7 +55,7 @@ describe('OnboardingChecklist', () => {
   it('shows carrier-specific steps for a CARRIER profile', async () => {
     mockApiClient.mockResolvedValue({
       ...shipperProfile,
-      role: 'CARRIER' as const,
+      role: 'carrier' as const,
       hasRoutePreferences: true,
     });
     renderWithClient(<OnboardingChecklist />);
