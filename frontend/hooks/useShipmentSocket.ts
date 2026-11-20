@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuthStore } from '../stores/auth.store';
-import { getAccessToken } from '../lib/api/client';
+import { getAccessToken, onTokenChange } from '../lib/api/client';
 import { connectSocket, disconnectSocket } from '../lib/socket';
 import { useNotificationStore } from '../stores/notification.store';
 
@@ -31,15 +31,19 @@ interface ShipmentUpdatedPayload {
 export function useShipmentSocket() {
   const { user } = useAuthStore();
   const { addNotification } = useNotificationStore();
+  // getAccessToken() is a plain module read, not reactive — track it in
+  // state via onTokenChange so a rotated/cleared token (refresh, hard
+  // logout) reconnects or tears down the socket instead of the effect only
+  // ever seeing the token that was live at mount (FE-110).
+  const [token, setToken] = useState<string | null>(() => getAccessToken());
+
+  useEffect(() => onTokenChange(setToken), []);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !token) {
       disconnectSocket();
       return;
     }
-
-    const token = getAccessToken();
-    if (!token) return;
 
     const socket = connectSocket(token);
 
@@ -69,12 +73,9 @@ export function useShipmentSocket() {
     };
 
     socket.on('shipment:updated', handleUpdate);
-    socket.on('connect_error', (err) => {
-      console.warn('[socket] connection error:', err.message);
-    });
 
     return () => {
       socket.off('shipment:updated', handleUpdate);
     };
-  }, [user, addNotification]);
+  }, [user, token, addNotification]);
 }

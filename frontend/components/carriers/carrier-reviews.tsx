@@ -2,34 +2,30 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../../lib/api/client';
+import { reviewsApi, ReviewsResponse } from '../../lib/api/reviews.api';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
-interface Review {
-  id: string;
-  reviewerId: string;
-  reviewerName: string;
-  rating: number; // 1-5
-  comment: string;
-  createdAt: string;
-}
+/** Star ratings are always presented with a single decimal place. */
+const RATING_PRECISION = 1;
 
-interface ReviewsResponse {
-  data: Review[];
-  total: number;
-  averageRating: number;
-  distribution: Record<1 | 2 | 3 | 4 | 5, number>;
-  page: number;
-  totalPages: number;
+/**
+ * Rounds a raw backend average to the precision the UI displays, so the
+ * visible number and the accessible name can never drift apart.
+ */
+function roundRating(rating: number): number {
+  return Number(rating.toFixed(RATING_PRECISION));
 }
 
 function Stars({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'lg' }) {
   const sz = size === 'lg' ? 'text-2xl' : 'text-sm';
+  // Round here as well as at the call site: rounding is idempotent, so a
+  // caller that forgets can no longer announce "4.6666666 out of 5 stars".
+  const rounded = roundRating(rating);
   return (
-    <span className={sz} aria-label={`${rating} out of 5 stars`}>
+    <span className={sz} aria-label={`${rounded} out of 5 stars`}>
       {[1, 2, 3, 4, 5].map((s) => (
-        <span key={s} className={s <= Math.round(rating) ? 'text-yellow-400' : 'text-muted-foreground/30'}>
+        <span key={s} className={s <= Math.round(rounded) ? 'text-yellow-400' : 'text-muted-foreground/30'}>
           ★
         </span>
       ))}
@@ -46,7 +42,7 @@ export function CarrierReviews({ carrierId }: CarrierReviewsProps) {
 
   const { data, isLoading, error } = useQuery<ReviewsResponse>({
     queryKey: ['carrier-reviews', carrierId, page],
-    queryFn: () => apiClient(`/carriers/${carrierId}/reviews?page=${page}&limit=5`),
+    queryFn: () => reviewsApi.listByCarrier(carrierId, { page, limit: 5 }),
   });
 
   if (isLoading) {
@@ -74,6 +70,8 @@ export function CarrierReviews({ carrierId }: CarrierReviewsProps) {
   }
 
   const dist = data.distribution ?? ({} as Record<number, number>);
+  // One rounding, used for both the visible number and the star's aria-label.
+  const averageRating = roundRating(data.averageRating ?? 0);
 
   return (
     <div className="space-y-6">
@@ -84,8 +82,8 @@ export function CarrierReviews({ carrierId }: CarrierReviewsProps) {
         </CardHeader>
         <CardContent className="flex gap-8 flex-wrap">
           <div className="text-center">
-            <p className="text-4xl font-bold">{data.averageRating?.toFixed(1) ?? '—'}</p>
-            <Stars rating={data.averageRating ?? 0} size="lg" />
+            <p className="text-4xl font-bold">{data.averageRating?.toFixed(RATING_PRECISION) ?? '—'}</p>
+            <Stars rating={averageRating} size="lg" />
             <p className="text-xs text-muted-foreground mt-1">{data.total} review{data.total !== 1 ? 's' : ''}</p>
           </div>
           <div className="flex-1 min-w-40 space-y-1">

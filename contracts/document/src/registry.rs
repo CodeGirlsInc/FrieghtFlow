@@ -1,0 +1,116 @@
+//! Registering a document against a shipment.
+
+use common::TTL_LEDGERS;
+use soroban_sdk::{Address, Bytes, BytesN, Env, Vec};
+
+use crate::errors::DocumentError;
+use crate::shipment::{Shipment, ShipmentClient};
+use crate::types::{DataKey, DocumentRecord, DocumentType, HashAlgorithm};
+use crate::{events, storage};
+
+/// Maximum byte length for `ipfs_cid` in `register_document`.
+///
+/// A CIDv0/CIDv1 string is typically ≤100 chars when Base58/Base32-encoded;
+/// 512 bytes is a generous ceiling that still prevents unbounded storage
+/// growth, matching the upper-bound discipline in `shipper::create`.
+pub const MAX_IPFS_CID_LEN: u32 = 512;
+
+/// Minimum byte length for `ipfs_cid` in `register_document`.
+///
+/// An empty (or near-empty) CID would store an off-chain pointer that
+/// does not exist, making the record claim provenance it cannot back.
+/// 8 bytes is the length of `bafkqaaa`, the shortest canonical CIDv1
+/// encoding, so no legitimate CID is rejected.
+pub const MIN_IPFS_CID_LEN: u32 = 8;
+
+/// Register a new document for a shipment.
+///
+/// `content_hash`    — 32-byte hash of the document file, computed with
+///                      `hash_algorithm`.
+/// `hash_algorithm`  — which algorithm `content_hash` was computed with.
+/// `ipfs_cid`        — IPFS CID (as bytes) pointing to the full document.
+///                     Must be at least `MIN_IPFS_CID_LEN` (8) bytes and
+///                     must not exceed `MAX_IPFS_CID_LEN` (512) bytes.
+///
+/// The shipment must exist in the configured shipment contract, and
+/// `uploader` must be a party to it (its shipper or its carrier). Without both
+/// checks a document could be anchored to a nonexistent or unrelated shipment,
+/// which is exactly the claim this registry exists to make trustworthy.
+pub fn register(
+    env: &Env,
+    uploader: Address,
+    shipment_id: u64,
+    doc_type: DocumentType,
+    content_hash: BytesN<32>,
+    hash_algorithm: HashAlgorithm,
+    ipfs_cid: Bytes,
+) -> Result<u64, DocumentError> {
+    uploader.require_auth();
+    storage::require_not_paused(env)?;
+
+    if ipfs_cid.len() > MAX_IPFS_CID_LEN {
+        return Err(DocumentError::FieldTooLong);
+    }
+    if ipfs_cid.len() < MIN_IPFS_CID_LEN {
+        return Err(DocumentError::FieldTooShort);
+    }
+
+    let shipment = fetch_shipment(env, shipment_id)?;
+    if !shipment.is_party(&uploader) {
+        return Err(DocumentError::NotShipmentParty);
+    }
+
+    let id = storage::next_id(env);
+    let doc = DocumentRecord {
+        id,
+        shipment_id,
+        uploader,
+        doc_type,
+        content_hash,
+        hash_algorithm,
+        ipfs_cid,
+        uploaded_at: env.ledger().timestamp(),
+        is_verified: false,
+        verified_by: None,
+        verified_at: 0,
+        flagged_by: None,
+        flagged_at: 0,
+        flag_reason: None,
+    };
+
+    storage::store(env, &doc);
+
+    // Append to the shipment's document list.
+    let mut list: Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::ShipmentDocs(shipment_id))
+        .unwrap_or_else(|| Vec::new(env));
+    list.push_back(id);
+    env.storage()
+        .persistent()
+        .set(&DataKey::ShipmentDocs(shipment_id), &list);
+    env.storage().persistent().extend_ttl(
+        &DataKey::ShipmentDocs(shipment_id),
+        TTL_LEDGERS,
+        TTL_LEDGERS,
+    );
+
+    events::registered(env, &doc);
+    Ok(id)
+}
+
+/// Cross-contract read of `shipment_id` from the configured shipment contract,
+/// mapping "no such shipment" onto a typed error instead of letting the
+/// callee's trap unwind this contract.
+fn fetch_shipment(env: &Env, shipment_id: u64) -> Result<Shipment, DocumentError> {
+    let client = ShipmentClient::new(env, &storage::shipment_contract(env)?);
+
+    client
+        .try_get_shipment(&shipment_id)
+        // The shipment contract returned an error — the id is unknown.
+        .map_err(|_| DocumentError::ShipmentNotFound)?
+        // A decode failure means our mirrored `Shipment` has drifted from the
+        // shipment contract's; that is a deployment bug, not user input.
+        .map_err(|_| DocumentError::ShipmentNotFound)
+}

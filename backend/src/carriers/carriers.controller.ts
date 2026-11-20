@@ -30,7 +30,9 @@ export class CarriersController {
   @Get('me/metrics')
   @UseGuards(RolesGuard)
   @Roles(UserRole.CARRIER)
-  @ApiOperation({ summary: 'Get performance metrics for the authenticated carrier' })
+  @ApiOperation({
+    summary: 'Get performance metrics for the authenticated carrier',
+  })
   getMyMetrics(@CurrentUser() user: User) {
     return this.carriersService.getMyMetrics(user.id);
   }
@@ -40,7 +42,12 @@ export class CarriersController {
   @Post('me/certifications')
   @UseGuards(RolesGuard)
   @Roles(UserRole.CARRIER)
-  @ApiOperation({ summary: 'Upload a new certification (Carrier only)' })
+  @ApiOperation({
+    summary:
+      'Create a certification from a platform-hosted document (Carrier only)',
+    description:
+      'Upload the file through POST /documents/certification first, then submit the returned documentId.',
+  })
   createCertification(
     @CurrentUser() user: User,
     @Body() dto: CreateCarrierCertificationDto,
@@ -58,7 +65,10 @@ export class CarriersController {
 
   @Get(':id/certifications')
   @UseGuards(RolesGuard)
-  @ApiOperation({ summary: 'Get certifications for a carrier (visible to all authenticated users)' })
+  @ApiOperation({
+    summary:
+      'Get certifications for a carrier (visible to all authenticated users)',
+  })
   getCarrierCertifications(@Param('id', ParseUUIDPipe) id: string) {
     return this.certificationsService.findByCarrierId(id);
   }

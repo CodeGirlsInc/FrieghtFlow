@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { User } from '../users/entities/user.entity';
 import { JwtPayload } from './strategies/jwt.strategy';
 
@@ -26,9 +27,17 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+// Hash of a throwaway password, compared against when the email is unknown so
+// that "no such account" and "wrong password" cost the same bcrypt work.
+const TIMING_EQUALISATION_HASH = bcrypt.hashSync(
+  'timing-equalisation-password',
+  12,
+);
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly refreshInFlight = new Map<string, Promise<AuthResponse>>();
 
   constructor(
     private readonly usersService: UsersService,
@@ -39,7 +48,10 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersService.findByEmail(email);
-    if (!user) return null;
+    if (!user) {
+      await this.usersService.verifyPassword(password, TIMING_EQUALISATION_HASH);
+      return null;
+    }
     const isMatch = await this.usersService.verifyPassword(
       password,
       user.passwordHash,
@@ -93,24 +105,44 @@ export class AuthService {
     userId: string,
     rawRefreshToken: string,
   ): Promise<AuthResponse> {
-    const baseUser = await this.usersService.findOne(userId);
-    if (!baseUser) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-    const user = await this.usersService.findByEmail(baseUser.email);
-
-    if (!user || !user.refreshToken) {
-      throw new UnauthorizedException('Invalid refresh token');
+    const cacheKey = `${userId}:${rawRefreshToken}`;
+    const inflight = this.refreshInFlight.get(cacheKey);
+    if (inflight) {
+      return inflight;
     }
 
-    const isValid = await bcrypt.compare(rawRefreshToken, user.refreshToken);
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
+    const work = (async () => {
+      const baseUser = await this.usersService.findOne(userId);
+      if (!baseUser) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      const user = await this.usersService.findByEmail(baseUser.email);
 
-    const tokens = await this.generateTokens(user);
-    await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
-    return this.buildAuthResponse(user, tokens);
+      if (!user || !user.refreshToken) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const isValid = await bcrypt.compare(rawRefreshToken, user.refreshToken);
+      if (!isValid) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const tokens = await this.generateTokens(user);
+      // Compare-and-set: only one instance can rotate this token hash.
+      await this.usersService.updateRefreshToken(
+        user.id,
+        tokens.refreshToken,
+        user.refreshToken,
+      );
+      return this.buildAuthResponse(user, tokens);
+    })();
+
+    this.refreshInFlight.set(cacheKey, work);
+    try {
+      return await work;
+    } finally {
+      this.refreshInFlight.delete(cacheKey);
+    }
   }
 
   async logout(userId: string): Promise<void> {
@@ -184,7 +216,7 @@ export class AuthService {
 
   async updateProfile(
     userId: string,
-    dto: { firstName?: string; lastName?: string; walletAddress?: string },
+    dto: UpdateProfileDto,
   ): Promise<Omit<User, 'passwordHash' | 'refreshToken'>> {
     await this.usersService.update(userId, dto);
     const updated = await this.usersService.findOne(userId);
