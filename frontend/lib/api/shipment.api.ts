@@ -6,6 +6,7 @@ import {
   QueryShipmentParams,
   PaginatedShipments,
   ShipmentStatus,
+  PublicShipmentTracking,
 } from '../../types/shipment.types';
 
 function buildQuery(params: QueryShipmentParams): string {
@@ -40,7 +41,7 @@ export const shipmentApi = {
     return apiClient(`/shipments/${id}`);
   },
 
-  track(trackingNumber: string): Promise<Shipment> {
+  track(trackingNumber: string): Promise<PublicShipmentTracking> {
     return apiClient(`/shipments/track/${trackingNumber}`);
   },
 

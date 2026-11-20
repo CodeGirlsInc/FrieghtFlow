@@ -1,4 +1,4 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:6000/api/v1';
+import { API_BASE } from '../config';
 
 export function getApiUrl(path: string): string {
   return path.startsWith('http') ? path : `${API_BASE}${path}`;

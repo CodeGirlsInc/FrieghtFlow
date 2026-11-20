@@ -3,15 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { shipmentApi } from '../../../lib/api/shipment.api';
-import { formatMoney } from '../../../lib/format/currency';
-import { StatusTimeline } from '../../../components/shipment/status-timeline';
+import { PublicStatusTimeline } from '../../../components/shipment/status-timeline';
 import { StatusBadge } from '../../../components/shipment/status-badge';
-import type { Shipment, ShipmentStatusHistory } from '../../../types/shipment.types';
+import type { PublicShipmentTracking } from '../../../types/shipment.types';
 
 export default function TrackingPage() {
   const { trackingNumber } = useParams<{ trackingNumber: string }>();
-  const [shipment, setShipment] = useState<Shipment | null>(null);
-  const [history, setHistory] = useState<ShipmentStatusHistory[]>([]);
+  const [shipment, setShipment] = useState<PublicShipmentTracking | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState(false);
@@ -21,15 +19,7 @@ export default function TrackingPage() {
     setLoading(true);
     shipmentApi
       .track(trackingNumber)
-      .then(async (s) => {
-        setShipment(s);
-        try {
-          const hist = await shipmentApi.getHistory(s.id);
-          setHistory(hist);
-        } catch {
-          // history is best-effort
-        }
-      })
+      .then(setShipment)
       .catch((err: { statusCode?: number }) => {
         if (err?.statusCode === 404) setNotFound(true);
         else setError(true);
@@ -92,36 +82,6 @@ export default function TrackingPage() {
 
         {/* Details */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 text-sm">
-          <div>
-            <p className="text-muted-foreground text-xs">Cargo</p>
-            <p className="font-medium">{shipment.cargoDescription}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground text-xs">Weight</p>
-            <p className="font-medium">{Number(shipment.weightKg).toLocaleString()} kg</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground text-xs">Price</p>
-            <p className="font-medium">
-              {formatMoney(shipment.price, shipment.currency)}
-            </p>
-          </div>
-          {shipment.shipper && (
-            <div>
-              <p className="text-muted-foreground text-xs">Shipper</p>
-              <p className="font-medium">
-                {shipment.shipper.firstName} {shipment.shipper.lastName}
-              </p>
-            </div>
-          )}
-          {shipment.carrier && (
-            <div>
-              <p className="text-muted-foreground text-xs">Carrier</p>
-              <p className="font-medium">
-                {shipment.carrier.firstName} {shipment.carrier.lastName}
-              </p>
-            </div>
-          )}
           {shipment.estimatedDeliveryDate && (
             <div>
               <p className="text-muted-foreground text-xs">Est. Delivery</p>
@@ -139,7 +99,7 @@ export default function TrackingPage() {
         {/* Timeline */}
         <div>
           <h2 className="text-base font-semibold mb-4">Status Timeline</h2>
-          <StatusTimeline history={history} />
+          <PublicStatusTimeline history={shipment.timeline} />
         </div>
       </div>
     </div>
