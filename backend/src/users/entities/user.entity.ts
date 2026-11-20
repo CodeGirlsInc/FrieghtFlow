@@ -39,6 +39,16 @@ export class User {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  /**
+   * Partial unique index: only one account may link any given wallet address.
+   * The index is defined in a migration as:
+   *   CREATE UNIQUE INDEX UQ_users_wallet_address
+   *     ON users (wallet_address)
+   *     WHERE wallet_address IS NOT NULL;
+   * The entity-level nullable column declaration is kept here; the uniqueness
+   * is enforced by the DB constraint, not by TypeORM's @Unique decorator
+   * (which cannot express a partial index).
+   */
   @Column({ name: 'wallet_address', nullable: true, type: 'varchar' })
   walletAddress: string | null;
 

@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { MailerService } from '@nestjs-modules/mailer';
 import {
@@ -21,7 +22,8 @@ export class NotificationsService {
 
   constructor(
     private readonly mailerService: MailerService,
-    private readonly prefsService: NotificationPreferencesService,
+    @Optional() private readonly configService?: ConfigService,
+    private readonly prefsService?: NotificationPreferencesService,
   ) {}
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -66,15 +68,49 @@ export class NotificationsService {
     `;
   }
 
+  private get frontendUrl(): string {
+    return this.configService?.get<string>('FRONTEND_URL') ?? 'https://app.freightflow.io';
+  }
+
   private baseTemplate(title: string, body: string): string {
+    const prefsUrl = `${this.frontendUrl}/settings/notifications`;
     return `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
         <h2 style="color:#1e40af;margin-bottom:16px;">${title}</h2>
         ${body}
         <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
-        <p style="color:#9ca3af;font-size:12px;">FreightFlow — Decentralized Freight Management</p>
+        <p style="color:#9ca3af;font-size:12px;">
+          FreightFlow — Decentralized Freight Management<br/>
+          <a href="${prefsUrl}" style="color:#6b7280;">Manage notification preferences</a>
+        </p>
       </div>
     `;
+  }
+
+  /**
+   * Wraps sendSafe to attach a List-Unsubscribe header pointing to the
+   * notification preferences page.
+   */
+  private async sendWithUnsubscribe(
+    to: string,
+    subject: string,
+    html: string,
+  ): Promise<void> {
+    const prefsUrl = `${this.frontendUrl}/settings/notifications`;
+    try {
+      await this.mailerService.sendMail({
+        to,
+        subject,
+        html,
+        headers: {
+          'List-Unsubscribe': `<${prefsUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Failed to send email to ${to}: ${msg}`);
+    }
   }
 
   // ── Event Handlers ───────────────────────────────────────────────────────────
