@@ -12,13 +12,17 @@ import {
   ShipmentEvent,
 } from '../shipments/events/shipment.events';
 import { Shipment } from '../shipments/entities/shipment.entity';
-import { User } from '../users/entities/user.entity';
+import { escapeHtml } from '../common/escape-html';
+import { NotificationPreferencesService } from '../notification-preferences/notification-preferences.service';
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly mailerService: MailerService) {}
+  constructor(
+    private readonly mailerService: MailerService,
+    private readonly prefsService: NotificationPreferencesService,
+  ) {}
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -35,31 +39,29 @@ export class NotificationsService {
     }
   }
 
-  /**
-   * Returns false for recipients that should not receive shipment emails:
-   * - Deactivated users (isActive === false): receive no emails at all.
-   * - Unverified email addresses (isEmailVerified === false): receive only
-   *   account-security mail (password reset, verification). Sending shipment
-   *   detail to an unverified address leaks data to a potentially wrong owner.
-   */
-  private recipientAllowedForShipmentEmail(user: User): boolean {
-    if (user.isActive === false) {
-      return false;
+  private async recipientEnabled(
+    userId: string,
+    key: Parameters<NotificationPreferencesService['isEnabled']>[1],
+  ): Promise<boolean> {
+    try {
+      return await this.prefsService.isEnabled(userId, key);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to read notification preferences for ${userId}: ${msg}`,
+      );
+      return true;
     }
-    if (user.isEmailVerified === false) {
-      return false;
-    }
-    return true;
   }
 
   private shipmentSummary(s: Shipment): string {
     return `
       <table style="border-collapse:collapse;width:100%;font-size:14px;">
-        <tr><td style="padding:6px 0;color:#6b7280;">Tracking #</td><td style="padding:6px 0;font-weight:600;">${s.trackingNumber}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280;">Route</td><td style="padding:6px 0;">${s.origin} → ${s.destination}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280;">Cargo</td><td style="padding:6px 0;">${s.cargoDescription}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280;">Weight</td><td style="padding:6px 0;">${s.weightKg} kg</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280;">Value</td><td style="padding:6px 0;">${s.currency} ${Number(s.price).toLocaleString()}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280;">Tracking #</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(s.trackingNumber)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280;">Route</td><td style="padding:6px 0;">${escapeHtml(s.origin)} → ${escapeHtml(s.destination)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280;">Cargo</td><td style="padding:6px 0;">${escapeHtml(s.cargoDescription)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280;">Weight</td><td style="padding:6px 0;">${escapeHtml(s.weightKg)} kg</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280;">Value</td><td style="padding:6px 0;">${escapeHtml(s.currency)} ${Number(s.price).toLocaleString()}</td></tr>
       </table>
     `;
   }
@@ -83,34 +85,38 @@ export class NotificationsService {
     if (!shipper || !carrier) return;
 
     // Notify shipper: a carrier accepted their shipment
-    await this.sendSafe(
-      shipper.email,
-      `✅ Carrier found for your shipment ${shipment.trackingNumber}`,
-      this.baseTemplate(
-        'Your shipment has been accepted!',
-        `
-        <p>Hi ${shipper.firstName},</p>
-        <p>Great news! <strong>${carrier.firstName} ${carrier.lastName}</strong> has accepted your shipment and will be handling the delivery.</p>
-        ${this.shipmentSummary(shipment)}
-        <p style="margin-top:16px;">You will receive another update when your cargo is picked up.</p>
-        `,
-      ),
-    );
+    if (await this.recipientEnabled(shipper.id, 'shipmentAccepted')) {
+      await this.sendSafe(
+        shipper.email,
+        `✅ Carrier found for your shipment ${shipment.trackingNumber}`,
+        this.baseTemplate(
+          'Your shipment has been accepted!',
+          `
+          <p>Hi ${escapeHtml(shipper.firstName)},</p>
+          <p>Great news! <strong>${escapeHtml(carrier.firstName)} ${escapeHtml(carrier.lastName)}</strong> has accepted your shipment and will be handling the delivery.</p>
+          ${this.shipmentSummary(shipment)}
+          <p style="margin-top:16px;">You will receive another update when your cargo is picked up.</p>
+          `,
+        ),
+      );
+    }
 
     // Notify carrier: confirm they accepted
-    await this.sendSafe(
-      carrier.email,
-      `📦 You accepted shipment ${shipment.trackingNumber}`,
-      this.baseTemplate(
-        'Shipment accepted — pickup next',
-        `
-        <p>Hi ${carrier.firstName},</p>
-        <p>You have successfully accepted a shipment. Please proceed to pick up the cargo.</p>
-        ${this.shipmentSummary(shipment)}
-        <p style="margin-top:16px;"><strong>Pickup location:</strong> ${shipment.origin}</p>
-        `,
-      ),
-    );
+    if (await this.recipientEnabled(carrier.id, 'shipmentAccepted')) {
+      await this.sendSafe(
+        carrier.email,
+        `📦 You accepted shipment ${shipment.trackingNumber}`,
+        this.baseTemplate(
+          'Shipment accepted — pickup next',
+          `
+          <p>Hi ${escapeHtml(carrier.firstName)},</p>
+          <p>You have successfully accepted a shipment. Please proceed to pick up the cargo.</p>
+          ${this.shipmentSummary(shipment)}
+          <p style="margin-top:16px;"><strong>Pickup location:</strong> ${escapeHtml(shipment.origin)}</p>
+          `,
+        ),
+      );
+    }
   }
 
   @OnEvent(SHIPMENT_IN_TRANSIT)
@@ -118,14 +124,16 @@ export class NotificationsService {
     const { shipper, carrier } = shipment;
     if (!shipper || !carrier) return;
 
+    if (!(await this.recipientEnabled(shipper.id, 'shipmentInTransit'))) return;
+
     await this.sendSafe(
       shipper.email,
       `🚚 Your shipment ${shipment.trackingNumber} is on the way`,
       this.baseTemplate(
         'Shipment picked up — in transit',
         `
-        <p>Hi ${shipper.firstName},</p>
-        <p>Your cargo has been picked up by <strong>${carrier.firstName} ${carrier.lastName}</strong> and is now in transit.</p>
+        <p>Hi ${escapeHtml(shipper.firstName)},</p>
+        <p>Your cargo has been picked up by <strong>${escapeHtml(carrier.firstName)} ${escapeHtml(carrier.lastName)}</strong> and is now in transit.</p>
         ${this.shipmentSummary(shipment)}
         ${shipment.estimatedDeliveryDate ? `<p style="margin-top:16px;"><strong>Estimated delivery:</strong> ${new Date(shipment.estimatedDeliveryDate).toDateString()}</p>` : ''}
         `,
@@ -139,33 +147,37 @@ export class NotificationsService {
     if (!shipper || !carrier) return;
 
     // Notify shipper: please confirm delivery
-    await this.sendSafe(
-      shipper.email,
-      `📬 Your shipment ${shipment.trackingNumber} has been delivered — action required`,
-      this.baseTemplate(
-        'Delivery reported — please confirm',
-        `
-        <p>Hi ${shipper.firstName},</p>
-        <p><strong>${carrier.firstName} ${carrier.lastName}</strong> has marked your shipment as delivered on <strong>${new Date().toDateString()}</strong>.</p>
-        ${this.shipmentSummary(shipment)}
-        <p style="margin-top:16px;">Please log in to FreightFlow to <strong>confirm delivery</strong> and complete the transaction, or raise a dispute if there is an issue.</p>
-        `,
-      ),
-    );
+    if (await this.recipientEnabled(shipper.id, 'shipmentDelivered')) {
+      await this.sendSafe(
+        shipper.email,
+        `📬 Your shipment ${shipment.trackingNumber} has been delivered — action required`,
+        this.baseTemplate(
+          'Delivery reported — please confirm',
+          `
+          <p>Hi ${escapeHtml(shipper.firstName)},</p>
+          <p><strong>${escapeHtml(carrier.firstName)} ${escapeHtml(carrier.lastName)}</strong> has marked your shipment as delivered on <strong>${new Date().toDateString()}</strong>.</p>
+          ${this.shipmentSummary(shipment)}
+          <p style="margin-top:16px;">Please log in to FreightFlow to <strong>confirm delivery</strong> and complete the transaction, or raise a dispute if there is an issue.</p>
+          `,
+        ),
+      );
+    }
 
     // Notify carrier: delivery marked, waiting for shipper confirmation
-    await this.sendSafe(
-      carrier.email,
-      `✔️ Delivery marked for ${shipment.trackingNumber} — awaiting confirmation`,
-      this.baseTemplate(
-        'Delivery marked — awaiting shipper confirmation',
-        `
-        <p>Hi ${carrier.firstName},</p>
-        <p>You have successfully marked shipment <strong>${shipment.trackingNumber}</strong> as delivered. The shipper has been notified and will confirm receipt shortly.</p>
-        ${this.shipmentSummary(shipment)}
-        `,
-      ),
-    );
+    if (await this.recipientEnabled(carrier.id, 'shipmentDelivered')) {
+      await this.sendSafe(
+        carrier.email,
+        `✔️ Delivery marked for ${shipment.trackingNumber} — awaiting confirmation`,
+        this.baseTemplate(
+          'Delivery marked — awaiting shipper confirmation',
+          `
+          <p>Hi ${escapeHtml(carrier.firstName)},</p>
+          <p>You have successfully marked shipment <strong>${escapeHtml(shipment.trackingNumber)}</strong> as delivered. The shipper has been notified and will confirm receipt shortly.</p>
+          ${this.shipmentSummary(shipment)}
+          `,
+        ),
+      );
+    }
   }
 
   @OnEvent(SHIPMENT_COMPLETED)
@@ -174,33 +186,37 @@ export class NotificationsService {
     if (!shipper || !carrier) return;
 
     // Notify carrier: delivery confirmed, job done
-    await this.sendSafe(
-      carrier.email,
-      `🎉 Shipment ${shipment.trackingNumber} completed — delivery confirmed`,
-      this.baseTemplate(
-        'Job complete — delivery confirmed by shipper',
-        `
-        <p>Hi ${carrier.firstName},</p>
-        <p>The shipper has confirmed receipt of shipment <strong>${shipment.trackingNumber}</strong>. This job is now complete.</p>
-        ${this.shipmentSummary(shipment)}
-        <p style="margin-top:16px;">Thank you for your service on FreightFlow!</p>
-        `,
-      ),
-    );
+    if (await this.recipientEnabled(carrier.id, 'shipmentCompleted')) {
+      await this.sendSafe(
+        carrier.email,
+        `🎉 Shipment ${shipment.trackingNumber} completed — delivery confirmed`,
+        this.baseTemplate(
+          'Job complete — delivery confirmed by shipper',
+          `
+          <p>Hi ${escapeHtml(carrier.firstName)},</p>
+          <p>The shipper has confirmed receipt of shipment <strong>${escapeHtml(shipment.trackingNumber)}</strong>. This job is now complete.</p>
+          ${this.shipmentSummary(shipment)}
+          <p style="margin-top:16px;">Thank you for your service on FreightFlow!</p>
+          `,
+        ),
+      );
+    }
 
     // Notify shipper: transaction complete
-    await this.sendSafe(
-      shipper.email,
-      `✅ Shipment ${shipment.trackingNumber} completed successfully`,
-      this.baseTemplate(
-        'Shipment completed',
-        `
-        <p>Hi ${shipper.firstName},</p>
-        <p>Your shipment <strong>${shipment.trackingNumber}</strong> has been completed successfully. Thank you for using FreightFlow!</p>
-        ${this.shipmentSummary(shipment)}
-        `,
-      ),
-    );
+    if (await this.recipientEnabled(shipper.id, 'shipmentCompleted')) {
+      await this.sendSafe(
+        shipper.email,
+        `✅ Shipment ${shipment.trackingNumber} completed successfully`,
+        this.baseTemplate(
+          'Shipment completed',
+          `
+          <p>Hi ${escapeHtml(shipper.firstName)},</p>
+          <p>Your shipment <strong>${escapeHtml(shipment.trackingNumber)}</strong> has been completed successfully. Thank you for using FreightFlow!</p>
+          ${this.shipmentSummary(shipment)}
+          `,
+        ),
+      );
+    }
   }
 
   @OnEvent(SHIPMENT_CANCELLED)
@@ -210,18 +226,21 @@ export class NotificationsService {
   }: ShipmentEvent): Promise<void> {
     const { shipper, carrier } = shipment;
     const reasonNote = reason
-      ? `<p><strong>Reason:</strong> ${reason}</p>`
+      ? `<p><strong>Reason:</strong> ${escapeHtml(reason)}</p>`
       : '';
 
-    if (shipper) {
+    if (
+      shipper &&
+      (await this.recipientEnabled(shipper.id, 'shipmentCancelled'))
+    ) {
       await this.sendSafe(
         shipper.email,
         `❌ Shipment ${shipment.trackingNumber} has been cancelled`,
         this.baseTemplate(
           'Shipment cancelled',
           `
-          <p>Hi ${shipper.firstName},</p>
-          <p>Shipment <strong>${shipment.trackingNumber}</strong> has been cancelled.</p>
+          <p>Hi ${escapeHtml(shipper.firstName)},</p>
+          <p>Shipment <strong>${escapeHtml(shipment.trackingNumber)}</strong> has been cancelled.</p>
           ${reasonNote}
           ${this.shipmentSummary(shipment)}
           `,
@@ -229,15 +248,18 @@ export class NotificationsService {
       );
     }
 
-    if (carrier) {
+    if (
+      carrier &&
+      (await this.recipientEnabled(carrier.id, 'shipmentCancelled'))
+    ) {
       await this.sendSafe(
         carrier.email,
         `❌ Shipment ${shipment.trackingNumber} has been cancelled`,
         this.baseTemplate(
           'Shipment cancelled',
           `
-          <p>Hi ${carrier.firstName},</p>
-          <p>Shipment <strong>${shipment.trackingNumber}</strong> that you were assigned to has been cancelled.</p>
+          <p>Hi ${escapeHtml(carrier.firstName)},</p>
+          <p>Shipment <strong>${escapeHtml(shipment.trackingNumber)}</strong> that you were assigned to has been cancelled.</p>
           ${reasonNote}
           ${this.shipmentSummary(shipment)}
           `,
@@ -250,18 +272,21 @@ export class NotificationsService {
   async onShipmentDisputed({ shipment, reason }: ShipmentEvent): Promise<void> {
     const { shipper, carrier } = shipment;
     const reasonNote = reason
-      ? `<p><strong>Reason for dispute:</strong> ${reason}</p>`
+      ? `<p><strong>Reason for dispute:</strong> ${escapeHtml(reason)}</p>`
       : '';
 
-    if (shipper) {
+    if (
+      shipper &&
+      (await this.recipientEnabled(shipper.id, 'shipmentDisputed'))
+    ) {
       await this.sendSafe(
         shipper.email,
         `⚠️ Dispute raised on shipment ${shipment.trackingNumber}`,
         this.baseTemplate(
           'A dispute has been raised',
           `
-          <p>Hi ${shipper.firstName},</p>
-          <p>A dispute has been raised on shipment <strong>${shipment.trackingNumber}</strong>. Our team will review and resolve it.</p>
+          <p>Hi ${escapeHtml(shipper.firstName)},</p>
+          <p>A dispute has been raised on shipment <strong>${escapeHtml(shipment.trackingNumber)}</strong>. Our team will review and resolve it.</p>
           ${reasonNote}
           ${this.shipmentSummary(shipment)}
           `,
@@ -269,15 +294,18 @@ export class NotificationsService {
       );
     }
 
-    if (carrier) {
+    if (
+      carrier &&
+      (await this.recipientEnabled(carrier.id, 'shipmentDisputed'))
+    ) {
       await this.sendSafe(
         carrier.email,
         `⚠️ Dispute raised on shipment ${shipment.trackingNumber}`,
         this.baseTemplate(
           'A dispute has been raised',
           `
-          <p>Hi ${carrier.firstName},</p>
-          <p>A dispute has been raised on shipment <strong>${shipment.trackingNumber}</strong>. Our team will review and resolve it.</p>
+          <p>Hi ${escapeHtml(carrier.firstName)},</p>
+          <p>A dispute has been raised on shipment <strong>${escapeHtml(shipment.trackingNumber)}</strong>. Our team will review and resolve it.</p>
           ${reasonNote}
           ${this.shipmentSummary(shipment)}
           `,
@@ -291,7 +319,7 @@ export class NotificationsService {
     const { shipper, carrier } = shipment;
     const outcome = shipment.status.toUpperCase();
     const reasonNote = reason
-      ? `<p><strong>Resolution note:</strong> ${reason}</p>`
+      ? `<p><strong>Resolution note:</strong> ${escapeHtml(reason)}</p>`
       : '';
 
     const body = (firstName: string) =>
@@ -299,21 +327,27 @@ export class NotificationsService {
         `Dispute resolved — ${outcome}`,
         `
       <p>Hi ${firstName},</p>
-      <p>The dispute on shipment <strong>${shipment.trackingNumber}</strong> has been reviewed and resolved by our admin team.</p>
+      <p>The dispute on shipment <strong>${escapeHtml(shipment.trackingNumber)}</strong> has been reviewed and resolved by our admin team.</p>
       <p><strong>Outcome:</strong> ${outcome}</p>
       ${reasonNote}
       ${this.shipmentSummary(shipment)}
       `,
       );
 
-    if (shipper) {
+    if (
+      shipper &&
+      (await this.recipientEnabled(shipper.id, 'disputeResolved'))
+    ) {
       await this.sendSafe(
         shipper.email,
         `🔔 Dispute resolved for shipment ${shipment.trackingNumber}`,
         body(shipper.firstName),
       );
     }
-    if (carrier) {
+    if (
+      carrier &&
+      (await this.recipientEnabled(carrier.id, 'disputeResolved'))
+    ) {
       await this.sendSafe(
         carrier.email,
         `🔔 Dispute resolved for shipment ${shipment.trackingNumber}`,

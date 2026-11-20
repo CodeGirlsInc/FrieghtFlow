@@ -37,7 +37,20 @@ export default function ShipmentMap({ origin, destination }: Props) {
     });
   }, [origin, destination]);
 
-  if (error) return null;
+  if (error) {
+    return (
+      <div
+        className="flex h-64 w-full flex-col items-center justify-center gap-1 rounded-lg border border-gray-200 bg-gray-50 text-center"
+        role="img"
+        aria-label={`Map unavailable. Route from ${origin} to ${destination}`}
+      >
+        <p className="text-sm font-medium text-gray-700">Map unavailable</p>
+        <p className="text-sm text-gray-500">
+          {origin} → {destination}
+        </p>
+      </div>
+    );
+  }
   if (!embedSrc) return <div className="h-64 animate-pulse rounded-lg bg-gray-100" aria-busy="true" />;
 
   return (

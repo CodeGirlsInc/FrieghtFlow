@@ -8,10 +8,13 @@ import {
   Query,
   ParseUUIDPipe,
   UseGuards,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -53,21 +56,20 @@ export class BidsController {
   getBids(
     @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
     @CurrentUser() user: User,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
-    return this.bidsService.getBids(
-      shipmentId,
-      user.id,
-      page ? Number(page) : 1,
-      limit ? Number(limit) : 20,
-    );
+    return this.bidsService.getBids(shipmentId, user.id, page, limit);
   }
 
   @Patch(':shipmentId/bids/:bidId/accept')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER)
-  @ApiOperation({ summary: 'Accept a bid (shipment owner only)' })
+  @ApiOperation({
+    summary: 'Shipper accepts a bid — assigns carrier, rejects others',
+  })
+  @ApiParam({ name: 'shipmentId', description: 'Shipment ID' })
+  @ApiParam({ name: 'bidId', description: 'Bid ID' })
   acceptBid(
     @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
     @Param('bidId', ParseUUIDPipe) bidId: string,

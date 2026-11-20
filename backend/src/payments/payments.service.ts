@@ -15,11 +15,24 @@ import { Shipment } from '../shipments/entities/shipment.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { User } from '../users/entities/user.entity';
 import { StellarContractService } from '../stellar/stellar-contract.service';
-import { ContractCallResult } from '../stellar/escrow-record.interface';
-import { priceToBaseUnits } from './settlement-asset.util';
+import {
+  ChainTimeoutError,
+  EscrowContractError,
+  SimulationError,
+  SubmissionError,
+} from '../stellar/errors/stellar-integration.errors';
+import {
+  CancellationSettlementResult,
+  ContractCallResult,
+} from '../stellar/escrow-record.interface';
+import {
+  priceToBaseUnits,
+  resolveSettlementAssetDecimals,
+} from './settlement-asset.util';
 import { mapStellarFundingError } from './errors/stellar-error-mapper';
 import {
   ForbiddenPaymentActionError,
+  InvalidCancellationFeeError,
   MissingWalletAddressError,
   PaymentAlreadyFundedError,
   PaymentAlreadyInFlightError,
@@ -36,6 +49,10 @@ export interface SubmitFundingResult {
   paymentId: string;
   status: PaymentStatus;
   stellarTxHash: string | null;
+}
+
+export interface PaymentResponse {
+  payment: Payment | null;
 }
 
 // A payment beyond this point is either funded or otherwise terminal for
@@ -62,6 +79,26 @@ export class PaymentsService {
     private readonly config: ConfigService,
   ) {}
 
+  async findByShipmentIdForUser(
+    shipmentId: string,
+    user: User,
+  ): Promise<PaymentResponse> {
+    const shipment = await this.getShipment(shipmentId);
+
+    const isShipper = shipment.shipperId === user.id;
+    const isCarrier = shipment.carrierId === user.id;
+    const isAdmin = user.role === 'admin';
+
+    if (!isShipper && !isCarrier && !isAdmin) {
+      throw new ForbiddenException(
+        'You do not have access to this shipment payment',
+      );
+    }
+
+    const payment = await this.findByShipmentId(shipmentId);
+    return { payment };
+  }
+
   async getOrCreatePayment(
     shipmentId: string,
     amount: number,
@@ -70,6 +107,8 @@ export class PaymentsService {
     shipperWalletAddress?: string,
     carrierWalletAddress?: string,
   ): Promise<Payment> {
+    resolveSettlementAssetDecimals(assetCode);
+
     const existing = await this.paymentRepo.findOne({ where: { shipmentId } });
     if (existing) {
       return existing;
@@ -128,12 +167,153 @@ export class PaymentsService {
   async releaseEscrowForShipment(shipmentId: string): Promise<void> {
     const payment = await this.findByShipmentId(shipmentId);
     if (!payment) {
-      return;
+      throw new ConflictException({
+        code: 'ESCROW_NOT_FUNDED',
+        message: 'Shipment has no payment escrow to release',
+      });
+    }
+    if (payment.status !== PaymentStatus.FUNDED) {
+      throw new ConflictException({
+        code: 'ESCROW_NOT_FUNDED',
+        message: `Shipment escrow cannot be released while payment is ${payment.status}`,
+      });
     }
 
-    await this.stellarContractService.releasePayment(
+    const result = await this.stellarContractService.releasePayment(
       BigInt(payment.onChainShipmentId),
     );
+    await this.paymentRepo.update(payment.id, {
+      status: PaymentStatus.RELEASED,
+      settledAt: new Date(),
+      stellarTxHash: result.txHash,
+    });
+  }
+
+  async assertCanCancelShipment(shipmentId: string): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (payment?.status === PaymentStatus.FUNDING) {
+      throw new ConflictException({
+        code: 'PAYMENT_FUNDING_IN_PROGRESS',
+        message: 'Cancellation is unavailable while escrow funding is in progress',
+      });
+    }
+  }
+
+  async assertFundedForPickup(shipmentId: string): Promise<void> {
+    if (String(this.config.get('SOROBAN_ENABLED')) !== 'true') return;
+    await this.assertFunded(shipmentId);
+  }
+
+  private async assertFunded(shipmentId: string): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (payment?.status !== PaymentStatus.FUNDED) {
+      throw new ConflictException({
+        code: 'ESCROW_NOT_FUNDED',
+        message: payment
+          ? `Shipment escrow is not releasable while payment is ${payment.status}`
+          : 'Shipment has no funded payment escrow',
+      });
+    }
+  }
+
+  /**
+   * Settles a `Funded` escrow back to the shipper, optionally retaining a
+   * cancellation fee for the platform (issue #1543).
+   *
+   * The chain call only happens when settlement is actually appropriate:
+   *
+   * - no payment row → nothing was ever funded, no chain call;
+   * - the payment is not `FUNDED` (pending/funding, or already released /
+   *   refunded / cancelled) → no funds are held, no chain call;
+   * - the payment is `DISPUTED` → the escrow is mid-dispute on chain and
+   *   `refund_payment_with_fee` would be rejected, so the cancellation is
+   *   deliberately **not** settled here. A disputed escrow can only be
+   *   settled through {@link resolveEscrowDisputeForShipment}, which refunds
+   *   in full. `ShipmentsService.cancel()` routes that case explicitly, so
+   *   reaching here with a DISPUTED payment means the caller used the wrong
+   *   path — a no-op leaves the escrow and the local row untouched and
+   *   coherent for the dispute flow that follows.
+   *
+   * `cancellationFee` is in fiat units (e.g. dollars); it is converted to
+   * the payment's settlement asset base units here so the contract always
+   * receives the same units it was funded with. A fee of `0` takes the plain
+   * `refund_payment` path, which is byte-for-byte the pre-#1543 behaviour.
+   */
+  async refundEscrowForShipment(
+    shipmentId: string,
+    cancellationFee = 0,
+  ): Promise<CancellationSettlementResult | undefined> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (!payment) return undefined;
+    if (payment.status !== PaymentStatus.FUNDED) return undefined;
+
+    const onChainShipmentId = BigInt(payment.onChainShipmentId);
+    const amountBaseUnits = priceToBaseUnits(
+      Number(payment.amount),
+      payment.assetCode,
+    );
+    const feeBaseUnits = priceToBaseUnits(cancellationFee, payment.assetCode);
+
+    // The contract rejects a fee >= the escrowed amount. Catching it here
+    // means a bad fee surfaces as a typed 4xx and the payment row is left
+    // FUNDED rather than half-settled.
+    if (feeBaseUnits > 0n && feeBaseUnits >= amountBaseUnits) {
+      throw new InvalidCancellationFeeError(
+        Number(payment.amount),
+        cancellationFee,
+      );
+    }
+
+    const result =
+      feeBaseUnits > 0n
+        ? await this.stellarContractService.refundPaymentWithFee(
+            onChainShipmentId,
+            feeBaseUnits,
+          )
+        : await this.stellarContractService.refundPayment(onChainShipmentId);
+
+    await this.paymentRepo.update(payment.id, {
+      status: PaymentStatus.REFUNDED,
+      settledAt: new Date(),
+      stellarTxHash: result.txHash,
+    });
+
+    return {
+      txHash: result.txHash,
+      status: result.status,
+      feeAmount: feeBaseUnits,
+      refundAmount: amountBaseUnits - feeBaseUnits,
+    };
+  }
+
+  async raiseEscrowDisputeForShipment(shipmentId: string): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (!payment) return;
+
+    // The escrow entrypoint requires the disputing party's signature. The
+    // backend never holds party secrets, so this is completed by the wallet
+    // flow rather than attempting to sign from a public address.
+    throw new Error(
+      'Escrow dispute must be raised by the shipper or carrier wallet',
+    );
+  }
+
+  async resolveEscrowDisputeForShipment(
+    shipmentId: string,
+    releaseToCarrier: boolean,
+  ): Promise<void> {
+    const payment = await this.findByShipmentId(shipmentId);
+    if (!payment) return;
+
+    const result = await this.stellarContractService.resolveDispute(
+      BigInt(payment.onChainShipmentId),
+      releaseToCarrier,
+    );
+    await this.paymentRepo.update(payment.id, {
+      status: releaseToCarrier ? PaymentStatus.RELEASED : PaymentStatus.REFUNDED,
+      settledAt: new Date(),
+      stellarTxHash: result.txHash,
+    });
   }
 
   private async generateNextOnChainId(): Promise<number> {
@@ -183,7 +363,7 @@ export class PaymentsService {
       shipper.walletAddress,
     );
 
-    const amount = priceToBaseUnits(Number(shipment.price));
+    const amount = priceToBaseUnits(Number(shipment.price), payment.assetCode);
     try {
       const unsignedXdr =
         await this.stellarContractService.buildFundEscrowTransaction(
@@ -257,7 +437,7 @@ export class PaymentsService {
         signer,
         payment.carrierWalletAddress as string,
         BigInt(payment.onChainShipmentId),
-        priceToBaseUnits(Number(payment.amount)),
+        priceToBaseUnits(Number(payment.amount), payment.assetCode),
       ),
     );
   }
@@ -270,6 +450,9 @@ export class PaymentsService {
     const shipment = await this.getShipment(shipmentId);
     if (shipment.shipperId !== requesterId) {
       throw new ForbiddenPaymentActionError();
+    }
+    if (shipment.status !== ShipmentStatus.ACCEPTED) {
+      throw new ShipmentNotAcceptedError();
     }
 
     const payment = await this.paymentRepo.findOne({
@@ -299,7 +482,11 @@ export class PaymentsService {
   ): Promise<SubmitFundingResult> {
     const claim = await this.paymentRepo.update(
       { id: payment.id, status: PaymentStatus.PENDING },
-      { status: PaymentStatus.FUNDING },
+      {
+        status: PaymentStatus.FUNDING,
+        stellarTxHash: null,
+        failureReason: null,
+      },
     );
     if (claim.affected !== 1) {
       throw new PaymentAlreadyInFlightError(payment.id);
@@ -322,10 +509,31 @@ export class PaymentsService {
       };
     } catch (error) {
       const mapped = mapStellarFundingError(error);
-      await this.paymentRepo.update(payment.id, {
-        status: PaymentStatus.PENDING,
-        failureReason: mapped.code,
-      });
+      const definitelyFailed =
+        error instanceof SimulationError ||
+        error instanceof EscrowContractError ||
+        (error instanceof SubmissionError && error.definitiveFailure);
+
+      if (
+        error instanceof ChainTimeoutError ||
+        (error instanceof SubmissionError && !error.definitiveFailure) ||
+        !definitelyFailed
+      ) {
+        await this.paymentRepo.update(payment.id, {
+          status: PaymentStatus.FUNDING,
+          stellarTxHash:
+            error instanceof ChainTimeoutError ||
+            error instanceof SubmissionError
+              ? (error.txHash ?? null)
+              : null,
+          failureReason: mapped.code,
+        });
+      } else {
+        await this.paymentRepo.update(payment.id, {
+          status: PaymentStatus.PENDING,
+          failureReason: mapped.code,
+        });
+      }
       throw mapped;
     }
   }

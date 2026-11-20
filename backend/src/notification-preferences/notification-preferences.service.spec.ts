@@ -79,7 +79,10 @@ describe('NotificationPreferencesService', () => {
     });
 
     it('returns false for disabled preference', async () => {
-      repo.findOne.mockResolvedValue({ ...defaultPrefs(), shipmentDisputed: false });
+      repo.findOne.mockResolvedValue({
+        ...defaultPrefs(),
+        shipmentDisputed: false,
+      });
       const result = await service.isEnabled('user1', 'shipmentDisputed');
       expect(result).toBe(false);
     });

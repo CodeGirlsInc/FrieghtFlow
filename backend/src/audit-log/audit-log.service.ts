@@ -31,7 +31,16 @@ export class AuditLogService {
   }
 
   async findAll(query: QueryAuditLogDto) {
-    const { page = 1, limit = 20, action } = query;
+    const {
+      page = 1,
+      limit = 20,
+      action,
+      adminId,
+      targetType,
+      targetId,
+      from,
+      to,
+    } = query;
     const skip = (page - 1) * limit;
 
     const qb = this.auditLogRepo
@@ -42,6 +51,11 @@ export class AuditLogService {
       .take(limit);
 
     if (action) qb.andWhere('log.action = :action', { action });
+    if (adminId) qb.andWhere('log.adminId = :adminId', { adminId });
+    if (targetType) qb.andWhere('log.targetType = :targetType', { targetType });
+    if (targetId) qb.andWhere('log.targetId = :targetId', { targetId });
+    if (from) qb.andWhere('log.createdAt >= :from', { from: new Date(from) });
+    if (to) qb.andWhere('log.createdAt <= :to', { to: new Date(to) });
 
     const [data, total] = await qb.getManyAndCount();
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };

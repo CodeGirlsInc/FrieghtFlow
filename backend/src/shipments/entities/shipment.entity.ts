@@ -75,6 +75,9 @@ export class Shipment {
   @Column({ type: 'decimal', precision: 14, scale: 2 })
   price: number;
 
+  @Column({ name: 'listed_price', type: 'decimal', precision: 14, scale: 2 })
+  listedPrice: number;
+
   @Column({ default: 'USD', length: 3 })
   currency: string;
 
@@ -104,6 +107,24 @@ export class Shipment {
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
+
+  // ── Cancellation ────────────────────────────────────────────────────────────
+
+  /**
+   * Tiered fee retained by the platform when this shipment is cancelled
+   * (rate depends on the status it was cancelled from — see
+   * `CancellationFeeService`). `null` while the shipment is still live, so
+   * the column doubles as "has this shipment been cancelled for a fee?".
+   */
+  @Column({
+    name: 'cancellation_fee',
+    type: 'decimal',
+    precision: 14,
+    scale: 2,
+    nullable: true,
+    default: null,
+  })
+  cancellationFee: number | null;
 
   // ── Dates ────────────────────────────────────────────────────────────────────
 

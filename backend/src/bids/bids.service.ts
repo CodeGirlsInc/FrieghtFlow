@@ -191,6 +191,9 @@ export class BidsService {
       throw new BadRequestException('Bid is no longer pending');
     }
 
+    // Accept this bid, reject the shipment's other pending bids, and assign
+    // the carrier — all in a single transaction so a crash between steps can
+    // never leave the shipment ACCEPTED without a carrier (or vice versa).
     const queryRunner = this.bidRepo.manager.connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

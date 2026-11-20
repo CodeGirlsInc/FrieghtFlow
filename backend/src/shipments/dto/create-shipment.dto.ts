@@ -11,6 +11,7 @@ import {
   IsISO4217CurrencyCode,
   IsEnum,
   IsBoolean,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -36,7 +37,10 @@ export class CreateShipmentDto {
   @MaxLength(2000)
   cargoDescription: string;
 
-  @ApiPropertyOptional({ enum: CargoCategory, example: CargoCategory.ELECTRONICS })
+  @ApiPropertyOptional({
+    enum: CargoCategory,
+    example: CargoCategory.ELECTRONICS,
+  })
   @IsOptional()
   @IsEnum(CargoCategory)
   cargoCategory?: CargoCategory;
@@ -61,6 +65,7 @@ export class CreateShipmentDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
+  @Max(1_000_000)
   price: number;
 
   @ApiPropertyOptional({ example: 'USD', default: 'USD' })

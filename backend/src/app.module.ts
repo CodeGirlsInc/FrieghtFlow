@@ -7,6 +7,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ShipmentsModule } from './shipments/shipments.module';
@@ -23,16 +25,11 @@ import { CarriersModule } from './carriers/carriers.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { PaymentsModule } from './payments/payments.module';
 import { StellarModule } from './stellar/stellar.module';
+import {
+  shipmentCreateTracker,
+  forgotPasswordTracker,
+} from './common/throttler-trackers';
 import { appConfigValidationSchema } from './config/app-config.validation';
-
-const shipmentCreateTracker = (context: ExecutionContext): string => {
-  const request = context.switchToHttp().getRequest<{
-    ip?: string;
-    user?: { id?: string };
-  }>();
-
-  return request.user?.id ?? request.ip ?? 'anonymous';
-};
 
 const throttlerErrorMessage = (context: ExecutionContext): string => {
   const request = context.switchToHttp().getRequest<{
@@ -56,11 +53,12 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
       isGlobal: true,
       validationSchema: appConfigValidationSchema,
       validationOptions: {
-        allowUnknown: true,
+        allowUnknown: false,
         abortEarly: false,
       },
     }),
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       errorMessage: throttlerErrorMessage,
       throttlers: [
@@ -79,6 +77,12 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
           ttl: 60_000,
           limit: 10,
           getTracker: (_request, context) => shipmentCreateTracker(context),
+        },
+        {
+          name: 'forgotPassword',
+          ttl: 900_000, // 15 minutes
+          limit: 3, // 3 requests per 15 min per target email
+          getTracker: (_request, context) => forgotPasswordTracker(context),
         },
       ],
     }),
@@ -115,6 +119,10 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
   controllers: [AppController],
   providers: [
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
