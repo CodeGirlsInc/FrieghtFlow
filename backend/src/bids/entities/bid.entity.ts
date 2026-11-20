@@ -6,6 +6,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   Index,
+  Unique,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Shipment } from '../../shipments/entities/shipment.entity';
@@ -17,6 +18,9 @@ export enum BidStatus {
 }
 
 @Entity('bids')
+// Partial unique index enforced at the DB level: one pending bid per carrier per shipment.
+// The constraint is added via migration; this decorator documents the intent.
+@Unique('UQ_bids_shipment_carrier_pending', ['shipmentId', 'carrierId'])
 export class Bid {
   @PrimaryGeneratedColumn('uuid')
   id: string;

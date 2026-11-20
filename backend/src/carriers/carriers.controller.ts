@@ -11,6 +11,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CarriersService } from './carriers.service';
 import { CarrierCertificationsService } from './carrier-certifications.service';
+import { CarrierEarningsService } from './carrier-earnings.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -25,6 +26,7 @@ export class CarriersController {
   constructor(
     private readonly carriersService: CarriersService,
     private readonly certificationsService: CarrierCertificationsService,
+    private readonly earningsService: CarrierEarningsService,
   ) {}
 
   @Get('me/metrics')
@@ -35,6 +37,18 @@ export class CarriersController {
   })
   getMyMetrics(@CurrentUser() user: User) {
     return this.carriersService.getMyMetrics(user.id);
+  }
+
+  @Get('me/earnings')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.CARRIER)
+  @ApiOperation({
+    summary: 'Get earnings summary for the authenticated carrier',
+    description:
+      'Returns per-currency lifetime, current-month, and 12-month breakdown. Aggregation is done in SQL.',
+  })
+  getMyEarnings(@CurrentUser() user: User) {
+    return this.earningsService.getEarningsSummary(user.id);
   }
 
   // ── Certification endpoints ──────────────────────────────────────────────────

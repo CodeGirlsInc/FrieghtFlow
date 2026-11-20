@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Repository, FindOptionsWhere, LessThan } from 'typeorm';
 
 export interface CursorPageOptions {
@@ -19,19 +20,63 @@ interface CursorPayload {
   id: string;
 }
 
+/** UUID v4 pattern used to validate cursor payloads. */
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function encodeCursor(createdAt: Date, id: string): string {
+  // Store the timestamp at full millisecond precision.  Using toISOString()
+  // is safe because Postgres timestamp columns are compared by value; the
+  // WHERE clause uses the same precision on both sides.
   const payload: CursorPayload = { createdAt: createdAt.toISOString(), id };
   return Buffer.from(JSON.stringify(payload)).toString('base64url');
 }
 
 export function decodeCursor(cursor: string): CursorPayload {
+  let payload: unknown;
   try {
-    return JSON.parse(
+    payload = JSON.parse(
       Buffer.from(cursor, 'base64url').toString('utf8'),
-    ) as CursorPayload;
+    );
   } catch {
-    throw new Error('Invalid pagination cursor');
+    throw new BadRequestException('Invalid pagination cursor');
   }
+
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    typeof (payload as CursorPayload).createdAt !== 'string' ||
+    typeof (payload as CursorPayload).id !== 'string'
+  ) {
+    throw new BadRequestException('Invalid pagination cursor');
+  }
+
+  const { createdAt, id } = payload as CursorPayload;
+
+  // Validate createdAt is a parseable ISO date
+  if (Number.isNaN(new Date(createdAt).getTime())) {
+    throw new BadRequestException('Invalid pagination cursor: bad createdAt');
+  }
+
+  // Validate id is a UUID
+  if (!UUID_PATTERN.test(id)) {
+    throw new BadRequestException('Invalid pagination cursor: bad id');
+  }
+
+  return { createdAt, id };
+}
+
+/**
+ * Validates and coerces a raw limit query-string value.
+ * Returns a number between 1 and 100, or the given default.
+ */
+export function parseLimit(raw: string | number | undefined, defaultLimit = 20): number {
+  if (raw === undefined || raw === null) return defaultLimit;
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw), 10);
+  if (!Number.isInteger(n) || n < 1 || n > 100) {
+    throw new BadRequestException('limit must be an integer between 1 and 100');
+  }
+  return n;
 }
 
 export async function cursorPaginate<T extends { id: string; createdAt: Date }>(

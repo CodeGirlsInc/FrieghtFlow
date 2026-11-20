@@ -14,13 +14,19 @@ export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => User, { eager: false, nullable: false, onDelete: 'CASCADE' })
+  /**
+   * ON DELETE RESTRICT prevents audit rows from being silently deleted when
+   * the admin account is removed. Prefer deactivating admins over deleting
+   * them. adminId is nullable so the row survives a SET NULL path if a future
+   * migration switches to that strategy instead.
+   */
+  @ManyToOne(() => User, { eager: false, nullable: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'admin_id' })
-  admin: User;
+  admin: User | null;
 
   @Index()
-  @Column({ name: 'admin_id' })
-  adminId: string;
+  @Column({ name: 'admin_id', nullable: true, type: 'uuid' })
+  adminId: string | null;
 
   @Index()
   @Column({ length: 100 })

@@ -12,12 +12,22 @@ export class NotificationPreferencesService {
   ) {}
 
   async getOrCreate(userId: string): Promise<NotificationPreferences> {
-    let prefs = await this.prefsRepo.findOne({ where: { userId } });
-    if (!prefs) {
-      prefs = this.prefsRepo.create({ userId });
-      prefs = await this.prefsRepo.save(prefs);
-    }
-    return prefs;
+    // Use upsert to avoid a race condition where two concurrent first-accesses
+    // both find no row and both attempt to insert, causing a unique-constraint
+    // violation on user_id.  orIgnore() maps to INSERT … ON CONFLICT DO NOTHING,
+    // which is a no-op when the row already exists.
+    await this.prefsRepo
+      .createQueryBuilder()
+      .insert()
+      .into(NotificationPreferences)
+      .values({ userId })
+      .orIgnore()
+      .execute();
+
+    // After the upsert the row is guaranteed to exist.
+    const prefs = await this.prefsRepo.findOne({ where: { userId } });
+    // findOne should never return null here; the cast is a safety fallback.
+    return prefs!;
   }
 
   async update(

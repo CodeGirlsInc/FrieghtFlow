@@ -6,8 +6,11 @@ import { apiClient } from '../../lib/api/client';
 
 const DISMISS_KEY = 'onboarding_checklist_dismissed';
 
+// Use lowercase role strings that match the backend UserRole enum.
+type UserRole = 'shipper' | 'carrier';
+
 interface UserProfile {
-  role: 'SHIPPER' | 'CARRIER';
+  role: UserRole;
   emailVerified: boolean;
   profileComplete: boolean;
   hasShipment: boolean;
@@ -38,14 +41,28 @@ export default function OnboardingChecklist() {
     setDismissed(localStorage.getItem(DISMISS_KEY) === 'true');
   }, []);
 
-  const { data: profile } = useQuery({
+  const {
+    data: profile,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ['onboarding-profile'],
     queryFn: () => apiClient<UserProfile>('/users/me/onboarding'),
+    // Do not throw on 404 — the endpoint may not exist yet.
+    retry: false,
   });
+
+  // Show nothing while loading or if the endpoint is unavailable.
+  // Log errors so they appear in the browser console for debugging.
+  if (isError) {
+    console.error('[OnboardingChecklist] Failed to load profile:', error);
+    return null;
+  }
 
   if (dismissed || !profile) return null;
 
-  const steps = profile.role === 'CARRIER' ? CARRIER_STEPS : SHIPPER_STEPS;
+  // Compare role in lowercase to match the backend UserRole enum values.
+  const steps = profile.role === 'carrier' ? CARRIER_STEPS : SHIPPER_STEPS;
   const completed = steps.filter((s) => profile[s.key]).length;
 
   if (completed === steps.length) return null;
