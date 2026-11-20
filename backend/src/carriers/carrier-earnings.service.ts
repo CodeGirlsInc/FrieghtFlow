@@ -10,10 +10,15 @@ interface MonthlyBreakdown {
   completedShipments: number;
 }
 
-interface EarningsSummary {
+interface CurrencyEarnings {
+  currency: string;
   lifetimeEarnings: number;
   currentMonthEarnings: number;
   monthlyBreakdown: MonthlyBreakdown[];
+}
+
+interface EarningsSummary {
+  byCurrency: CurrencyEarnings[];
 }
 
 @Injectable()
@@ -24,49 +29,95 @@ export class CarrierEarningsService {
   ) {}
 
   async getEarningsSummary(carrierId: string): Promise<EarningsSummary> {
-    const completed = await this.shipmentRepo.find({
-      where: { carrierId, status: ShipmentStatus.COMPLETED },
-      select: ['id', 'price', 'actualDeliveryDate'],
-    });
+    // Aggregate in SQL grouped by currency and UTC month to avoid loading all
+    // rows into memory and to avoid summing across currencies incorrectly.
+    const rows = await this.shipmentRepo
+      .createQueryBuilder('s')
+      .select('s.currency', 'currency')
+      .addSelect(
+        "TO_CHAR(DATE_TRUNC('month', s.actual_delivery_date AT TIME ZONE 'UTC'), 'YYYY-MM')",
+        'month',
+      )
+      .addSelect('SUM(CAST(s.price AS numeric))', 'earnings')
+      .addSelect('COUNT(*)', 'count')
+      .where('s.carrier_id = :carrierId', { carrierId })
+      .andWhere('s.status = :status', { status: ShipmentStatus.COMPLETED })
+      .andWhere('s.actual_delivery_date IS NOT NULL')
+      .groupBy('s.currency')
+      .addGroupBy(
+        "DATE_TRUNC('month', s.actual_delivery_date AT TIME ZONE 'UTC')",
+      )
+      .orderBy('s.currency', 'ASC')
+      .addOrderBy(
+        "DATE_TRUNC('month', s.actual_delivery_date AT TIME ZONE 'UTC')",
+        'ASC',
+      )
+      .getRawMany<{
+        currency: string;
+        month: string | null;
+        earnings: string;
+        count: string;
+      }>();
 
-    const lifetimeEarnings = completed.reduce(
-      (sum, s) => sum + Number(s.price),
-      0,
+    // Also aggregate lifetime totals per currency (includes rows where
+    // actual_delivery_date is NULL, which the monthly query excludes).
+    const lifetimeTotals = await this.shipmentRepo
+      .createQueryBuilder('s')
+      .select('s.currency', 'currency')
+      .addSelect('SUM(CAST(s.price AS numeric))', 'total')
+      .where('s.carrier_id = :carrierId', { carrierId })
+      .andWhere('s.status = :status', { status: ShipmentStatus.COMPLETED })
+      .groupBy('s.currency')
+      .getRawMany<{ currency: string; total: string }>();
+
+    const lifetimeMap = new Map(
+      lifetimeTotals.map((r) => [r.currency, Number(r.total)]),
     );
 
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-    const buckets = new Map<string, { earnings: number; count: number }>();
-
-    // Pre-fill last 12 months
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      buckets.set(key, { earnings: 0, count: 0 });
-    }
-
-    for (const s of completed) {
-      const date = s.actualDeliveryDate ? new Date(s.actualDeliveryDate) : null;
-      if (!date) continue;
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (buckets.has(key)) {
-        const b = buckets.get(key)!;
-        b.earnings += Number(s.price);
-        b.count += 1;
+    // Group monthly rows by currency.
+    const currencyMap = new Map<
+      string,
+      Map<string, { earnings: number; count: number }>
+    >();
+    for (const row of rows) {
+      if (!row.month) continue;
+      if (!currencyMap.has(row.currency)) {
+        currencyMap.set(row.currency, new Map());
       }
+      currencyMap
+        .get(row.currency)!
+        .set(row.month, { earnings: Number(row.earnings), count: Number(row.count) });
     }
 
-    const monthlyBreakdown: MonthlyBreakdown[] = Array.from(
-      buckets.entries(),
-    ).map(([month, { earnings, count }]) => ({
-      month,
-      earnings,
-      completedShipments: count,
-    }));
+    const now = new Date();
+    const currentMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 
-    const currentMonthEarnings = buckets.get(currentMonthKey)?.earnings ?? 0;
+    const byCurrency: CurrencyEarnings[] = [];
 
-    return { lifetimeEarnings, currentMonthEarnings, monthlyBreakdown };
+    for (const currency of [...lifetimeMap.keys()].sort()) {
+      const monthMap = currencyMap.get(currency) ?? new Map();
+
+      // Fill the last 12 months including those with no shipments.
+      const monthlyBreakdown: MonthlyBreakdown[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        const bucket = monthMap.get(key) ?? { earnings: 0, count: 0 };
+        monthlyBreakdown.push({
+          month: key,
+          earnings: bucket.earnings,
+          completedShipments: bucket.count,
+        });
+      }
+
+      byCurrency.push({
+        currency,
+        lifetimeEarnings: lifetimeMap.get(currency) ?? 0,
+        currentMonthEarnings: monthMap.get(currentMonthKey)?.earnings ?? 0,
+        monthlyBreakdown,
+      });
+    }
+
+    return { byCurrency };
   }
 }

@@ -8,6 +8,7 @@ import { CarriersController } from './carriers.controller';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { CarrierCertificationExpiryScheduler } from './carrier-certification-expiry.scheduler';
+import { CarrierEarningsService } from './carrier-earnings.service';
 
 @Module({
   imports: [
@@ -20,7 +21,8 @@ import { CarrierCertificationExpiryScheduler } from './carrier-certification-exp
     CarriersService,
     CarrierCertificationsService,
     CarrierCertificationExpiryScheduler,
+    CarrierEarningsService,
   ],
-  exports: [CarrierCertificationsService],
+  exports: [CarrierCertificationsService, CarrierEarningsService],
 })
 export class CarriersModule {}
