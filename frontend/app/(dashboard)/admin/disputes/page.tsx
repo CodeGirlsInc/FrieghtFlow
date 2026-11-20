@@ -7,13 +7,15 @@ import { toast } from 'sonner';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { adminApi } from '../../../../lib/api/admin.api';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
+import { formatMoney } from '../../../../lib/format/currency';
 import { ShipmentStatus, type Shipment, type ShipmentStatusHistory } from '../../../../types/shipment.types';
 import { Button } from '../../../../components/ui/button';
+import { Pagination } from '../../../../components/ui/pagination';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { StatusTimeline } from '../../../../components/shipment/status-timeline';
 
-const fmt = (n: number, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n);
+// Never throws on an unrecognised currency code — see lib/format/currency.ts.
+const fmt = (n: number, currency = 'USD') => formatMoney(n, currency);
 
 function ConfirmDialog({
   resolution,
@@ -277,13 +279,15 @@ export default function AdminDisputesPage() {
         )}
 
         {result && result.totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <p className="text-muted-foreground">Showing {result.data.length} of {result.total}</p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-              <Button variant="outline" size="sm" disabled={page === result.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={result.totalPages}
+            currentCount={result.data.length}
+            total={result.total}
+            itemLabel="disputes"
+            onPageChange={setPage}
+            label="Disputes pagination"
+          />
         )}
       </div>
     </>

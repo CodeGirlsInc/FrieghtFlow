@@ -37,7 +37,7 @@ export class WebhooksController {
   @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   @ApiOperation({
     summary: 'Register a webhook URL for shipment status changes',
-    description: `Shippers receive events for their own shipments. Carriers receive events for shipments assigned to them. Admins receive all events. A user may have at most ${DEFAULT_MAX_ACTIVE_WEBHOOKS_PER_USER} active webhooks by default (configure with WEBHOOK_MAX_PER_USER).`,
+    description: `Shippers receive events for their own shipments. Carriers receive events for shipments assigned to them. Admins receive all events. A user may have at most ${DEFAULT_MAX_ACTIVE_WEBHOOKS_PER_USER} active webhooks by default (configure with WEBHOOK_MAX_PER_USER). Delete an existing webhook before registering another one.`,
   })
   @ApiResponse({ status: 201, description: 'Webhook created' })
   @ApiResponse({

@@ -65,6 +65,8 @@ export class DocumentsController {
   @ApiResponse({ status: 201, description: 'Document uploaded successfully' })
   @ApiResponse({ status: 400, description: 'Invalid file or payload' })
   @ApiResponse({ status: 403, description: 'Not a party to this shipment' })
+  // Multer options are configured via MulterModule in DocumentsModule. The
+  // cleanup interceptor wraps parsing so rejected requests cannot leak files.
   @UseInterceptors(UploadCleanupInterceptor, FileInterceptor('file'))
   async upload(
     @UploadedFile() file: Express.Multer.File,
@@ -132,7 +134,10 @@ export class DocumentsController {
         unsupportedDocumentMimeTypeMessage(file.mimetype),
       );
     }
-    if (!contentMatchesMimeType(file.buffer, file.mimetype)) {
+    if (
+      file.buffer?.length &&
+      !contentMatchesMimeType(file.buffer, file.mimetype)
+    ) {
       throw new BadRequestException(
         `File content does not match the declared type ${file.mimetype}`,
       );

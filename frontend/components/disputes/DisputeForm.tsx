@@ -8,6 +8,10 @@ import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { apiClient } from '../../lib/api/client';
+import { partitionValidFiles, buildFileAcceptAttribute } from '../../lib/validation/file-upload';
+
+/** Derived from ALLOWED_FILE_EXTENSIONS so the picker and the validator agree. */
+const EVIDENCE_ACCEPT = buildFileAcceptAttribute();
 
 const schema = z.object({
   reason: z.string().min(10, 'Please describe the issue (min 10 characters)'),
@@ -27,15 +31,24 @@ export function DisputeForm({ shipmentId, onSuccess, onClose }: Props) {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const onSubmit = async (data: FormData) => {
+    const files = fileRef.current?.files;
+    if (files && files.length > 0) {
+      const { errors } = partitionValidFiles(files);
+      if (errors.length > 0) {
+        errors.forEach((message) => toast.error(message));
+        return;
+      }
+    }
+
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append('reason', data.reason);
-      const files = fileRef.current?.files;
       if (files) {
         Array.from(files).forEach((f) => formData.append('evidence', f));
       }
@@ -48,6 +61,10 @@ export function DisputeForm({ shipmentId, onSuccess, onClose }: Props) {
       });
 
       toast.success('Dispute filed successfully.');
+      if (fileRef.current) {
+        fileRef.current.value = '';
+      }
+      reset();
       onSuccess?.();
     } catch (err: unknown) {
       const error = err as { message?: string };
@@ -94,7 +111,7 @@ export function DisputeForm({ shipmentId, onSuccess, onClose }: Props) {
               id="evidence"
               type="file"
               multiple
-              accept="image/*,.pdf,.doc,.docx"
+              accept={EVIDENCE_ACCEPT}
               ref={fileRef}
               aria-label="Upload evidence files"
               className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"

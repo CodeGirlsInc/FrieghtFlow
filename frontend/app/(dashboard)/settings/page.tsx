@@ -2,7 +2,6 @@
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { toast } from 'sonner';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -17,19 +16,10 @@ import {
 } from '../../../components/ui/card';
 import { useAuthStore } from '../../../stores/auth.store';
 import { changePassword } from '../../../lib/api/auth.api';
-
-const schema = z
-  .object({
-    currentPassword: z.string().min(1, 'Current password is required'),
-    newPassword: z.string().min(8, 'New password must be at least 8 characters'),
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.newPassword === d.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  });
-
-type FormData = z.infer<typeof schema>;
+import {
+  changePasswordSchema,
+  type ChangePasswordFormData,
+} from '../../../lib/validation/auth';
 
 export default function SettingsPage() {
   const { logout } = useAuthStore();
@@ -39,9 +29,9 @@ export default function SettingsPage() {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<ChangePasswordFormData>({ resolver: zodResolver(changePasswordSchema) });
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: ChangePasswordFormData) => {
     try {
       await changePassword(data.currentPassword, data.newPassword);
       toast.success('Password changed. Please sign in again with your new password.');

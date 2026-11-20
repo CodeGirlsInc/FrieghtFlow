@@ -4,6 +4,7 @@ export enum DocumentType {
   INVOICE = 'invoice',
   CUSTOMS_DECLARATION = 'customs_declaration',
   INSURANCE_CERTIFICATE = 'insurance_certificate',
+  CARRIER_CERTIFICATION = 'carrier_certification',
   PHOTO = 'photo',
   OTHER = 'other',
 }

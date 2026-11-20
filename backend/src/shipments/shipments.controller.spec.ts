@@ -26,6 +26,12 @@ describe('ShipmentsController', () => {
         shipperId: userId,
         ...dto,
       })),
+    batchCreate: jest.fn().mockResolvedValue({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      items: [{ index: 0, success: true, id: 'batch-shipment-1' }],
+    }),
     findAll: jest.fn().mockResolvedValue({
       data: [],
       total: 0,
@@ -126,6 +132,7 @@ describe('ShipmentsController', () => {
 
   afterEach(() => {
     shipmentsService.create.mockClear();
+    shipmentsService.batchCreate.mockClear();
     shipmentsService.findAll.mockClear();
     shipmentsService.exportShipments.mockClear();
   });
@@ -183,6 +190,27 @@ describe('ShipmentsController', () => {
       .expect(201);
 
     expect(shipmentsService.create).toHaveBeenCalledTimes(11);
+  });
+
+  it('delegates batch creation and preserves per-item results', async () => {
+    const response = await request(httpServer)
+      .post('/shipments/batch')
+      .set('x-user-id', 'batch-user-1')
+      .send({ shipments: [payload] })
+      .expect(201);
+
+    expect(response.body).toEqual({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      items: [{ index: 0, success: true, id: 'batch-shipment-1' }],
+    });
+    expect(shipmentsService.batchCreate).toHaveBeenCalledWith(
+      'batch-user-1',
+      expect.objectContaining({
+        shipments: [expect.objectContaining(payload)],
+      }),
+    );
   });
 
   it('accepts origin and destination query params for shipment search', async () => {
