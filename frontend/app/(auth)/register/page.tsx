@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '../../../components/ui/button';
@@ -23,9 +23,24 @@ import PasswordStrengthBar from '../../../components/auth/PasswordStrengthBar';
 import { registerSchema, type RegisterFormData } from '../../../lib/validation/auth';
 
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { register: registerUser, isLoading } = useAuthStore();
   const [emailSent, setEmailSent] = useState(false);
+
+  // A `?role=carrier` CTA (e.g. the landing page) preselects the carrier
+  // option; anything else — no param or an invalid value — falls back to the
+  // shipper default, matching the zod schema.
+  const roleParam = searchParams.get('role');
+  const initialRole: RegisterFormData['role'] = roleParam === 'carrier' ? 'carrier' : 'shipper';
 
   const {
     register,
@@ -35,7 +50,7 @@ export default function RegisterPage() {
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { role: 'shipper' },
+    defaultValues: { role: initialRole },
   });
 
   const selectedRole = watch('role');
