@@ -5,10 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
-  OneToMany,
 } from 'typeorm';
 import { UserRole } from '../../common/enums/role.enum';
-import { TwoFactorRecovery } from './two-factor-recovery.entity';
 
 @Entity('users')
 export class User {
@@ -41,6 +39,16 @@ export class User {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  /**
+   * Partial unique index: only one account may link any given wallet address.
+   * The index is defined in a migration as:
+   *   CREATE UNIQUE INDEX UQ_users_wallet_address
+   *     ON users (wallet_address)
+   *     WHERE wallet_address IS NOT NULL;
+   * The entity-level nullable column declaration is kept here; the uniqueness
+   * is enforced by the DB constraint, not by TypeORM's @Unique decorator
+   * (which cannot express a partial index).
+   */
   @Column({ name: 'wallet_address', nullable: true, type: 'varchar' })
   walletAddress: string | null;
 
@@ -52,7 +60,12 @@ export class User {
   })
   refreshToken: string | null;
 
-  @Column({ name: 'verification_token', nullable: true, type: 'varchar' })
+  @Column({
+    name: 'verification_token',
+    nullable: true,
+    type: 'varchar',
+    select: false,
+  })
   verificationToken: string | null;
 
   @Column({
@@ -82,13 +95,4 @@ export class User {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
-
-  @Column({ default: false })
-  isTwoFactorEnabled: boolean;
-
-  @Column({ nullable: true, select: false })
-  twoFactorSecret: string | null;
-
-  @OneToMany(() => TwoFactorRecovery, (recovery) => recovery.user)
-  recoveryCodes: TwoFactorRecovery[];
 }
