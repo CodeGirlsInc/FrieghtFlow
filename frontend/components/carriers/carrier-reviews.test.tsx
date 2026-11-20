@@ -123,6 +123,46 @@ describe('CarrierReviews Component', () => {
     });
   });
 
+  it('rounds the average rating to one decimal in both the visible text and the star aria-label', async () => {
+    mockApiClient.mockResolvedValue({
+      ...mockReviewsResponse,
+      total: 3,
+      averageRating: 4.6666666,
+      distribution: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 2 },
+    });
+    const queryClient = createTestQueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CarrierReviews carrierId="c1" />
+      </QueryClientProvider>
+    );
+
+    const visible = await screen.findByText('4.7');
+    const stars = screen.getByLabelText('4.7 out of 5 stars');
+
+    expect(stars).toBeInTheDocument();
+    // The accessible name must not read the raw decimal, and must agree with
+    // what sighted users see.
+    expect(stars).toHaveAttribute('aria-label', '4.7 out of 5 stars');
+    expect(visible.textContent).toBe('4.7');
+    expect(screen.queryByLabelText('4.6666666 out of 5 stars')).not.toBeInTheDocument();
+  });
+
+  it('announces an integer per-review rating without a spurious decimal', async () => {
+    mockApiClient.mockResolvedValue(mockReviewsResponse);
+    const queryClient = createTestQueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CarrierReviews carrierId="c1" />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByLabelText('5 out of 5 stars')).toBeInTheDocument();
+    expect(screen.getByLabelText('4 out of 5 stars')).toBeInTheDocument();
+  });
+
   it('supports pagination through multiple pages', async () => {
     const paginatedResponsePage1 = {
       ...mockReviewsResponse,

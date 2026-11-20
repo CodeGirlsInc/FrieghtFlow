@@ -18,6 +18,7 @@
 //! Every contract crate in this workspace uses the same layout:
 //!
 //! - [`errors`]   — the `#[contracterror]` enum
+//! - [`outcome`]  — the typed `Outcome` a completed shipment reports
 //! - [`types`]    — `#[contracttype]` records and the storage [`DataKey`]
 //! - [`events`]   — event topics and payloads (see `contracts/EVENTS.md`)
 //! - `storage`    — shared storage accessors
@@ -27,9 +28,11 @@
 //! - `stats`      — completion statistics and scoring
 //! - `test`       — `#[cfg(test)]` unit tests, one module per area
 
+mod authorized;
 mod contract;
 pub mod errors;
 pub mod events;
+pub mod outcome;
 mod rating;
 mod stats;
 mod storage;
@@ -41,4 +44,5 @@ mod test;
 
 pub use contract::{ReputationContract, ReputationContractClient};
 pub use errors::ReputationError;
+pub use outcome::Outcome;
 pub use types::{DataKey, RatingRecord, Reputation, UserType};

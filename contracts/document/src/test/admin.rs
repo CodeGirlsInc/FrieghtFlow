@@ -44,3 +44,27 @@ fn test_rotate_admin_requires_current_admin() {
     let result = ctx.client.try_rotate_admin(&impostor, &new_admin);
     assert_eq!(result, Err(Ok(DocumentError::Unauthorized)));
 }
+
+// --- Issue #1450: set_shipment_contract must check require_not_paused ---
+
+/// set_shipment_contract is now blocked while the contract is paused,
+/// matching the behaviour of EscrowContract::set_shipment_contract.
+#[test]
+fn test_set_shipment_contract_blocked_when_paused() {
+    let ctx = setup();
+    ctx.client.pause(&ctx.admin);
+
+    let new_shipment = Address::generate(&ctx.env);
+    let result = ctx.client.try_set_shipment_contract(&new_shipment);
+    assert_eq!(result, Err(Ok(DocumentError::Paused)));
+}
+
+/// set_shipment_contract succeeds when the contract is unpaused.
+#[test]
+fn test_set_shipment_contract_succeeds_when_unpaused() {
+    let ctx = setup();
+    let new_shipment = Address::generate(&ctx.env);
+
+    // Must not panic — contract is unpaused at this point.
+    ctx.client.set_shipment_contract(&new_shipment);
+}

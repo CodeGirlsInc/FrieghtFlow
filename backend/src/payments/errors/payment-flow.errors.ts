@@ -12,8 +12,10 @@ export type PaymentFlowErrorCode =
   | 'PAYMENT_ALREADY_FUNDED'
   | 'PAYMENT_ALREADY_IN_FLIGHT'
   | 'MISSING_WALLET_ADDRESS'
+  | 'INVALID_CANCELLATION_FEE'
   | 'ESCROW_SIMULATION_FAILED'
   | 'ESCROW_SUBMISSION_FAILED'
+  | 'ESCROW_SUBMISSION_TIMEOUT'
   | 'ESCROW_CONTRACT_REJECTED';
 
 export abstract class PaymentFlowError extends HttpException {
@@ -87,6 +89,26 @@ export class MissingWalletAddressError extends PaymentFlowError {
 }
 
 /**
+ * The computed cancellation fee would leave the shipper with nothing, which
+ * the escrow contract refuses (`fee >= amount`). Raised before any chain call
+ * so the payment row stays `FUNDED` and the shipment is not cancelled into an
+ * inconsistent state.
+ */
+export class InvalidCancellationFeeError extends PaymentFlowError {
+  constructor(
+    readonly escrowedAmount: number,
+    readonly requestedFee: number,
+  ) {
+    super(
+      'INVALID_CANCELLATION_FEE',
+      `A cancellation fee of ${requestedFee} cannot be charged against an escrowed amount of ${escrowedAmount}`,
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      { escrowedAmount, requestedFee },
+    );
+  }
+}
+
+/**
  * Simulation failed before anything was submitted — most commonly the
  * shipper's token balance or `approve` allowance to the escrow contract is
  * insufficient (the escrow contract's `fund_escrow` calls
@@ -110,6 +132,22 @@ export class EscrowSubmissionFailedError extends PaymentFlowError {
       'ESCROW_SUBMISSION_FAILED',
       'The funding transaction was rejected by the network',
       HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+    );
+  }
+}
+
+/**
+ * The network did not confirm in time, so the outcome is unknown: the
+ * transaction may still land. Unlike ESCROW_SUBMISSION_FAILED this is NOT
+ * safe to retry blindly - check the payment status first.
+ */
+export class EscrowSubmissionTimeoutError extends PaymentFlowError {
+  constructor(details?: unknown) {
+    super(
+      'ESCROW_SUBMISSION_TIMEOUT',
+      'The funding transaction was not confirmed in time; check the payment status before retrying',
+      HttpStatus.GATEWAY_TIMEOUT,
       details,
     );
   }

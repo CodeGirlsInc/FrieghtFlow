@@ -7,10 +7,13 @@ import { User } from '../users/entities/user.entity';
 import { Shipment } from '../shipments/entities/shipment.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { StellarModule } from '../stellar/stellar.module';
-import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Shipment, Payment]), CarriersModule, StellarModule, AuditLogModule],
+  imports: [
+    TypeOrmModule.forFeature([User, Shipment, Payment]),
+    CarriersModule,
+    StellarModule,
+  ],
   controllers: [AdminController],
   providers: [AdminService],
 })

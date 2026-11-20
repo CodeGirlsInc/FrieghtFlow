@@ -14,4 +14,10 @@ pub enum EscrowError {
     InvalidAmount = 8,
     InsufficientBalance = 9,
     Paused = 10,
+    /// The shipper and carrier are the same address.
+    ///
+    /// Distinct from `InvalidAmount` so a caller can tell a bad amount from a
+    /// structurally invalid escrow: this one can never become valid, because the
+    /// parties are fixed at funding time (issue #1675).
+    InvalidParties = 11,
 }

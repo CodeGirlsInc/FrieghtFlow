@@ -18,4 +18,19 @@ pub enum DocumentError {
     /// `flag_document` was called on a document that isn't currently verified
     /// — there is nothing to flag/reverse.
     NotVerified = 10,
+    /// A string or byte field exceeds its maximum allowed length.
+    ///
+    /// `ipfs_cid` in `register_document` is capped at 512 bytes (a CIDv1
+    /// Base58/Base32 string is at most ~100 chars; 512 is a generous ceiling
+    /// that still prevents unbounded persistent-storage growth).
+    /// `reason` in `flag_document` is capped at 1024 bytes, matching
+    /// `cargo_description` in the shipment contract.
+    FieldTooLong = 11,
+    /// A string or byte field is shorter than its minimum allowed length.
+    ///
+    /// `ipfs_cid` in `register_document` must be at least
+    /// `MIN_IPFS_CID_LEN` (8) bytes: an empty CID would record an
+    /// off-chain pointer that does not exist, and no canonical CID is
+    /// shorter than the 8-byte `bafkqaaa` CIDv1 form.
+    FieldTooShort = 12,
 }

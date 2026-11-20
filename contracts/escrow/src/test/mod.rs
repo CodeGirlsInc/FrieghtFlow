@@ -9,6 +9,7 @@ use crate::contract::{EscrowContract, EscrowContractClient};
 mod admin;
 mod events;
 mod funding;
+mod property;
 mod settlement;
 
 pub const AMOUNT: i128 = 500_000_000; // 50 XLM in stroops (7 decimals)

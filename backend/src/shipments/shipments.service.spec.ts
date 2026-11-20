@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,12 +11,14 @@ import { Readable } from 'node:stream';
 import { ILike } from 'typeorm';
 import { ShipmentsService } from './shipments.service';
 import { Shipment } from './entities/shipment.entity';
+import { Bid, BidStatus } from '../bids/entities/bid.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
 import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { CargoCategory } from '../common/enums/cargo-category.enum';
 import { User } from '../users/entities/user.entity';
 import { PaymentsService } from '../payments/payments.service';
+import { CancellationFeeService } from './cancellation-fee.service';
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
@@ -60,6 +63,7 @@ function makeShipment(overrides: Partial<Shipment> = {}): Shipment {
     insurancePremium: null,
     status: ShipmentStatus.PENDING,
     notes: null,
+    cancellationFee: null,
     pickupDate: null,
     estimatedDeliveryDate: null,
     actualDeliveryDate: null,
@@ -77,6 +81,7 @@ function mockRepo() {
     save: jest.fn(),
     createQueryBuilder: jest.fn(),
     manager: {
+      transaction: jest.fn(),
       connection: {
         createQueryRunner: jest.fn(),
       },
@@ -89,6 +94,7 @@ function mockRepo() {
     save: jest.Mock;
     createQueryBuilder: jest.Mock;
     manager: {
+      transaction: jest.Mock;
       connection: { createQueryRunner: jest.Mock };
       save: jest.Mock;
     };
@@ -112,17 +118,31 @@ describe('ShipmentsService', () => {
   let paymentsService: {
     releaseEscrowForShipment: jest.Mock;
     refundEscrowForShipment: jest.Mock;
+    assertCanCancelShipment: jest.Mock;
+    assertFundedForPickup: jest.Mock;
     raiseEscrowDisputeForShipment: jest.Mock;
     resolveEscrowDisputeForShipment: jest.Mock;
   };
 
   beforeEach(async () => {
     shipmentRepo = mockRepo();
+    shipmentRepo.manager.transaction.mockImplementation(async (callback: any) =>
+      callback({
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
+        findOne: jest.fn().mockResolvedValue(makeShipment({
+          status: ShipmentStatus.ACCEPTED,
+          carrierId: 'carrier-uuid-1',
+        })),
+        save: jest.fn().mockResolvedValue({}),
+      }),
+    );
     historyRepo = mockRepo();
     eventEmitter = { emit: jest.fn() } as unknown as jest.Mocked<EventEmitter2>;
     paymentsService = {
       releaseEscrowForShipment: jest.fn(),
       refundEscrowForShipment: jest.fn(),
+      assertCanCancelShipment: jest.fn(),
+      assertFundedForPickup: jest.fn(),
       raiseEscrowDisputeForShipment: jest.fn(),
       resolveEscrowDisputeForShipment: jest.fn(),
     };
@@ -137,6 +157,9 @@ describe('ShipmentsService', () => {
         },
         { provide: EventEmitter2, useValue: eventEmitter },
         { provide: PaymentsService, useValue: paymentsService },
+        // The real policy is used here on purpose: cancel() must actually
+        // charge the tiered fee, not a stubbed value.
+        CancellationFeeService,
       ],
     }).compile();
 
@@ -161,7 +184,11 @@ describe('ShipmentsService', () => {
       });
 
       expect(shipmentRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ status: ShipmentStatus.PENDING }),
+        expect.objectContaining({
+          status: ShipmentStatus.PENDING,
+          price: 5000,
+          listedPrice: 5000,
+        }),
       );
       expect(historyRepo.save).toHaveBeenCalled();
       expect(eventEmitter.emit).toHaveBeenCalledWith(
@@ -353,33 +380,68 @@ describe('ShipmentsService', () => {
         id: 'carrier-uuid-1',
         role: UserRole.CARRIER,
       });
-      const accepted = makeShipment({
-        status: ShipmentStatus.ACCEPTED,
-        carrierId: carrier.id,
-      });
-
-      shipmentRepo.findOne
-        .mockResolvedValueOnce(shipment)
-        .mockResolvedValueOnce(accepted);
-      shipmentRepo.save.mockResolvedValue(accepted);
+      shipmentRepo.findOne.mockResolvedValue(shipment);
       historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
       historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
 
       await service.accept('shipment-uuid-1', carrier);
 
-      expect(shipmentRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: ShipmentStatus.ACCEPTED,
-          carrierId: carrier.id,
-        }),
-      );
+      expect(shipmentRepo.manager.transaction).toHaveBeenCalled();
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'shipment.accepted',
         expect.anything(),
       );
     });
 
-    it('throws BadRequestException when shipment is not PENDING', async () => {
+    it('allows only one of two concurrent accepts and rejects pending bids', async () => {
+      const shipment = makeShipment();
+      const carrier = makeUser({ id: 'carrier-uuid-1', role: UserRole.CARRIER });
+      const otherCarrier = makeUser({ id: 'carrier-uuid-2', role: UserRole.CARRIER });
+      let status = ShipmentStatus.PENDING;
+      const update = jest.fn(async (entity: any, criteria: any, values: any) => {
+        if (entity === Shipment) {
+          if (status !== ShipmentStatus.PENDING) return { affected: 0 };
+          status = values.status;
+          return { affected: 1 };
+        }
+        return { affected: 1 };
+      });
+      const bidUpdate = jest.fn(async () => ({ affected: 1 }));
+      shipmentRepo.findOne.mockResolvedValue(shipment);
+      shipmentRepo.manager.transaction.mockImplementation(async (callback: any) =>
+        callback({
+          update: jest.fn(async (entity: any, criteria: any, values: any) => {
+            const result = await update(entity, criteria, values);
+            if (entity !== Shipment) bidUpdate(entity, criteria, values);
+            return result;
+          }),
+          findOne: jest.fn().mockResolvedValue(makeShipment({
+            status: ShipmentStatus.ACCEPTED,
+            carrierId: carrier.id,
+          })),
+          save: jest.fn().mockResolvedValue({}),
+        }),
+      );
+
+      const results = await Promise.allSettled([
+        service.accept(shipment.id, carrier),
+        service.accept(shipment.id, otherCarrier),
+      ]);
+
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+      expect(rejected.reason).toBeInstanceOf(ConflictException);
+      expect(bidUpdate).toHaveBeenCalledWith(
+        Bid,
+        expect.objectContaining({ status: BidStatus.PENDING }),
+        expect.objectContaining({ status: BidStatus.REJECTED }),
+      );
+      expect(bidUpdate).toHaveBeenCalledTimes(2);
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws ConflictException when shipment is not PENDING', async () => {
       const shipment = makeShipment({ status: ShipmentStatus.ACCEPTED });
       const carrier = makeUser({
         id: 'carrier-uuid-1',
@@ -388,7 +450,7 @@ describe('ShipmentsService', () => {
       shipmentRepo.findOne.mockResolvedValue(shipment);
 
       await expect(service.accept('shipment-uuid-1', carrier)).rejects.toThrow(
-        BadRequestException,
+        ConflictException,
       );
     });
   });
@@ -540,6 +602,30 @@ describe('ShipmentsService', () => {
   });
 
   describe('cancel()', () => {
+    it('rejects cancellation if funding is in flight before saving the shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      shipmentRepo.findOne.mockResolvedValue(makeShipment({
+        status: ShipmentStatus.ACCEPTED,
+        shipperId: shipper.id,
+      }));
+      paymentsService.assertCanCancelShipment.mockRejectedValue(
+        new ConflictException({ code: 'PAYMENT_FUNDING_IN_PROGRESS' }),
+      );
+
+      await expect(service.cancel('shipment-uuid-1', shipper)).rejects.toThrow();
+      expect(shipmentRepo.save).not.toHaveBeenCalled();
+      expect(paymentsService.refundEscrowForShipment).not.toHaveBeenCalled();
+    });
+
+    function primeCancelFlow(shipment: Shipment, saved: Shipment): void {
+      shipmentRepo.findOne
+        .mockResolvedValueOnce(shipment)
+        .mockResolvedValueOnce(saved);
+      shipmentRepo.save.mockResolvedValue(saved);
+      historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
+      historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+    }
+
     it('cancels a PENDING shipment with a reason', async () => {
       const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
       const shipment = makeShipment({
@@ -547,13 +633,7 @@ describe('ShipmentsService', () => {
         shipperId: shipper.id,
       });
       const cancelled = makeShipment({ status: ShipmentStatus.CANCELLED });
-
-      shipmentRepo.findOne
-        .mockResolvedValueOnce(shipment)
-        .mockResolvedValueOnce(cancelled);
-      shipmentRepo.save.mockResolvedValue(cancelled);
-      historyRepo.create.mockReturnValue({} as ShipmentStatusHistory);
-      historyRepo.save.mockResolvedValue({} as ShipmentStatusHistory);
+      primeCancelFlow(shipment, cancelled);
 
       await service.cancel('shipment-uuid-1', shipper, 'Customer request');
 
@@ -563,6 +643,184 @@ describe('ShipmentsService', () => {
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'shipment.cancelled',
         expect.anything(),
+      );
+    });
+
+    // ── Cancellation fee (issue #1543) ─────────────────────────────────────
+
+    it('records a 10% cancellation fee when cancelling an ACCEPTED shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.ACCEPTED,
+        shipperId: shipper.id,
+        price: 5000,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper, 'Changed my mind');
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: ShipmentStatus.CANCELLED,
+          cancellationFee: 500,
+          notes: 'Cancellation fee: 500 USD',
+        }),
+      );
+    });
+
+    it('records a 25% cancellation fee when cancelling an IN_TRANSIT shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.IN_TRANSIT,
+        shipperId: shipper.id,
+        price: 400,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper);
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: ShipmentStatus.CANCELLED,
+          cancellationFee: 100,
+        }),
+      );
+    });
+
+    it('records a zero fee when cancelling a PENDING shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.PENDING,
+        shipperId: shipper.id,
+        price: 5000,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper);
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ cancellationFee: 0 }),
+      );
+    });
+
+    it('preserves the shipper’s existing notes when recording the fee', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.ACCEPTED,
+        shipperId: shipper.id,
+        notes: 'Fragile — do not stack',
+        price: 1000,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper);
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notes: 'Fragile — do not stack\nCancellation fee: 100 USD',
+        }),
+      );
+    });
+
+    it('preserves refund behaviour and refunds before persisting', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      const shipment = makeShipment({
+        status: ShipmentStatus.ACCEPTED,
+        shipperId: shipper.id,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', shipper);
+
+      expect(paymentsService.refundEscrowForShipment).toHaveBeenCalledWith(
+        'shipment-uuid-1',
+        500,
+      );
+      expect(
+        paymentsService.refundEscrowForShipment.mock.invocationCallOrder[0],
+      ).toBeLessThan(shipmentRepo.save.mock.invocationCallOrder[0]);
+    });
+
+    it('does not cancel or record a fee when the escrow refund fails', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      shipmentRepo.findOne.mockResolvedValue(
+        makeShipment({
+          status: ShipmentStatus.ACCEPTED,
+          shipperId: shipper.id,
+        }),
+      );
+      paymentsService.refundEscrowForShipment.mockRejectedValue(
+        new Error('escrow unavailable'),
+      );
+
+      await expect(service.cancel('shipment-uuid-1', shipper)).rejects.toThrow(
+        'escrow unavailable',
+      );
+      expect(shipmentRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('records no fee when an admin cancels a disputed shipment', async () => {
+      const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
+      const shipment = makeShipment({ status: ShipmentStatus.DISPUTED });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', admin, 'Carrier breached');
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ cancellationFee: 0 }),
+      );
+    });
+
+    it('still refuses to cancel a DELIVERED shipment', async () => {
+      const shipper = makeUser({ id: 'user-uuid-1', role: UserRole.SHIPPER });
+      shipmentRepo.findOne.mockResolvedValue(
+        makeShipment({
+          status: ShipmentStatus.DELIVERED,
+          shipperId: shipper.id,
+        }),
+      );
+
+      await expect(service.cancel('shipment-uuid-1', shipper)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(paymentsService.refundEscrowForShipment).not.toHaveBeenCalled();
+    });
+
+    it('rejects users who are not a party to the shipment', async () => {
+      const outsider = makeUser({ id: 'outsider', role: UserRole.SHIPPER });
+      shipmentRepo.findOne.mockResolvedValue(
+        makeShipment({
+          status: ShipmentStatus.PENDING,
+          shipperId: 'somebody-else',
+        }),
+      );
+
+      await expect(service.cancel('shipment-uuid-1', outsider)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(shipmentRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('lets the assigned carrier cancel an in-transit shipment without a fee', async () => {
+      const carrier = makeUser({
+        id: 'carrier-uuid-1',
+        role: UserRole.CARRIER,
+      });
+      const shipment = makeShipment({
+        status: ShipmentStatus.IN_TRANSIT,
+        carrierId: carrier.id,
+        price: 800,
+      });
+      primeCancelFlow(shipment, makeShipment());
+
+      await service.cancel('shipment-uuid-1', carrier);
+
+      expect(shipmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ cancellationFee: 0 }),
+      );
+      expect(paymentsService.refundEscrowForShipment).toHaveBeenCalledWith(
+        'shipment-uuid-1',
+        0,
       );
     });
   });

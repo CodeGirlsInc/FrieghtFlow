@@ -5,6 +5,15 @@
  * form rejects passwords the server would reject before the round-trip.
  * Rules and messages are defined once in PASSWORD_RULES so they can be shared
  * with PasswordStrengthBar without drifting.
+ *
+ * The email and password rules below used to be copy-pasted into every auth
+ * page, which meant a password-policy change had to be made in up to four
+ * places and the copies had already started to drift. They live here now so
+ * there is exactly one place to change.
+ *
+ * Rules and messages that differ per form are modelled explicitly rather than
+ * flattened: `changePasswordSchema` keeps its own "New password must be at
+ * least 8 characters" wording, which is distinct from `passwordSchema`.
  */
 
 import { z } from 'zod';
@@ -79,6 +88,10 @@ export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 
 /**
  * `app/(dashboard)/settings` — change password.
+ *
+ * Kept separate from `loginSchema`: the current-password field only has to be
+ * non-empty, and the new-password message deliberately reads "New password…"
+ * rather than the shared "Password…".
  */
 export const changePasswordSchema = z
   .object({

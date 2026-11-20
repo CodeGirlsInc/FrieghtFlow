@@ -17,4 +17,10 @@ pub enum IdentityError {
     /// to `NotInitialized`, as the other four contracts in this workspace do)
     /// so existing numeric error codes for this contract are unaffected.
     AlreadyInitialized = 6,
+    /// The `user_id_hash` already has `MAX_WALLETS_PER_HASH` wallets
+    /// registered against it. Revoke one before registering another.
+    ///
+    /// This bounds `unindex_wallet`'\''s O(n) rebuild cost and the read cost of
+    /// `get_wallets_by_identity` (issue #1455).
+    WalletLimitReached = 7,
 }

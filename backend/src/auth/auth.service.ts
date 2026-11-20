@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { User } from '../users/entities/user.entity';
 import { JwtPayload } from './strategies/jwt.strategy';
 
@@ -25,6 +26,13 @@ export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
 }
+
+// Hash of a throwaway password, compared against when the email is unknown so
+// that "no such account" and "wrong password" cost the same bcrypt work.
+const TIMING_EQUALISATION_HASH = bcrypt.hashSync(
+  'timing-equalisation-password',
+  12,
+);
 
 @Injectable()
 export class AuthService {
@@ -40,7 +48,10 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersService.findByEmail(email);
-    if (!user) return null;
+    if (!user) {
+      await this.usersService.verifyPassword(password, TIMING_EQUALISATION_HASH);
+      return null;
+    }
     const isMatch = await this.usersService.verifyPassword(
       password,
       user.passwordHash,
@@ -117,7 +128,12 @@ export class AuthService {
       }
 
       const tokens = await this.generateTokens(user);
-      await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
+      // Compare-and-set: only one instance can rotate this token hash.
+      await this.usersService.updateRefreshToken(
+        user.id,
+        tokens.refreshToken,
+        user.refreshToken,
+      );
       return this.buildAuthResponse(user, tokens);
     })();
 
@@ -200,7 +216,7 @@ export class AuthService {
 
   async updateProfile(
     userId: string,
-    dto: { firstName?: string; lastName?: string; walletAddress?: string },
+    dto: UpdateProfileDto,
   ): Promise<Omit<User, 'passwordHash' | 'refreshToken'>> {
     await this.usersService.update(userId, dto);
     const updated = await this.usersService.findOne(userId);

@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import type { User, LoginPayload, RegisterPayload } from '../types/auth.types';
 import * as authApi from '../lib/api/auth.api';
 import { onTokenChange } from '../lib/api/client';
+import { disconnectSocket } from '../lib/socket';
 
 interface AuthState {
   user: User | null;
@@ -49,6 +50,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       await authApi.logout();
     } finally {
       set({ user: null, isAuthenticated: false, isLoading: false });
+      // Explicit teardown, independent of useShipmentSocket's effect: the
+      // socket authenticated with this session's token must never outlive
+      // the session, whether or not the hook happens to be mounted.
+      disconnectSocket();
     }
   },
 

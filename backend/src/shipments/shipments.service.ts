@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Readable, Transform } from 'node:stream';
@@ -11,11 +12,16 @@ import {
   FindOptionsWhere,
   ILike,
   SelectQueryBuilder,
+  Not,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
 } from 'typeorm';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { v4 as uuidv4 } from 'uuid';
 import { Shipment } from './entities/shipment.entity';
+import { Bid, BidStatus } from '../bids/entities/bid.entity';
 import { ShipmentStatusHistory } from './entities/shipment-status-history.entity';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
@@ -30,6 +36,7 @@ import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { PaymentsService } from '../payments/payments.service';
+import { CancellationFeeService } from './cancellation-fee.service';
 import {
   SHIPMENT_CREATED,
   SHIPMENT_ACCEPTED,
@@ -109,6 +116,7 @@ export class ShipmentsService {
     private readonly historyRepo: Repository<ShipmentStatusHistory>,
     private readonly eventEmitter: EventEmitter2,
     private readonly paymentsService: PaymentsService,
+    private readonly cancellationFeeService: CancellationFeeService,
   ) {}
 
   // ── Tracking number ──────────────────────────────────────────────────────────
@@ -127,33 +135,66 @@ export class ShipmentsService {
     to: ShipmentStatus,
     actorRole: UserRole,
   ): void {
-    const allowed: Partial<
-      Record<ShipmentStatus, { next: ShipmentStatus[]; roles: UserRole[] }>
-    > = {
-      [ShipmentStatus.PENDING]: {
-        next: [ShipmentStatus.ACCEPTED, ShipmentStatus.CANCELLED],
-        roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
-      },
-      [ShipmentStatus.ACCEPTED]: {
-        next: [ShipmentStatus.IN_TRANSIT, ShipmentStatus.CANCELLED],
-        roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
-      },
-      [ShipmentStatus.IN_TRANSIT]: {
-        next: [ShipmentStatus.DELIVERED, ShipmentStatus.DISPUTED],
-        roles: [UserRole.CARRIER, UserRole.ADMIN],
-      },
-      [ShipmentStatus.DELIVERED]: {
-        next: [ShipmentStatus.COMPLETED, ShipmentStatus.DISPUTED],
-        roles: [UserRole.SHIPPER, UserRole.ADMIN],
-      },
-      [ShipmentStatus.DISPUTED]: {
-        next: [ShipmentStatus.COMPLETED, ShipmentStatus.CANCELLED],
-        roles: [UserRole.ADMIN],
-      },
+    // Roles are declared per (from → to) edge rather than per `from` state:
+    // cancelling is open to the shipper at every cancellable stage, while
+    // moving a shipment in transit is still carrier-only.
+    type TransitionRule = { to: ShipmentStatus; roles: UserRole[] };
+
+    const allowed: Partial<Record<ShipmentStatus, TransitionRule[]>> = {
+      [ShipmentStatus.PENDING]: [
+        {
+          to: ShipmentStatus.ACCEPTED,
+          roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
+        },
+        {
+          to: ShipmentStatus.CANCELLED,
+          roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
+        },
+      ],
+      [ShipmentStatus.ACCEPTED]: [
+        {
+          to: ShipmentStatus.IN_TRANSIT,
+          roles: [UserRole.CARRIER, UserRole.ADMIN],
+        },
+        {
+          to: ShipmentStatus.CANCELLED,
+          roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
+        },
+      ],
+      [ShipmentStatus.IN_TRANSIT]: [
+        {
+          to: ShipmentStatus.DELIVERED,
+          roles: [UserRole.CARRIER, UserRole.ADMIN],
+        },
+        {
+          to: ShipmentStatus.DISPUTED,
+          roles: [UserRole.CARRIER, UserRole.ADMIN],
+        },
+        // A shipment can still be called off while the cargo is moving;
+        // it is charged the IN_TRANSIT cancellation tier.
+        {
+          to: ShipmentStatus.CANCELLED,
+          roles: [UserRole.CARRIER, UserRole.SHIPPER, UserRole.ADMIN],
+        },
+      ],
+      [ShipmentStatus.DELIVERED]: [
+        {
+          to: ShipmentStatus.COMPLETED,
+          roles: [UserRole.SHIPPER, UserRole.ADMIN],
+        },
+        {
+          to: ShipmentStatus.DISPUTED,
+          roles: [UserRole.SHIPPER, UserRole.ADMIN],
+        },
+      ],
+      [ShipmentStatus.DISPUTED]: [
+        { to: ShipmentStatus.COMPLETED, roles: [UserRole.ADMIN] },
+        { to: ShipmentStatus.CANCELLED, roles: [UserRole.ADMIN] },
+      ],
     };
 
-    const rule = allowed[from];
-    if (!rule || !rule.next.includes(to)) {
+    const rule = allowed[from]?.find((candidate) => candidate.to === to);
+    if (!rule) {
       throw new BadRequestException(
         `Cannot transition shipment from "${from}" to "${to}"`,
       );
@@ -202,6 +243,7 @@ export class ShipmentsService {
       weightKg: dto.weightKg,
       volumeCbm: dto.volumeCbm ?? null,
       price: dto.price,
+      listedPrice: dto.price,
       currency: dto.currency ?? 'USD',
       notes: dto.notes ?? null,
       status: ShipmentStatus.PENDING,
@@ -231,22 +273,14 @@ export class ShipmentsService {
     return saved;
   }
 
+  /**
+   * Creates each shipment in its own transaction so one invalid item cannot
+   * roll back the whole batch. Every item is reported back with its own
+   * success flag and either the new shipment id or the failure reason.
+   */
   async batchCreate(
     shipperId: string,
     dto: BatchCreateShipmentsDto,
-
-  ): Promise<string[]> {
-    const createdIds: string[] = [];
-
-    // Use TypeORM transaction
-    const queryRunner =
-      this.shipmentRepo.manager.connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      for (const shipmentDto of dto.shipments) {
-
   ): Promise<BatchCreateResultDto> {
     const results: BatchItemResultDto[] = [];
 
@@ -259,7 +293,6 @@ export class ShipmentsService {
       await queryRunner.startTransaction();
 
       try {
-
         const insurancePremium = shipmentDto.isInsured
           ? Math.round(shipmentDto.price * 0.015 * 100) / 100
           : null;
@@ -275,6 +308,7 @@ export class ShipmentsService {
           weightKg: shipmentDto.weightKg,
           volumeCbm: shipmentDto.volumeCbm ?? null,
           price: shipmentDto.price,
+          listedPrice: shipmentDto.price,
           currency: shipmentDto.currency ?? 'USD',
           notes: shipmentDto.notes ?? null,
           status: ShipmentStatus.PENDING,
@@ -377,7 +411,7 @@ export class ShipmentsService {
   }
 
   async findMarketplace(query: QueryShipmentDto): Promise<PaginatedShipments> {
-    const { page = 1, limit = 20, origin, destination, cargoCategory } = query;
+    const { page = 1, limit = 20, origin, destination, cargoCategory, minPrice, maxPrice } = query;
     const skip = (page - 1) * limit;
 
     const where: FindOptionsWhere<Shipment> = {
@@ -386,6 +420,13 @@ export class ShipmentsService {
     if (origin) where.origin = ILike(`%${origin}%`);
     if (destination) where.destination = ILike(`%${destination}%`);
     if (cargoCategory) where.cargoCategory = cargoCategory;
+    if (minPrice !== undefined && maxPrice !== undefined) {
+      where.price = Between(minPrice, maxPrice);
+    } else if (minPrice !== undefined) {
+      where.price = MoreThanOrEqual(minPrice);
+    } else if (maxPrice !== undefined) {
+      where.price = LessThanOrEqual(maxPrice);
+    }
 
     const [data, total] = await this.shipmentRepo.findAndCount({
       where,
@@ -398,23 +439,39 @@ export class ShipmentsService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(id: string): Promise<Shipment> {
+  private assertShipmentAccess(shipment: Shipment, user?: User): void {
+    if (!user || user.role === UserRole.ADMIN) return;
+
+    const isRelatedUser =
+      shipment.shipperId === user.id || shipment.carrierId === user.id;
+
+    if (!isRelatedUser) {
+      throw new ForbiddenException(
+        'Not authorised to access this shipment',
+      );
+    }
+  }
+
+  async findOne(id: string, user?: User): Promise<Shipment> {
     const shipment = await this.shipmentRepo.findOne({
       where: { id },
       relations: ['shipper', 'carrier'],
     });
     if (!shipment) throw new NotFoundException(`Shipment ${id} not found`);
+    this.assertShipmentAccess(shipment, user);
     return shipment;
   }
 
-  async findByTracking(trackingNumber: string): Promise<Shipment> {
-    const shipment = await this.shipmentRepo.findOne({
-      where: { trackingNumber },
-      relations: ['shipper', 'carrier'],
+  async getHistory(
+    shipmentId: string,
+    user?: User,
+  ): Promise<ShipmentStatusHistory[]> {
+    await this.findOne(shipmentId, user);
+    return this.historyRepo.find({
+      where: { shipmentId },
+      relations: ['changedBy'],
+      order: { changedAt: 'ASC' },
     });
-    if (!shipment)
-      throw new NotFoundException(`Shipment ${trackingNumber} not found`);
-    return shipment;
   }
 
   async exportShipments(
@@ -444,14 +501,58 @@ export class ShipmentsService {
     };
   }
 
+  /**
+   * Public tracking view: status and route only. The full shipment (price,
+   * cargo description, notes, party records) is never returned here.
+   */
+  async findByTracking(trackingNumber: string) {
+    const shipment = await this.shipmentRepo.findOne({
+      where: { trackingNumber },
+    });
+    if (!shipment) {
+      throw new NotFoundException(
+        `No shipment found for tracking number ${trackingNumber}`,
+      );
+    }
+
+    // The public tracking page also wants a timeline, and the authenticated
+    // `GET /shipments/:id/history` it used to call for one rejects a stranger
+    // with 403 (issue #1669). Returning the timeline here closes that gap.
+    //
+    // Deliberately *not* `getHistory`: that returns full `ShipmentStatusHistory`
+    // rows including `changedBy` and `reason`, which would leak a user id and
+    // whatever free text a party typed into an endpoint that now has no
+    // authentication on it. Only the status and its timestamp are public.
+    const history = await this.historyRepo.find({
+      where: { shipmentId: shipment.id },
+      order: { changedAt: 'ASC' },
+    });
+
+    return {
+      trackingNumber: shipment.trackingNumber,
+      status: shipment.status,
+      origin: shipment.origin,
+      destination: shipment.destination,
+      pickupDate: shipment.pickupDate,
+      estimatedDeliveryDate: shipment.estimatedDeliveryDate,
+      actualDeliveryDate: shipment.actualDeliveryDate,
+      updatedAt: shipment.updatedAt,
+      timeline: history.map((entry) => ({
+        status: entry.toStatus,
+        changedAt: entry.changedAt,
+      })),
+    };
+  }
+
   async update(
     id: string,
     shipperId: string,
     dto: UpdateShipmentDto,
+    role?: UserRole,
   ): Promise<Shipment> {
     const shipment = await this.findOne(id);
 
-    if (shipment.shipperId !== shipperId) {
+    if (shipment.shipperId !== shipperId && role !== UserRole.ADMIN) {
       throw new ForbiddenException('Only the shipper can update this shipment');
     }
     if (shipment.status !== ShipmentStatus.PENDING) {
@@ -474,25 +575,58 @@ export class ShipmentsService {
 
   async accept(shipmentId: string, carrier: User): Promise<Shipment> {
     const shipment = await this.findOne(shipmentId);
+    if (shipment.status !== ShipmentStatus.PENDING) {
+      throw new ConflictException('Shipment has already been accepted');
+    }
     this.assertTransitionAllowed(
       shipment.status,
       ShipmentStatus.ACCEPTED,
       carrier.role,
     );
 
-    shipment.carrierId = carrier.id;
-    shipment.status = ShipmentStatus.ACCEPTED;
-    const saved = await this.shipmentRepo.save(shipment);
-    await this.recordHistory(
-      shipmentId,
-      ShipmentStatus.PENDING,
-      ShipmentStatus.ACCEPTED,
-      carrier.id,
-    );
-    const full = await this.findOne(shipmentId);
+    const saved = await this.shipmentRepo.manager.transaction(async (manager) => {
+      const result = await manager.update(
+        Shipment,
+        { id: shipmentId, status: ShipmentStatus.PENDING },
+        { carrierId: carrier.id, status: ShipmentStatus.ACCEPTED },
+      );
+      if (result.affected !== 1) {
+        throw new ConflictException('Shipment has already been accepted');
+      }
+
+      await manager.update(
+        Bid,
+        { shipmentId, carrierId: carrier.id, status: BidStatus.PENDING },
+        { status: BidStatus.ACCEPTED },
+      );
+      await manager.update(
+        Bid,
+        {
+          shipmentId,
+          carrierId: Not(carrier.id),
+          status: BidStatus.PENDING,
+        },
+        { status: BidStatus.REJECTED },
+      );
+      const accepted = await manager.findOne(Shipment, {
+        where: { id: shipmentId },
+      });
+      if (!accepted) throw new NotFoundException('Shipment not found');
+      accepted.carrier = carrier;
+      await manager.save(
+        this.historyRepo.create({
+          shipmentId,
+          fromStatus: ShipmentStatus.PENDING,
+          toStatus: ShipmentStatus.ACCEPTED,
+          changedById: carrier.id,
+          reason: null,
+        }),
+      );
+      return accepted;
+    });
     this.eventEmitter.emit(
       SHIPMENT_ACCEPTED,
-      new ShipmentEvent(full, carrier.id),
+      new ShipmentEvent(saved, carrier.id),
     );
     return saved;
   }
@@ -511,6 +645,8 @@ export class ShipmentsService {
       carrier.role,
     );
 
+    await this.paymentsService.assertFundedForPickup(shipmentId);
+
     shipment.status = ShipmentStatus.IN_TRANSIT;
     const saved = await this.shipmentRepo.save(shipment);
     await this.recordHistory(
@@ -519,10 +655,9 @@ export class ShipmentsService {
       ShipmentStatus.IN_TRANSIT,
       carrier.id,
     );
-    const full = await this.findOne(shipmentId);
     this.eventEmitter.emit(
       SHIPMENT_IN_TRANSIT,
-      new ShipmentEvent(full, carrier.id),
+      new ShipmentEvent(saved, carrier.id),
     );
     return saved;
   }
@@ -550,10 +685,9 @@ export class ShipmentsService {
       ShipmentStatus.DELIVERED,
       carrier.id,
     );
-    const full = await this.findOne(shipmentId);
     this.eventEmitter.emit(
       SHIPMENT_DELIVERED,
-      new ShipmentEvent(full, carrier.id),
+      new ShipmentEvent(saved, carrier.id),
     );
     return saved;
   }
@@ -579,14 +713,32 @@ export class ShipmentsService {
       ShipmentStatus.COMPLETED,
       shipper.id,
     );
-    const full = await this.findOne(shipmentId);
     this.eventEmitter.emit(
       SHIPMENT_COMPLETED,
-      new ShipmentEvent(full, shipper.id),
+      new ShipmentEvent(saved, shipper.id),
     );
     return saved;
   }
 
+  /**
+   * Cancels a shipment, refunding escrow and retaining a tiered
+   * cancellation fee.
+   *
+   * Shipper and admin cancellations use the status-based fee tier (free
+   * while PENDING, 10% once a carrier has accepted, 25% while IN_TRANSIT,
+   * and free for an admin cancelling a disputed shipment). Carrier-
+   * initiated cancellations are always fee-free. The fee is stamped on
+   * the shipment and surfaced on every shipment read via
+   * `shipment.cancellationFee`.
+   *
+   * Ordering matters: the fee is computed before the settlement so a failing
+   * chain call leaves the shipment — and its recorded fee — untouched.
+   *
+   * A `DISPUTED` shipment is settled through the dispute path, which refunds
+   * in full; `refundEscrowForShipment` would be rejected by the contract for
+   * a non-`Funded` escrow. Its fee tier is 0 (see `CancellationFeeService`),
+   * so the shipper is made whole either way.
+   */
   async cancel(
     shipmentId: string,
     user: User,
@@ -607,8 +759,27 @@ export class ShipmentsService {
       user.role,
     );
 
-    await this.paymentsService.refundEscrowForShipment(shipmentId);
+    await this.paymentsService.assertCanCancelShipment(shipmentId);
+
     const previousStatus = shipment.status;
+    const cancellationFee = this.cancellationFeeService.applyTo(
+      shipment,
+      user.role,
+      previousStatus,
+    );
+
+    if (previousStatus === ShipmentStatus.DISPUTED) {
+      await this.paymentsService.resolveEscrowDisputeForShipment(
+        shipmentId,
+        false,
+      );
+    } else {
+      await this.paymentsService.refundEscrowForShipment(
+        shipmentId,
+        cancellationFee,
+      );
+    }
+
     shipment.status = ShipmentStatus.CANCELLED;
     const saved = await this.shipmentRepo.save(shipment);
     await this.recordHistory(
@@ -618,10 +789,9 @@ export class ShipmentsService {
       user.id,
       reason,
     );
-    const full = await this.findOne(shipmentId);
     this.eventEmitter.emit(
       SHIPMENT_CANCELLED,
-      new ShipmentEvent(full, user.id, reason),
+      new ShipmentEvent(saved, user.id, reason),
     );
     return saved;
   }
@@ -629,7 +799,7 @@ export class ShipmentsService {
   async raiseDispute(
     shipmentId: string,
     user: User,
-    reason: string,
+    reason?: string,
   ): Promise<Shipment> {
     const shipment = await this.findOne(shipmentId);
 
@@ -657,10 +827,9 @@ export class ShipmentsService {
       user.id,
       reason,
     );
-    const full = await this.findOne(shipmentId);
     this.eventEmitter.emit(
       SHIPMENT_DISPUTED,
-      new ShipmentEvent(full, user.id, reason),
+      new ShipmentEvent(saved, user.id, reason),
     );
     return saved;
   }
@@ -668,9 +837,13 @@ export class ShipmentsService {
   async resolveDispute(
     shipmentId: string,
     admin: User,
-    resolution: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED,
-    reason: string,
+    resolution?: ShipmentStatus.COMPLETED | ShipmentStatus.CANCELLED,
+    reason?: string,
   ): Promise<Shipment> {
+    if (!resolution) {
+      throw new BadRequestException('Dispute resolution is required');
+    }
+
     const shipment = await this.findOne(shipmentId);
     this.assertTransitionAllowed(shipment.status, resolution, admin.role);
 
@@ -687,10 +860,9 @@ export class ShipmentsService {
       admin.id,
       reason,
     );
-    const full = await this.findOne(shipmentId);
     this.eventEmitter.emit(
       SHIPMENT_DISPUTE_RESOLVED,
-      new ShipmentEvent(full, admin.id, reason),
+      new ShipmentEvent(saved, admin.id, reason),
     );
     return saved;
   }
@@ -759,17 +931,6 @@ export class ShipmentsService {
     return { statusCounts, totalRevenue, dailyTrends };
   }
 
-  // ── History ──────────────────────────────────────────────────────────────────
-
-  async getHistory(shipmentId: string): Promise<ShipmentStatusHistory[]> {
-    await this.findOne(shipmentId); // ensure it exists
-    return this.historyRepo.find({
-      where: { shipmentId },
-      relations: ['changedBy'],
-      order: { changedAt: 'ASC' },
-    });
-  }
-
   private buildExportQuery(user: User): SelectQueryBuilder<Shipment> {
     const queryBuilder = this.shipmentRepo
       .createQueryBuilder('shipment')
@@ -835,7 +996,7 @@ export class ShipmentsService {
       },
     });
 
-    return rowStream.pipe(transformer);
+    return this.pipeExportRows(rowStream, transformer);
   }
 
   private createJsonExportStream(rowStream: Readable): Readable {
@@ -854,6 +1015,16 @@ export class ShipmentsService {
       },
     });
 
+    return this.pipeExportRows(rowStream, transformer);
+  }
+
+  private pipeExportRows(rowStream: Readable, transformer: Transform): Readable {
+    // Readable.pipe() does not forward source errors to its destination. Forward
+    // them explicitly, and release the query stream if the consumer goes away.
+    rowStream.once('error', (error) => transformer.destroy(error));
+    transformer.once('close', () => {
+      if (!rowStream.destroyed) rowStream.destroy();
+    });
     return rowStream.pipe(transformer);
   }
 
@@ -888,7 +1059,7 @@ export class ShipmentsService {
     }
 
     const escapedValue = sanitized.replace(/"/g, '""');
-    if (/[",\n]/.test(sanitized)) {
+    if (/[",\r\n]/.test(sanitized)) {
       return `"${escapedValue}"`;
     }
 

@@ -7,12 +7,12 @@ import { useAuthStore } from '../../../../stores/auth.store';
 import { adminApi, PaginatedUsers } from '../../../../lib/api/admin.api';
 import type { User, UserRole } from '../../../../types/auth.types';
 import { Button } from '../../../../components/ui/button';
+import { Pagination } from '../../../../components/ui/pagination';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '../../../../components/ui/card';
 import { UserTableRowSkeleton } from '../../../../components/ui/skeleton';
 
@@ -156,9 +156,6 @@ export default function AdminUsersPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Users</CardTitle>
-            <CardDescription>
-              Page {result.page} of {result.totalPages}
-            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -243,29 +240,15 @@ export default function AdminUsersPage() {
 
       {/* Pagination */}
       {result && result.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            Showing {result.data.length} of {result.total} users
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === result.totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={result.totalPages}
+          currentCount={result.data.length}
+          total={result.total}
+          itemLabel="users"
+          onPageChange={setPage}
+          label="Users pagination"
+        />
       )}
     </div>
   );

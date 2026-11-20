@@ -27,6 +27,7 @@ function makeShipment(
     insurancePremium: null,
     status: ShipmentStatus.COMPLETED,
     notes: null,
+    cancellationFee: null,
     pickupDate: null,
     estimatedDeliveryDate: null,
     actualDeliveryDate: new Date('2026-08-15T12:00:00.000Z'),

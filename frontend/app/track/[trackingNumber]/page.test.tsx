@@ -121,8 +121,23 @@ describe('Public tracking page — anonymous data boundary', () => {
     expect(mockTrack).toHaveBeenCalledWith('FF-ABC-123');
   });
 
-  it('exposes only the intended public fields to an anonymous viewer', async () => {
-    mockTrack.mockResolvedValue(fullShipment);
+  it('renders the price with a currency code Intl rejects, instead of crashing (FE-192)', async () => {
+    mockTrack.mockResolvedValue({ ...fullShipment, currency: '123' });
+
+    render(<TrackingPage />);
+
+    expect(await screen.findByText('123 3,500.00')).toBeInTheDocument();
+  });
+
+  it('renders a decimal-string price, since Postgres decimal arrives as a string (FE-192)', async () => {
+    mockTrack.mockResolvedValue({ ...fullShipment, price: '1234.5' as unknown as number });
+
+    render(<TrackingPage />);
+
+    expect(await screen.findByText('$1,234.50')).toBeInTheDocument();
+  });
+
+  it('exposes only the intended public fields to an anonymous viewer', async () => {    mockTrack.mockResolvedValue(fullShipment);
 
     render(<TrackingPage />);
 

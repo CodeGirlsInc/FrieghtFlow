@@ -7,6 +7,7 @@ use crate::contract::{ReputationContract, ReputationContractClient};
 
 mod admin;
 mod events;
+mod property;
 mod rating;
 mod stats;
 mod users;

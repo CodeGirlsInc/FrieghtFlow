@@ -42,7 +42,12 @@ export class CarriersController {
   @Post('me/certifications')
   @UseGuards(RolesGuard)
   @Roles(UserRole.CARRIER)
-  @ApiOperation({ summary: 'Upload a new certification (Carrier only)' })
+  @ApiOperation({
+    summary:
+      'Create a certification from a platform-hosted document (Carrier only)',
+    description:
+      'Upload the file through POST /documents/certification first, then submit the returned documentId.',
+  })
   createCertification(
     @CurrentUser() user: User,
     @Body() dto: CreateCarrierCertificationDto,

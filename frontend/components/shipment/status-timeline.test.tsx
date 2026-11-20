@@ -9,6 +9,20 @@ const mockUser = {
   lastName: 'Doe',
 };
 
+function makeEntry(overrides: Partial<ShipmentStatusHistory> = {}): ShipmentStatusHistory {
+  return {
+    id: 'h1',
+    shipmentId: 's1',
+    fromStatus: null,
+    toStatus: ShipmentStatus.PENDING,
+    changedById: 'u1',
+    changedBy: mockUser,
+    reason: null,
+    changedAt: '2026-08-01T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
 describe('StatusTimeline Component', () => {
   it('renders empty message when history is empty', () => {
     render(<StatusTimeline history={[]} />);
@@ -152,5 +166,71 @@ describe('StatusTimeline Component', () => {
 
     expect(cancelledDot).toBeInTheDocument();
     expect(cancelledDot?.textContent).toBe('✕');
+  });
+
+  describe('attribution line', () => {
+    it('renders "by John Doe" for a complete actor', () => {
+      render(<StatusTimeline history={[makeEntry()]} />);
+      expect(screen.getByText('by John Doe')).toBeInTheDocument();
+    });
+
+    it('falls back to "by System" when changedBy is null, with no dangling "by"', () => {
+      render(<StatusTimeline history={[makeEntry({ changedBy: null })]} />);
+
+      expect(screen.getByText('by System')).toBeInTheDocument();
+      // The whole line is "by <name>" — there is never a bare "by" on its own.
+      expect(screen.queryByText(/^by$/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^by\s*$/)).not.toBeInTheDocument();
+    });
+
+    it('falls back to "by System" when the changedBy key is absent entirely', () => {
+      const entry = makeEntry();
+      delete entry.changedBy;
+
+      render(<StatusTimeline history={[entry]} />);
+
+      expect(screen.getByText('by System')).toBeInTheDocument();
+    });
+
+    it('renders only the first name when the actor has no last name', () => {
+      // The relation is `eager: false`, so a partial actor is representable.
+      const partial = { id: 'u2', firstName: 'Ada', lastName: '' };
+      render(<StatusTimeline history={[makeEntry({ changedBy: partial })]} />);
+
+      expect(screen.getByText('by Ada')).toBeInTheDocument();
+    });
+
+    it('falls back to "by System" when the actor has no usable name at all', () => {
+      // A User whose name fields didn't survive serialization — the cast stands
+      // in for that, since the declared type promises strings.
+      const nameless = { id: 'u3' } as unknown as NonNullable<
+        ShipmentStatusHistory['changedBy']
+      >;
+      render(<StatusTimeline history={[makeEntry({ changedBy: nameless })]} />);
+
+      expect(screen.getByText('by System')).toBeInTheDocument();
+    });
+
+    it('falls back to "by System" when the actor name is only whitespace', () => {
+      render(
+        <StatusTimeline history={[makeEntry({ changedBy: { id: 'u4', firstName: '  ', lastName: '  ' } })]} />,
+      );
+
+      expect(screen.getByText('by System')).toBeInTheDocument();
+    });
+
+    it('renders each entry with its own attribution', () => {
+      const history = [
+        makeEntry({ id: 'h1', changedBy: mockUser }),
+        makeEntry({ id: 'h2', toStatus: ShipmentStatus.ACCEPTED, changedBy: null }),
+        makeEntry({ id: 'h3', toStatus: ShipmentStatus.IN_TRANSIT, changedBy: { id: 'u5', firstName: 'Ada', lastName: 'Lovelace' } }),
+      ];
+
+      render(<StatusTimeline history={history} />);
+
+      expect(screen.getByText('by John Doe')).toBeInTheDocument();
+      expect(screen.getByText('by Ada Lovelace')).toBeInTheDocument();
+      expect(screen.getAllByText('by System')).toHaveLength(1);
+    });
   });
 });

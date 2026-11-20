@@ -7,8 +7,9 @@
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 
 use crate::errors::ReputationError;
+use crate::outcome::Outcome;
 use crate::types::{DataKey, RatingRecord, Reputation, UserType};
-use crate::{rating, stats, storage, users};
+use crate::{authorized, rating, stats, storage, users};
 
 #[contract]
 pub struct ReputationContract;
@@ -51,6 +52,23 @@ impl ReputationContract {
         Ok(())
     }
 
+    /// Admin-only: repoint `update_stats` at a new authorized contract.
+    ///
+    /// Needed because `initialize` sets the address once; without this the
+    /// link breaks permanently if the shipment contract is redeployed.
+    pub fn set_authorized_contract(
+        env: Env,
+        admin: Address,
+        new_contract: Address,
+    ) -> Result<(), ReputationError> {
+        authorized::set(&env, admin, new_contract)
+    }
+
+    /// The contract address currently allowed to call `update_stats`.
+    pub fn get_authorized_contract(env: Env) -> Result<Address, ReputationError> {
+        storage::authorized_contract(&env)
+    }
+
     /// Admin-only: pause all state-mutating entrypoints.
     pub fn pause(env: Env, admin: Address) -> Result<(), ReputationError> {
         admin.require_auth();
@@ -80,7 +98,21 @@ impl ReputationContract {
         users::register(&env, user, user_type)
     }
 
+    /// Correct a mis-registered `UserType` in one user-signed call — the
+    /// reputation analogue of identity's `update_identity`. See
+    /// [`users::update`].
+    pub fn update_user_type(
+        env: Env,
+        user: Address,
+        user_type: UserType,
+    ) -> Result<(), ReputationError> {
+        users::update(&env, user, user_type)
+    }
+
     /// Submit a 1-5 star rating. See [`rating::submit`].
+    ///
+    /// Both `rater` and `rated` must be registered users; an unregistered
+    /// caller receives [`ReputationError::UserNotFound`].
     pub fn submit_rating(
         env: Env,
         rater: Address,
@@ -97,14 +129,19 @@ impl ReputationContract {
     }
 
     /// Record a completed shipment. See [`stats::update`].
+    ///
+    /// The `was_on_time`/`was_successful` boolean pair is replaced by the
+    /// typed [`Outcome`] value, which names exactly one result and enforces
+    /// that it is appropriate for the user'\''s type. Callers that pass a
+    /// carrier-only outcome for a shipper (or vice versa) receive
+    /// [`ReputationError::UserTypeMismatch`] instead of silent discard.
     pub fn update_stats(
         env: Env,
         caller: Address,
         user: Address,
-        was_on_time: bool,
-        was_successful: bool,
+        outcome: Outcome,
     ) -> Result<(), ReputationError> {
-        stats::update(&env, caller, user, was_on_time, was_successful)
+        stats::update(&env, caller, user, outcome)
     }
 
     /// Composite 0-1000 reputation score. See [`stats::score`].

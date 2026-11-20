@@ -1,9 +1,10 @@
 //! Storage accessors shared by the contract's entrypoint modules.
 
+use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Env, Vec};
 
 use crate::errors::ShipmentError;
-use crate::types::{DataKey, Shipment, TTL_LEDGERS};
+use crate::types::{DataKey, Shipment};
 
 pub fn admin(env: &Env) -> Result<Address, ShipmentError> {
     env.storage()
@@ -67,6 +68,36 @@ pub fn append_to_list(env: &Env, key: DataKey, id: u64) {
     env.storage()
         .persistent()
         .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+}
+
+/// Drop `id` from `key`, removing the entry entirely once the list is empty.
+///
+/// The counterpart to [`append_to_list`]. Leaving a stale id behind is not
+/// cosmetic: `get_shipments_by_carrier` reads this list verbatim, so an id that
+/// is never removed keeps resolving as a live shipment for that carrier
+/// (issue #1677).
+pub fn remove_from_list(env: &Env, key: DataKey, id: u64) {
+    let list: Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env));
+
+    let mut remaining = Vec::new(env);
+    for item in list.iter() {
+        if item != id {
+            remaining.push_back(item);
+        }
+    }
+
+    if remaining.is_empty() {
+        env.storage().persistent().remove(&key);
+    } else {
+        env.storage().persistent().set(&key, &remaining);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+    }
 }
 
 /// Slice `list[offset..offset+limit]`, clamped to the list's bounds.

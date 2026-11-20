@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { getErrorMessage } from '../../lib/api/client';
 import { reviewsApi } from '../../lib/api/reviews.api';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+
+const STARS = [1, 2, 3, 4, 5];
 
 interface SubmitReviewFormProps {
   shipmentId: string;
@@ -13,8 +16,7 @@ interface SubmitReviewFormProps {
 }
 
 /**
- * FE-108 — lets a shipper rate a completed shipment's carrier. Surfaced on
- * the shipment detail page once a shipment reaches COMPLETED.
+ * Lets either party rate the other once a shipment reaches COMPLETED.
  */
 export function SubmitReviewForm({ shipmentId, title = 'Rate this shipment' }: SubmitReviewFormProps) {
   const [rating, setRating] = useState(0);
@@ -22,6 +24,44 @@ export function SubmitReviewForm({ shipmentId, title = 'Rate this shipment' }: S
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [alreadyReviewed, setAlreadyReviewed] = useState(false);
+
+  // FE-193 — the WAI-ARIA radiogroup pattern. Selection follows focus, so the
+  // focusable star and the checked star are always the same one, and the group
+  // is a single Tab stop (roving tabindex).
+  const focused = rating || 1;
+  const starsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  const focusStar = (star: number) => {
+    setRating(star);
+    starsRef.current[star - 1]?.focus();
+  };
+  const onStarKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    // Leave browser shortcuts (Alt+Left = back, etc.) alone.
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const current = focused;
+    let next: number | null = null;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        next = Math.min(current + 1, STARS.length);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        // The radio pattern does not wrap: the first star stays put.
+        next = Math.max(current - 1, 1);
+        break;
+      case 'Home':
+        next = 1;
+        break;
+      case 'End':
+        next = STARS.length;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    if (next !== current) focusStar(next);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,8 +75,16 @@ export function SubmitReviewForm({ shipmentId, title = 'Rate this shipment' }: S
       toast.success('Thanks for your review!');
       setSubmitted(true);
     } catch (err: unknown) {
-      const error = err as { message?: string };
-      toast.error(error?.message ?? 'Failed to submit review. Please try again.');
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        ('statusCode' in err && err.statusCode === 409 || 'status' in err && err.status === 409)
+      ) {
+        setAlreadyReviewed(true);
+        setSubmitted(true);
+      } else {
+        toast.error(getErrorMessage(err) ?? 'Failed to submit review. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -46,7 +94,9 @@ export function SubmitReviewForm({ shipmentId, title = 'Rate this shipment' }: S
     return (
       <Card>
         <CardContent className="py-6 text-center text-sm text-muted-foreground">
-          ✓ Your review has been submitted.
+          {alreadyReviewed
+            ? 'You have already reviewed this shipment.'
+            : '✓ Your review has been submitted.'}
         </CardContent>
       </Card>
     );
@@ -67,13 +117,18 @@ export function SubmitReviewForm({ shipmentId, title = 'Rate this shipment' }: S
             className="flex gap-1 text-2xl"
             onMouseLeave={() => setHoverRating(0)}
           >
-            {[1, 2, 3, 4, 5].map((star) => (
+            {STARS.map((star) => (
               <button
                 key={star}
+                ref={(el) => {
+                  starsRef.current[star - 1] = el;
+                }}
                 type="button"
                 role="radio"
                 aria-checked={rating === star}
                 aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                tabIndex={star === focused ? 0 : -1}
+                onKeyDown={onStarKeyDown}
                 onMouseEnter={() => setHoverRating(star)}
                 onClick={() => setRating(star)}
                 className={star <= displayRating ? 'text-yellow-400' : 'text-muted-foreground/30'}

@@ -25,6 +25,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RefreshDto } from './dto/refresh.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
@@ -76,7 +77,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
   async refresh(
-    @Body() body: { userId: string; refreshToken: string },
+    @Body() body: RefreshDto,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.refresh(

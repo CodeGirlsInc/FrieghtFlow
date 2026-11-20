@@ -26,6 +26,18 @@ pub fn fund(
         return Err(EscrowError::InvalidAmount);
     }
 
+    // A payee identical to the payer produces an escrow that releases to the
+    // address that funded it (issue #1675). That is never a real shipment: it
+    // settles without cargo moving, which is only useful for farming settlement
+    // events or for confusing indexers and the backend's escrow reconciliation,
+    // both of which treat a release as evidence of a completed job.
+    //
+    // Checked before any token is pulled so a rejected escrow cannot leave a
+    // balance stranded in the contract.
+    if carrier == shipper {
+        return Err(EscrowError::InvalidParties);
+    }
+
     // Ensure no double-funding for the same shipment.
     if env
         .storage()
@@ -33,8 +45,14 @@ pub fn fund(
         .has(&DataKey::Escrow(shipment_id))
     {
         let existing = storage::load(env, shipment_id)?;
-        if existing.status == EscrowStatus::Funded {
-            return Err(EscrowError::AlreadyFunded);
+        match existing.status {
+            EscrowStatus::Funded => return Err(EscrowError::AlreadyFunded),
+            EscrowStatus::Released | EscrowStatus::Refunded | EscrowStatus::Disputed => {
+                return Err(EscrowError::InvalidStatus);
+            }
+            // `Pending` records are never created today; keep the arm so a
+            // future `Pending -> Funded` transition stays a valid one.
+            EscrowStatus::Pending => {}
         }
     }
 

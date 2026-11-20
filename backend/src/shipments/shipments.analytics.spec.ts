@@ -8,6 +8,7 @@ import { ShipmentStatus } from '../common/enums/shipment-status.enum';
 import { UserRole } from '../common/enums/role.enum';
 import { User } from '../users/entities/user.entity';
 import { PaymentsService } from '../payments/payments.service';
+import { CancellationFeeService } from './cancellation-fee.service';
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
@@ -95,6 +96,7 @@ describe('ShipmentsService.getAnalytics()', () => {
           provide: PaymentsService,
           useValue: { releaseEscrowForShipment: jest.fn() },
         },
+        CancellationFeeService,
       ],
     }).compile();
 

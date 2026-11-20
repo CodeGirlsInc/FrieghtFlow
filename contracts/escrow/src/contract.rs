@@ -67,14 +67,48 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Configure the shipment contract allowed to settle escrow atomically.
-    /// The platform admin remains supported for custody-model compatibility.
+    /// Admin-only: configure the shipment contract allowed to settle escrow
+    /// atomically.
+    ///
+    /// This records configuration only. It does **not** change who may settle:
+    /// [`storage::require_settlement_authority`] requires the platform admin
+    /// whether or not an address is set here, so calling this can no longer
+    /// revoke the admin's settlement authority (issue #1673).
+    ///
+    /// The previous comment claimed "the platform admin remains supported for
+    /// custody-model compatibility" while the code did the opposite — the admin
+    /// check was skipped whenever this value was set, so a single call to this
+    /// entrypoint silently broke every backend settlement path.
+    ///
+    /// Settling from the shipment contract itself needs a separate admin- and
+    /// contract-authorised entrypoint, or invoker detection once soroban-sdk
+    /// exposes it again; see the note on
+    /// [`storage::require_settlement_authority`].
     pub fn set_shipment_contract(env: Env, shipment_contract: Address) -> Result<(), EscrowError> {
         storage::admin(&env)?.require_auth();
         storage::require_not_paused(&env)?;
         env.storage()
             .instance()
             .set(&DataKey::ShipmentContract, &shipment_contract);
+        Ok(())
+    }
+
+    /// Admin-only: update the SEP-41 token contract address.
+    ///
+    /// `initialize` sets `DataKey::TokenContract` once; without this entrypoint
+    /// there is no in-place recovery path if the token is redeployed (e.g. a
+    /// migrated SEP-41 wrapper or a redeployed asset contract). Mirrors the
+    /// pattern already shipped for `set_authorized_contract` in the reputation
+    /// crate (closed issue [CONTRACT-64]).
+    ///
+    /// Requires admin auth and the contract to be unpaused, consistent with
+    /// `set_shipment_contract` in this same crate.
+    pub fn set_token_contract(env: Env, new_token: Address) -> Result<(), EscrowError> {
+        storage::admin(&env)?.require_auth();
+        storage::require_not_paused(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenContract, &new_token);
         Ok(())
     }
 
@@ -99,6 +133,18 @@ impl EscrowContract {
         settlement::refund(&env, shipment_id)
     }
 
+    /// Cancel a shipment, retaining `fee_amount` (in the token's base unit)
+    /// for the platform and returning the remainder to the shipper. A
+    /// `fee_amount` of `0` is a full refund. See
+    /// [`settlement::refund_with_fee`].
+    pub fn refund_payment_with_fee(
+        env: Env,
+        shipment_id: u64,
+        fee_amount: i128,
+    ) -> Result<(), EscrowError> {
+        settlement::refund_with_fee(&env, shipment_id, fee_amount)
+    }
+
     /// Either party disputes the escrow. See [`settlement::raise_dispute`].
     pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), EscrowError> {
         settlement::raise_dispute(&env, caller, shipment_id)
@@ -117,6 +163,15 @@ impl EscrowContract {
         storage::load(&env, shipment_id)
     }
 
+    /// The platform fee (in base units) retained the last time this escrow
+    /// was settled as a partial refund, or `0` if it has not been.
+    ///
+    /// Lets the backend's escrow reconciliation confirm that the fee it
+    /// recorded off-chain matches what the contract actually paid out.
+    pub fn get_settlement_fee(env: Env, shipment_id: u64) -> i128 {
+        storage::settlement_fee(&env, shipment_id)
+    }
+
     /// Read the configured admin address.
     ///
     /// Lets external callers (e.g. the backend's Soroban integration layer)
@@ -127,8 +182,8 @@ impl EscrowContract {
         storage::admin(&env)
     }
 
-    pub fn get_balance(env: Env) -> i128 {
-        let token = storage::token(&env).unwrap_or_else(|_| panic!());
-        token.balance(&env.current_contract_address())
+    pub fn get_balance(env: Env) -> Result<i128, EscrowError> {
+        let token = storage::token(&env)?;
+        Ok(token.balance(&env.current_contract_address()))
     }
 }

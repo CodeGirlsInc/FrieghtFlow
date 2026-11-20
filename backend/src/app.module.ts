@@ -7,6 +7,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ShipmentsModule } from './shipments/shipments.module';
@@ -51,11 +53,12 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
       isGlobal: true,
       validationSchema: appConfigValidationSchema,
       validationOptions: {
-        allowUnknown: true,
+        allowUnknown: false,
         abortEarly: false,
       },
     }),
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       errorMessage: throttlerErrorMessage,
       throttlers: [
@@ -116,6 +119,10 @@ const throttlerErrorMessage = (context: ExecutionContext): string => {
   controllers: [AppController],
   providers: [
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,

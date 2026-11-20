@@ -10,6 +10,7 @@ import {
 import {
   ApiBearerAuth,
   ApiConflictResponse,
+  ApiExcludeEndpoint,
   ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
@@ -39,7 +40,6 @@ export class PaymentsController {
       'Returns the escrow payment record if one exists for this shipment. Accessible to the shipper, carrier, and admin.',
   })
   @ApiOkResponse({ description: 'Payment record found', type: Payment })
-  @ApiOperation({ summary: 'Get escrow status for a shipment' })
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER, UserRole.CARRIER, UserRole.ADMIN)
   getStatus(
@@ -101,6 +101,8 @@ export class PaymentsController {
   @Post(':paymentId/test-sign-and-submit')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER)
+  // Hidden from Swagger unless the test-signing flag is enabled.
+  @ApiExcludeEndpoint(process.env.ALLOW_TEST_SIGNING !== 'true')
   @ApiOperation({
     summary: 'TEST ONLY — signs with a provided secret and submits (shipper only)',
     description:

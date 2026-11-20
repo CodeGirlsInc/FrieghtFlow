@@ -41,9 +41,9 @@ function NotificationItem({ n }: { n: ShipmentNotification }) {
       href={`/shipments/${n.shipmentId}`}
       className={`block px-4 py-3 hover:bg-accent transition-colors ${!n.read ? 'bg-primary/5' : ''}`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2 min-w-0 w-full">
         <div className="min-w-0">
-          <p className={`text-xs font-semibold ${color}`}>{label}</p>
+          <p className={`text-xs font-semibold break-words ${color}`}>{label}</p>
           <p className="text-xs text-muted-foreground truncate">
             {n.trackingNumber} · {n.origin} → {n.destination}
           </p>
@@ -116,13 +116,19 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 z-50 w-80 rounded-lg border border-border bg-card shadow-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <p className="text-sm font-semibold">Notifications</p>
+        // `w-80` keeps the 320px look on wide screens; the clamp caps it to
+        // what actually fits. In (dashboard)/layout.tsx's mobile top bar the
+        // bell sits ~2.5rem in from the viewport's right edge (px-4 padding +
+        // gap-2 + the hamburger button's p-1.5), so 100vw - 4rem leaves that
+        // offset plus a 1.5rem gutter on the left and can never overflow at
+        // 320px.
+        <div className="absolute right-0 top-10 z-50 w-80 max-w-[calc(100vw-4rem)] rounded-lg border border-border bg-card shadow-lg overflow-hidden">
+          <div className="flex items-center justify-between gap-2 min-w-0 px-4 py-3 border-b border-border">
+            <p className="text-sm font-semibold min-w-0 truncate">Notifications</p>
             {notifications.length > 0 && (
               <button
                 onClick={clearAll}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
               >
                 Clear all
               </button>

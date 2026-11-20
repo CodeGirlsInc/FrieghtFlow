@@ -6,6 +6,7 @@
 use soroban_sdk::{testutils::Address as _, Address, TryFromVal};
 
 use super::{emitted, emitted_key, no_events, setup, Ctx};
+use crate::outcome::Outcome;
 use crate::types::{RatingRecord, Reputation, UserType};
 
 fn only_reputation(ctx: &Ctx, action: &str) -> Reputation {
@@ -70,7 +71,7 @@ fn test_update_stats_emits_updated() {
     ctx.client.register_user(&carrier, &UserType::Carrier);
 
     ctx.client
-        .update_stats(&ctx.auth_contract, &carrier, &true, &false);
+        .update_stats(&ctx.auth_contract, &carrier, &Outcome::OnTime);
 
     let payload = only_reputation(&ctx, "updated");
     assert_eq!(payload.total_completed, 1);
@@ -92,6 +93,22 @@ fn test_rejected_call_emits_nothing() {
 
     let _ = ctx
         .client
-        .try_update_stats(&random, &carrier, &true, &false);
+        .try_update_stats(&random, &carrier, &Outcome::OnTime);
     assert!(no_events(&ctx.env));
+}
+
+#[test]
+fn test_update_user_type_emits_updated() {
+    let ctx = setup();
+    let user = Address::generate(&ctx.env);
+    ctx.client.register_user(&user, &UserType::Shipper);
+
+    ctx.client.update_user_type(&user, &UserType::Carrier);
+
+    let payload = only_reputation(&ctx, "updated");
+    assert_eq!(payload.user, user);
+    assert_eq!(payload.user_type, UserType::Carrier);
+
+    let key: Address = emitted_key(&ctx.env, &ctx.client.address, "updated");
+    assert_eq!(key, user);
 }

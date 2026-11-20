@@ -3,14 +3,21 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import ProfilePage from './page';
 import { useAuthStore } from '../../../stores/auth.store';
 import { updateProfile } from '../../../lib/api/auth.api';
+import { reviewsApi } from '../../../lib/api/reviews.api';
 import type { User } from '../../../types/auth.types';
 
 jest.mock('../../../lib/api/auth.api', () => ({
   updateProfile: jest.fn(),
 }));
+jest.mock('../../../lib/api/reviews.api', () => ({
+  reviewsApi: { getAverageRating: jest.fn() },
+}));
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
 const mockUpdateProfile = updateProfile as jest.Mock;
+const mockGetAverageRating = reviewsApi.getAverageRating as jest.MockedFunction<
+  typeof reviewsApi.getAverageRating
+>;
 
 const user: User = {
   id: 'u-1',
@@ -36,6 +43,7 @@ beforeEach(() => {
     useAuthStore.setState({ user, isAuthenticated: true, isLoading: false });
   });
   mockUpdateProfile.mockResolvedValue(user);
+  mockGetAverageRating.mockResolvedValue({ averageRating: 4.5, totalReviews: 2 });
 });
 
 describe('/profile — the canonical profile editor', () => {
@@ -51,6 +59,14 @@ describe('/profile — the canonical profile editor', () => {
     // Read-only identity
     expect(screen.getByText('jane@example.com')).toBeInTheDocument();
     expect(screen.getByText('shipper')).toBeInTheDocument();
+  });
+
+  it('shows the current user’s received average rating and review count', async () => {
+    render(<ProfilePage />);
+
+    expect(await screen.findByText('4.5 / 5')).toBeInTheDocument();
+    expect(screen.getByText('· 2 reviews')).toBeInTheDocument();
+    expect(mockGetAverageRating).toHaveBeenCalledWith(user.id);
   });
 
   it('rejects a malformed Stellar wallet address', async () => {
