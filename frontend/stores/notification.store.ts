@@ -22,6 +22,15 @@ interface NotificationState {
   clearAll: () => void;
 }
 
+let fallbackNotificationId = 0;
+
+function createNotificationId(shipmentId: string): string {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return uuid
+    ? `${shipmentId}-${uuid}`
+    : `${shipmentId}-${Date.now()}-${++fallbackNotificationId}`;
+}
+
 export const useNotificationStore = create<NotificationState>((set) => ({
   notifications: [],
   unreadCount: 0,
@@ -30,7 +39,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     set((state) => {
       const notification: ShipmentNotification = {
         ...n,
-        id: `${n.shipmentId}-${Date.now()}`,
+        id: createNotificationId(n.shipmentId),
         read: false,
       };
       // Keep only the most recent 20 notifications

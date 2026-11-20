@@ -1,6 +1,10 @@
 'use client';
 
-import { ShipmentStatusHistory, ShipmentStatus } from '../../types/shipment.types';
+import {
+  PublicTrackingEvent,
+  ShipmentStatusHistory,
+  ShipmentStatus,
+} from '../../types/shipment.types';
 import { cn } from '../../lib/utils';
 
 const STATUS_ICON: Record<ShipmentStatus, string> = {
@@ -92,6 +96,43 @@ export function StatusTimeline({ history }: StatusTimelineProps) {
                 &ldquo;{entry.reason}&rdquo;
               </p>
             )}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export function PublicStatusTimeline({ history }: { history: PublicTrackingEvent[] }) {
+  if (history.length === 0) {
+    return <p className="text-sm text-muted-foreground">No history yet.</p>;
+  }
+
+  return (
+    <ol className="relative border-l border-border ml-3">
+      {history.map((entry, index) => (
+        <li key={`${entry.status}-${entry.changedAt}-${index}`} className="mb-6 ml-6">
+          <span
+            className={cn(
+              'absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full text-white text-xs font-bold',
+              STATUS_COLOR[entry.status] ?? 'bg-gray-400',
+            )}
+          >
+            {STATUS_ICON[entry.status] ?? '?'}
+          </span>
+          <div>
+            <p className="font-medium text-foreground text-sm">
+              {StatusLabel(entry.status)}
+            </p>
+            <time className="text-xs text-muted-foreground">
+              {new Date(entry.changedAt).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </time>
           </div>
         </li>
       ))}
