@@ -49,6 +49,12 @@ pub fn resolve(
     shipment.status = if resolve_as_completed {
         ShipmentStatus::Completed
     } else {
+        // #1855: resolving against the carrier ends in `Cancelled` too, so it
+        // has to unwind the assignment just like `shipper::cancel` does. The
+        // ex-carrier is not retained for audit in the live record: the
+        // `resolved` event below keeps the decision recoverable without
+        // leaving them as a `is_party` with upload rights.
+        storage::unassign_carrier(env, &mut shipment);
         ShipmentStatus::Cancelled
     };
     shipment.updated_at = env.ledger().timestamp();

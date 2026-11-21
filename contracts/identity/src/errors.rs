@@ -23,4 +23,8 @@ pub enum IdentityError {
     /// This bounds `unindex_wallet`'\''s O(n) rebuild cost and the read cost of
     /// `get_wallets_by_identity` (issue #1455).
     WalletLimitReached = 7,
+    /// An admin previously revoked this wallet and no admin has reinstated it.
+    WalletRevoked = 8,
+    /// `reinstate_identity` was called for a wallet with no revocation marker.
+    NotRevoked = 9,
 }

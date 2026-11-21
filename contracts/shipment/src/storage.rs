@@ -100,6 +100,18 @@ pub fn remove_from_list(env: &Env, key: DataKey, id: u64) {
     }
 }
 
+/// Clear a shipment's carrier assignment and its reverse index entry.
+///
+/// Both routes to `Cancelled` must use this (#1677, #1855): leaving either the
+/// `carrier` field or `CarrierList(carrier)` in place keeps the ex-carrier a
+/// live `is_party` who can still be handed cancelled jobs by
+/// `get_shipments_by_carrier` and authorise document uploads.
+pub fn unassign_carrier(env: &Env, shipment: &mut Shipment) {
+    if let Some(carrier) = shipment.carrier.take() {
+        remove_from_list(env, DataKey::CarrierList(carrier), shipment.id);
+    }
+}
+
 /// Slice `list[offset..offset+limit]`, clamped to the list's bounds.
 pub fn paginate(env: &Env, list: Vec<u64>, offset: u32, limit: u32) -> Vec<u64> {
     let mut paged = Vec::new(env);
