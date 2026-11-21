@@ -87,6 +87,15 @@ interface ShipmentExportResult {
 
 type ShipmentExportValue = string | number | Date | null | undefined;
 
+export type ShipmentHistoryActor = Pick<
+  User,
+  'id' | 'firstName' | 'lastName' | 'role'
+>;
+
+export type ShipmentHistoryEntry = Omit<ShipmentStatusHistory, 'changedBy'> & {
+  changedBy: ShipmentHistoryActor | null;
+};
+
 @Injectable()
 export class ShipmentsService {
   private readonly exportColumns: Array<keyof ShipmentExportRow> = [
@@ -465,13 +474,31 @@ export class ShipmentsService {
   async getHistory(
     shipmentId: string,
     user?: User,
-  ): Promise<ShipmentStatusHistory[]> {
+  ): Promise<ShipmentHistoryEntry[]> {
     await this.findOne(shipmentId, user);
-    return this.historyRepo.find({
+    const history = await this.historyRepo.find({
       where: { shipmentId },
       relations: ['changedBy'],
       order: { changedAt: 'ASC' },
     });
+
+    return history.map((entry) => ({
+      id: entry.id,
+      shipmentId: entry.shipmentId,
+      fromStatus: entry.fromStatus,
+      toStatus: entry.toStatus,
+      changedBy: entry.changedBy
+        ? {
+            id: entry.changedBy.id,
+            firstName: entry.changedBy.firstName,
+            lastName: entry.changedBy.lastName,
+            role: entry.changedBy.role,
+          }
+        : null,
+      changedById: entry.changedById,
+      reason: entry.reason,
+      changedAt: entry.changedAt,
+    }));
   }
 
   async exportShipments(
