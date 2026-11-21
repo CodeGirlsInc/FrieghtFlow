@@ -16,11 +16,13 @@ import {
   CardTitle,
 } from '../../../components/ui/card';
 import { forgotPassword } from '../../../lib/api/auth.api';
+import { getErrorMessage } from '../../../lib/api/client';
 import { forgotPasswordSchema, type ForgotPasswordFormData } from '../../../lib/validation/auth';
 
 export default function ForgotPasswordPage() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const {
     register,
@@ -30,12 +32,20 @@ export default function ForgotPasswordPage() {
 
   const onSubmit = async (data: ForgotPasswordFormData) => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       await forgotPassword(data.email);
+      // Success only on a 2xx response — the backend already returns the
+      // same generic 200 for unknown emails, so a 2xx means the email was
+      // sent (#1837).
       setSubmitted(true);
-    } catch {
-      // Always show the success state to prevent email enumeration
-      setSubmitted(true);
+    } catch (err) {
+      if ((err as { statusCode?: number })?.statusCode === 429) {
+        // The forgot-password throttle is 3 per 15 minutes (#1837).
+        setErrorMessage('Too many requests, try again in 15 minutes');
+      } else {
+        setErrorMessage(getErrorMessage(err) ?? 'Something went wrong. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -95,6 +105,12 @@ export default function ForgotPasswordPage() {
               <p className="text-sm text-destructive">{errors.email.message}</p>
             )}
           </div>
+
+          {errorMessage && (
+            <p role="alert" className="text-sm text-destructive">
+              {errorMessage}
+            </p>
+          )}
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={loading}>
