@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
+import { formatMoney } from '../../../../lib/format/currency';
 import {
   SUPPORTED_CURRENCIES_HINT,
   currencySchema,
@@ -477,7 +478,9 @@ function NewShipmentForm() {
                     </>
                   )}
                   <span className="text-muted-foreground">Price</span>
-                  <span className="font-medium">{values.price} {values.currency}</span>
+                  <span className="font-medium">
+                    {formatMoney(values.price, values.currency)}
+                  </span>
                   {values.pickupDate && (
                     <>
                       <span className="text-muted-foreground">Pickup</span>

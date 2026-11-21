@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import NewShipmentPage from './page';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
 import { SUPPORTED_CURRENCIES_HINT } from '../../../../lib/validation/currency';
+import { formatMoney } from '../../../../lib/format/currency';
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -299,10 +300,11 @@ describe('New shipment form — currency is validated against real codes (FE-192
     await user.click(screen.getByRole('button', { name: 'Next →' }));
 
     expect(await screen.findByText('Review & Submit')).toBeInTheDocument();
-    // The review step echoes the price as "1500 NGN" in a single span.
+    // The review step echoes the price through formatMoney — the same
+    // formatting the shipment detail page uses.
     expect(
       screen.getByText((_content, element) =>
-        element?.tagName === 'SPAN' && element.textContent === `1500 ${code}`,
+        element?.tagName === 'SPAN' && element.textContent === formatMoney(1500, code),
       ),
     ).toBeInTheDocument();
   });

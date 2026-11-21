@@ -9,19 +9,21 @@ import {
   NotificationPreference,
   NotificationPreferenceKey,
 } from '../../../../lib/api/notifications.api';
+import { useAuthStore } from '../../../../stores/auth.store';
 
 export default function NotificationPreferencesPage() {
+  const { user } = useAuthStore();
   const [prefs, setPrefs] = useState<NotificationPreference[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     notificationsApi
-      .getPreferences()
+      .getPreferences(user?.role)
       .then(setPrefs)
-      .catch(() => setPrefs(defaultPreferenceList()))
+      .catch(() => setPrefs(defaultPreferenceList(user?.role)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user?.role]);
 
   const handleToggle = useCallback(
     async (type: NotificationPreferenceKey, enabled: boolean) => {

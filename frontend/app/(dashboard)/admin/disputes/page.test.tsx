@@ -14,7 +14,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('../../../../lib/api/admin.api', () => ({
-  adminApi: { listShipments: jest.fn() },
+  adminApi: { listShipments: jest.fn(), reconcileEscrow: jest.fn() },
 }));
 const mockListShipments = adminApi.listShipments as jest.MockedFunction<typeof adminApi.listShipments>;
 
@@ -118,5 +118,91 @@ describe('AdminDisputesPage — price formatting (FE-192)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
     await waitFor(() => expect(screen.getByText('Status History')).toBeInTheDocument());
     expect(screen.getAllByText('123 250.00').length).toBe(2);
+  });
+});
+
+describe('AdminDisputesPage — escrow status (#1846)', () => {
+  it('shows the escrow amount and the DB vs on-chain status in the detail panel', async () => {
+    mockListShipments.mockResolvedValue({
+      data: [makeShipment()],
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+    (adminApi.reconcileEscrow as jest.Mock).mockResolvedValue({
+      shipmentId: 's1',
+      offChain: {
+        paymentId: 'p1',
+        status: 'funded',
+        onChainShipmentId: 1,
+        stellarTxHash: 'tx-1',
+        amount: 250,
+        assetCode: 'USD',
+      },
+      onChain: {
+        shipmentId: 1,
+        shipper: 'GSHIPPER',
+        carrier: 'GCARRIER',
+        amount: 250,
+        status: 'Funded',
+        fundedAt: 1_700_000_000,
+        settledAt: 0,
+      },
+      match: true,
+      mismatches: [],
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+
+    const escrowSection = (await screen.findByText('Escrow status')).parentElement;
+    expect(escrowSection?.textContent).toContain('$250.00');
+    expect(escrowSection?.textContent).toContain('DB funded');
+    expect(escrowSection?.textContent).toContain('on-chain Funded');
+    expect(screen.getByText('Off-chain and on-chain status agree.')).toBeInTheDocument();
+  });
+
+  it('highlights the mismatch before resolving when statuses disagree', async () => {
+    mockListShipments.mockResolvedValue({
+      data: [makeShipment()],
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+    (adminApi.reconcileEscrow as jest.Mock).mockResolvedValue({
+      shipmentId: 's1',
+      offChain: {
+        paymentId: 'p1',
+        status: 'pending',
+        onChainShipmentId: 1,
+        stellarTxHash: null,
+        amount: 250,
+        assetCode: 'USD',
+      },
+      onChain: {
+        shipmentId: 1,
+        shipper: 'GSHIPPER',
+        carrier: 'GCARRIER',
+        amount: 250,
+        status: 'Funded',
+        fundedAt: 1_700_000_000,
+        settledAt: 0,
+      },
+      match: false,
+      mismatches: ['Status mismatch: off-chain=pending, on-chain=Funded'],
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+
+    const escrowSection = await screen.findByText('Escrow status');
+    expect(escrowSection.parentElement?.textContent).toContain(
+      'Status mismatch: off-chain=pending, on-chain=Funded',
+    );
+    expect(
+      screen.queryByText('Off-chain and on-chain status agree.'),
+    ).not.toBeInTheDocument();
   });
 });
