@@ -44,8 +44,13 @@ Where a transition can go two ways it is still one event, and the payload's
 | `shipment`   | `created`, `updated`, `accepted`, `intransit`, `delivered`, `completed`, `disputed`, `resolved`, `cancelled` |
 | `escrow`     | `funded`, `released`, `refunded`, `disputed`, `resolved` |
 | `document`   | `registered`, `verified`, `flagged` |
-| `identity`   | `registered`, `revoked`, `updated` |
+| `identity`   | `registered`, `revoked`, `deregistered`, `updated` |
 | `reputation` | `registered`, `submitted`, `updated` |
+
+`identity` emits `revoked` only for an admin `revoke_identity` and
+`deregistered` only for the wallet's own `deregister_identity`; both carry the
+unbound `user_id_hash`, but indexers must not conflate a sanction with a
+voluntary exit (#1856).
 
 `reputation` is the one contract with two payload shapes: `submitted` carries
 the new `RatingRecord`, while `registered` and `updated` carry the affected

@@ -33,6 +33,15 @@ contract and for the backend.
 Statuses: `Created`, `Accepted`, `InTransit`, `Delivered`, `Completed`,
 `Disputed`, `Cancelled`.
 
+Both paths into `Cancelled` — `cancel_shipment` and
+`resolve_dispute(..., false)` — call the same `storage::unassign_carrier`
+helper. The `carrier` field is cleared and the id removed from
+`CarrierList(carrier)`, so a cancelled job is not returned by
+`get_shipments_by_carrier` and the ex-carrier is no longer `is_party` (and so
+cannot authorise document uploads on it). Audit history stays in the
+`resolved` / `cancelled` event; it is deliberately not kept in the live
+record as a usable assignment (#1855).
+
 ## Errors
 
 | Code | Variant | Meaning |
