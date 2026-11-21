@@ -129,9 +129,14 @@ pub fn confirm_delivery(
         return Err(ShipmentError::InvalidStatus);
     }
 
+    let now = env.ledger().timestamp();
     shipment.status = ShipmentStatus::Completed;
-    shipment.updated_at = env.ledger().timestamp();
+    shipment.updated_at = now;
     storage::save(env, &shipment);
+
+    let mut milestones = storage::milestones(env, shipment_id);
+    milestones.completed_at = now;
+    storage::store_milestones(env, shipment_id, &milestones);
 
     events::completed(env, &shipment);
     Ok(())

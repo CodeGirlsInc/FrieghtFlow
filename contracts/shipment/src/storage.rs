@@ -4,7 +4,7 @@ use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Env, Vec};
 
 use crate::errors::ShipmentError;
-use crate::types::{DataKey, Shipment};
+use crate::types::{DataKey, Dispute, Milestones, Shipment};
 
 pub fn admin(env: &Env) -> Result<Address, ShipmentError> {
     env.storage()
@@ -98,6 +98,46 @@ pub fn remove_from_list(env: &Env, key: DataKey, id: u64) {
             .persistent()
             .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
     }
+}
+
+/// Clear a shipment's carrier assignment and its reverse index entry.
+///
+/// Shared by the carrier's `withdraw_acceptance` (#1864) and both routes to
+/// `Cancelled`; leaving either the field or `CarrierList(carrier)` in place
+/// would hand out stale jobs and keep an ex-carrier as `is_party`.
+pub fn unassign_carrier(env: &Env, shipment: &mut Shipment) {
+    if let Some(carrier) = shipment.carrier.take() {
+        remove_from_list(env, DataKey::CarrierList(carrier), shipment.id);
+    }
+}
+
+/// The dispute record for a shipment, if one has been raised (#1863).
+pub fn dispute(env: &Env, shipment_id: u64) -> Result<Dispute, ShipmentError> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Dispute(shipment_id))
+        .ok_or(ShipmentError::NotFound)
+}
+
+pub fn store_dispute(env: &Env, shipment_id: u64, dispute: &Dispute) {
+    let key = DataKey::Dispute(shipment_id);
+    env.storage().persistent().set(&key, dispute);
+    env.storage().persistent().extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+}
+
+/// Milestone timestamps for a shipment, zero-filled when none were recorded
+/// (e.g. for a shipment created before milestones existed) (#1865).
+pub fn milestones(env: &Env, shipment_id: u64) -> Milestones {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Milestones(shipment_id))
+        .unwrap_or_default()
+}
+
+pub fn store_milestones(env: &Env, shipment_id: u64, milestones: &Milestones) {
+    let key = DataKey::Milestones(shipment_id);
+    env.storage().persistent().set(&key, milestones);
+    env.storage().persistent().extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
 }
 
 /// Slice `list[offset..offset+limit]`, clamped to the list's bounds.

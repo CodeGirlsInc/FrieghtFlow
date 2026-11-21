@@ -25,7 +25,9 @@ initialisation.
 | `resolve_dispute(shipment_id, release_to_carrier, fee_amount)` | Admin | Splits a `Disputed` escrow and settles it. |
 | `get_escrow(shipment_id)` | Read-only | Returns the `EscrowRecord`. |
 | `get_settlement_fee(shipment_id)` | Read-only | Fee retained the last time this escrow settled as a partial refund. |
-| `get_admin()` / `get_balance()` | Read-only | Admin address / contract token balance. |
+| `get_admin()` | Read-only | Admin address. |
+| `get_balance()` | Read-only | **Pooled** token balance of the contract (all live escrows plus dust/direct transfers), not one escrow's funds. |
+| `get_total_locked()` | Read-only | Sum of amounts in all `Funded`/`Disputed` escrows; `get_balance() >= get_total_locked()` is the reconciliation invariant. |
 
 Statuses: `Pending` (declared, currently unused — see `types.rs`),
 `Funded`, `Released`, `Refunded`, `Disputed`.
@@ -55,6 +57,7 @@ Statuses: `Pending` (declared, currently unused — see `types.rs`),
 | `Admin` | Instance | Settlement authority / platform fee recipient |
 | `TokenContract` | Instance | SEP-41 token holding the funds |
 | `ShipmentContract` | Instance | Shipment contract this escrow is wired to |
+| `TotalLocked` | Instance | Sum of unsettled escrow amounts (#1862) |
 | `Paused` | Instance | Pause flag |
 
 ## Events
