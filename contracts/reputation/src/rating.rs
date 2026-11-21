@@ -120,9 +120,19 @@ pub fn void(env: &Env, rating_id: u64) -> Result<(), ReputationError> {
             remaining.push_back(rater);
         }
     }
-    env.storage()
-        .persistent()
-        .set(&DataKey::ShipmentRaters(record.shipment_id), &remaining);
+    // Match `storage::remove_from_list` in the shipment crate: drop the key
+    // entirely once the list is empty, and bump the TTL while it still holds
+    // entries. Writing back an empty vector would leave a dead persistent
+    // entry that never gets extended and expires independently of the data.
+    let raters_key = DataKey::ShipmentRaters(record.shipment_id);
+    if remaining.is_empty() {
+        env.storage().persistent().remove(&raters_key);
+    } else {
+        env.storage().persistent().set(&raters_key, &remaining);
+        env.storage()
+            .persistent()
+            .extend_ttl(&raters_key, TTL_LEDGERS, TTL_LEDGERS);
+    }
 
     // Reverse the rating's effect on the rated user's aggregate.
     let mut rep = storage::load_reputation(env, &record.rated)?;

@@ -74,6 +74,25 @@ pub fn store_settlement_fee(env: &Env, shipment_id: u64, fee: i128) {
     env.storage().persistent().extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
 }
 
+/// The ledger timestamp at which `shipment_id` was disputed, or `0` when it
+/// has never been disputed.
+pub fn disputed_at(env: &Env, shipment_id: u64) -> u64 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::DisputedAt(shipment_id))
+        .unwrap_or(0)
+}
+
+/// Record when a dispute was raised. Called once, on the
+/// `Funded → Disputed` transition.
+pub fn store_disputed_at(env: &Env, shipment_id: u64, when: u64) {
+    let key = DataKey::DisputedAt(shipment_id);
+    env.storage().persistent().set(&key, &when);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+}
+
 /// Settlement requires the platform admin's authorisation.
 ///
 /// `DataKey::ShipmentContract` records the contract that may settle an escrow

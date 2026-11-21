@@ -25,6 +25,7 @@ initialisation.
 | `resolve_dispute(shipment_id, release_to_carrier, fee_amount)` | Admin | Splits a `Disputed` escrow and settles it. |
 | `get_escrow(shipment_id)` | Read-only | Returns the `EscrowRecord`. |
 | `get_settlement_fee(shipment_id)` | Read-only | Fee retained the last time this escrow settled as a partial refund. |
+| `get_disputed_at(shipment_id)` | Read-only | Ledger timestamp the dispute was raised at (`0` if never disputed). |
 | `get_admin()` / `get_balance()` | Read-only | Admin address / contract token balance. |
 
 Statuses: `Pending` (declared, currently unused — see `types.rs`),
@@ -52,6 +53,7 @@ Statuses: `Pending` (declared, currently unused — see `types.rs`),
 |---|---|---|
 | `Escrow(u64)` | Persistent | `EscrowRecord` keyed by shipment id |
 | `EscrowFee(u64)` | Persistent | Fee retained at last partial-refund settlement |
+| `DisputedAt(u64)` | Persistent | Ledger timestamp the dispute was raised |
 | `Admin` | Instance | Settlement authority / platform fee recipient |
 | `TokenContract` | Instance | SEP-41 token holding the funds |
 | `ShipmentContract` | Instance | Shipment contract this escrow is wired to |
