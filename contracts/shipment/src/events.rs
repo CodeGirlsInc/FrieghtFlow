@@ -52,3 +52,8 @@ pub fn resolved(env: &Env, shipment: &Shipment) {
 pub fn cancelled(env: &Env, shipment: &Shipment) {
     publish(env, symbol_short!("cancelled"), shipment);
 }
+
+/// A carrier withdrew from an accepted shipment before pickup (#1864).
+pub fn released(env: &Env, shipment: &Shipment) {
+    publish(env, symbol_short!("released"), shipment);
+}

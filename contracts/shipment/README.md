@@ -19,19 +19,28 @@ contract and for the backend.
 | `create_shipment(shipper, origin, destination, cargo_description, weight_kg, price)` | Shipper | Creates a `Created` shipment and returns its id. |
 | `update_shipment(...)` | Shipper | Edits terms while the shipment is still `Created`. |
 | `accept_shipment(carrier, shipment_id)` | Carrier | Moves `Created → Accepted` and records the carrier. |
+| `withdraw_acceptance(carrier, shipment_id)` | Assigned carrier | Releases an `Accepted` job back to `Created` before pickup (#1864). |
 | `mark_in_transit(carrier, shipment_id)` | Carrier | Moves `Accepted → InTransit`. |
 | `mark_delivered(carrier, shipment_id)` | Carrier | Moves `InTransit → Delivered`. |
 | `confirm_delivery(shipper, shipment_id)` | Shipper | Moves `Delivered → Completed`, the signal for payment release. |
 | `cancel_shipment(shipper, shipment_id)` | Shipper | Cancels from `Created` or `Accepted` only. |
-| `raise_dispute(caller, shipment_id)` | Shipper or carrier | Moves the shipment into `Disputed`. |
+| `raise_dispute(caller, shipment_id, reason_hash)` | Shipper or carrier | Moves the shipment into `Disputed` and records who/why. `reason_hash` is `Option<BytesN<32>>` (#1863). |
 | `resolve_dispute(shipment_id, resolve_as_completed)` | Admin | Resolves a dispute as completed or cancelled. |
 | `get_shipment(shipment_id)` | Read-only | Returns the full `Shipment` record. |
+| `get_dispute(shipment_id)` | Read-only | Raiser, timestamp and optional reason hash of the dispute (#1863). |
+| `get_milestones(shipment_id)` | Read-only | Accepted / in-transit / delivered / completed timestamps (`0` = not reached) (#1865). |
 | `get_shipments_by_shipper(shipper, offset, limit)` | Read-only | Paginated list of the shipper's shipment ids. |
 | `get_shipments_by_carrier(carrier, offset, limit)` | Read-only | Paginated list of the carrier's shipment ids. |
 | `get_total_shipments()` | Read-only | Number of shipments ever created. |
 
 Statuses: `Created`, `Accepted`, `InTransit`, `Delivered`, `Completed`,
 `Disputed`, `Cancelled`.
+
+`Dispute` and `Milestones` live under their own `DataKey`s rather than as new
+`Shipment` fields, so the `Shipment` encoding, getters and event payloads keep
+their existing ABI. `get_milestones` is zero-filled for shipments created
+before these timestamps existed; individual transition times survive later
+status changes because only the dedicated record is written per transition.
 
 ## Errors
 

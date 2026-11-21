@@ -82,6 +82,7 @@ pub fn refund_with_fee(
     record.status = EscrowStatus::Refunded;
     record.settled_at = env.ledger().timestamp();
     storage::store(env, &record);
+    storage::release_locked(env, record.amount); // #1862
 
     // Same `refunded` action as a full refund — the event convention
     // (`contracts/EVENTS.md`) is one post-transition `EscrowRecord` payload
@@ -117,6 +118,7 @@ fn settle(env: &Env, shipment_id: u64, to_carrier: bool) -> Result<(), EscrowErr
     };
     record.settled_at = env.ledger().timestamp();
     storage::store(env, &record);
+    storage::release_locked(env, record.amount); // #1862
 
     if to_carrier {
         events::released(env, &record);
@@ -180,6 +182,7 @@ pub fn resolve_dispute(
     };
     record.settled_at = env.ledger().timestamp();
     storage::store(env, &record);
+    storage::release_locked(env, record.amount); // #1862
 
     // A single `resolved` event; its payload's `status` says which way it went.
     events::resolved(env, &record);

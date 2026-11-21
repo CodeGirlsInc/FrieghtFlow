@@ -53,5 +53,10 @@ pub enum DataKey {
     /// breaking already-deployed clients for no gain. `DataKey` is never
     /// part of the ABI, so a new variant here is free.
     EscrowFee(u64),
+    /// Sum of the amounts in every `Funded` or `Disputed` escrow. Kept in
+    /// instance storage so `get_total_locked` is a single read, independent
+    /// of how many escrows exist. `get_balance` remains the pooled token
+    /// balance; this counter is the reconciled, per-escrow figure (#1862).
+    TotalLocked,
     Paused,
 }
