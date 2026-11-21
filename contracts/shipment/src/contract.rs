@@ -194,6 +194,19 @@ impl ShipmentContract {
         storage::paginate(&env, list, offset, limit)
     }
 
+    /// Paginated ids of shipments still in `Created`.
+    ///
+    /// Appended on create and removed on accept/cancel, so a carrier can list
+    /// open work without scanning every shipment id.
+    pub fn get_open_shipments(env: Env, offset: u32, limit: u32) -> Vec<u64> {
+        let list: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::OpenList)
+            .unwrap_or_else(|| Vec::new(&env));
+        storage::paginate(&env, list, offset, limit)
+    }
+
     pub fn get_total_shipments(env: Env) -> u64 {
         env.storage()
             .persistent()

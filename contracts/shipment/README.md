@@ -28,6 +28,7 @@ contract and for the backend.
 | `get_shipment(shipment_id)` | Read-only | Returns the full `Shipment` record. |
 | `get_shipments_by_shipper(shipper, offset, limit)` | Read-only | Paginated list of the shipper's shipment ids. |
 | `get_shipments_by_carrier(carrier, offset, limit)` | Read-only | Paginated list of the carrier's shipment ids. |
+| `get_open_shipments(offset, limit)` | Read-only | Paginated list of shipments still in `Created`. |
 | `get_total_shipments()` | Read-only | Number of shipments ever created. |
 
 Statuses: `Created`, `Accepted`, `InTransit`, `Delivered`, `Completed`,
@@ -56,6 +57,7 @@ Statuses: `Created`, `Accepted`, `InTransit`, `Delivered`, `Completed`,
 | `Shipment(u64)` | Persistent | `Shipment` record |
 | `ShipperList(Address)` | Persistent | `Vec<u64>` of the shipper's ids |
 | `CarrierList(Address)` | Persistent | `Vec<u64>` of the carrier's ids |
+| `OpenList` | Persistent | `Vec<u64>` of shipments still in `Created` |
 | `Admin` | Instance | Current admin address |
 | `Paused` | Instance | Pause flag |
 
