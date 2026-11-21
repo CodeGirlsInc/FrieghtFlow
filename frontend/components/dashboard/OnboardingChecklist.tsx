@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
 
@@ -21,17 +22,21 @@ interface UserProfile {
 }
 
 const SHIPPER_STEPS = [
-  { key: 'emailVerified', label: 'Verify email' },
-  { key: 'profileComplete', label: 'Complete profile' },
-  { key: 'hasShipment', label: 'Create first shipment' },
-  { key: 'hasDocument', label: 'Upload a document' },
+  { key: 'emailVerified', label: 'Verify email', href: '/profile' },
+  { key: 'profileComplete', label: 'Complete profile', href: '/profile' },
+  { key: 'hasShipment', label: 'Create first shipment', href: '/shipments/new' },
+  { key: 'hasDocument', label: 'Upload a document', href: '/shipments' },
 ] as const;
 
 const CARRIER_STEPS = [
-  { key: 'emailVerified', label: 'Verify email' },
-  { key: 'hasRoutePreferences', label: 'Add route preferences' },
-  { key: 'hasCertifications', label: 'Upload certifications' },
-  { key: 'hasAcceptedShipment', label: 'Accept first shipment' },
+  { key: 'emailVerified', label: 'Verify email', href: '/profile' },
+  { key: 'hasRoutePreferences', label: 'Add route preferences', href: '/settings' },
+  {
+    key: 'hasCertifications',
+    label: 'Upload certifications',
+    href: '/carrier/certifications',
+  },
+  { key: 'hasAcceptedShipment', label: 'Accept first shipment', href: '/marketplace' },
 ] as const;
 
 export default function OnboardingChecklist() {
@@ -93,9 +98,12 @@ export default function OnboardingChecklist() {
             <span className={profile[step.key] ? 'text-green-500' : 'text-gray-300'}>
               {profile[step.key] ? '✓' : '○'}
             </span>
-            <span className={profile[step.key] ? 'text-gray-400 line-through' : 'text-gray-700'}>
+            <Link
+              href={step.href}
+              className={profile[step.key] ? 'text-gray-400 line-through' : 'text-gray-700 hover:underline'}
+            >
               {step.label}
-            </span>
+            </Link>
           </li>
         ))}
       </ul>

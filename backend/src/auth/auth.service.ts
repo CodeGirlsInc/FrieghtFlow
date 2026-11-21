@@ -49,7 +49,10 @@ export class AuthService {
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      await this.usersService.verifyPassword(password, TIMING_EQUALISATION_HASH);
+      await this.usersService.verifyPassword(
+        password,
+        TIMING_EQUALISATION_HASH,
+      );
       return null;
     }
     const isMatch = await this.usersService.verifyPassword(
@@ -162,6 +165,31 @@ export class AuthService {
     }
     await this.usersService.markEmailVerified(user.id);
     return { message: 'Email verified successfully' };
+  }
+
+  async resendVerificationEmail(userId: string): Promise<{ message: string }> {
+    const user = await this.usersService.findOne(userId);
+    if (user.isEmailVerified) {
+      throw new BadRequestException('Email is already verified');
+    }
+
+    const token = uuidv4();
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await this.usersService.updateVerificationToken(user.id, token, expiry);
+
+    try {
+      await this.sendVerificationEmail(user, token);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to resend verification email to ${user.email}: ${message}`,
+      );
+      throw new BadRequestException(
+        'Could not send verification email. Please try again.',
+      );
+    }
+
+    return { message: 'Verification email sent. Please check your inbox.' };
   }
 
   async forgotPassword(email: string): Promise<{ message: string }> {
@@ -277,7 +305,7 @@ export class AuthService {
       'FRONTEND_URL',
       'http://localhost:3000',
     );
-    const verifyUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
+    const verifyUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(token)}`;
 
     await this.mailerService.sendMail({
       to: user.email,

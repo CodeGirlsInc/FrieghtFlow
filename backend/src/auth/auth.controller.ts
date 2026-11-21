@@ -120,6 +120,22 @@ export class AuthController {
     return this.authService.verifyEmail(token);
   }
 
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @Throttle({ auth: { limit: 3, ttl: 900_000 } })
+  @ApiOperation({
+    summary: 'Resend the verification email for the current user',
+  })
+  @ApiResponse({ status: 200, description: 'Verification email sent' })
+  @ApiResponse({
+    status: 400,
+    description: 'Email already verified or send failed',
+  })
+  resendVerification(@CurrentUser() user: User) {
+    return this.authService.resendVerificationEmail(user.id);
+  }
+
   @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)

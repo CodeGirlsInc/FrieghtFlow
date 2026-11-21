@@ -105,7 +105,7 @@ describe('AuthService', () => {
       usersService.create.mockResolvedValue(user);
       usersService.updateVerificationToken.mockResolvedValue(undefined);
       usersService.updateRefreshToken.mockResolvedValue(undefined);
-      mailerService.sendMail.mockResolvedValue(undefined as never);
+      mailerService.sendMail.mockResolvedValue(undefined);
       jwtService.signAsync
         .mockResolvedValueOnce('access-token')
         .mockResolvedValueOnce('refresh-token');
@@ -121,6 +121,11 @@ describe('AuthService', () => {
       expect(usersService.create).toHaveBeenCalled();
       expect(usersService.updateVerificationToken).toHaveBeenCalled();
       expect(mailerService.sendMail).toHaveBeenCalled();
+      const mail = mailerService.sendMail.mock.calls[0][0] as { html: string };
+      expect(mail.html).toContain(
+        'href="http://localhost:3000/verify-email?token=',
+      );
+      expect(mail.html).not.toContain('/auth/verify-email');
       expect(result.accessToken).toBe('access-token');
       expect(result.refreshToken).toBe('refresh-token');
       expect(result.user).not.toHaveProperty('passwordHash');
@@ -294,6 +299,55 @@ describe('AuthService', () => {
     });
   });
 
+  // ── resendVerificationEmail ────────────────────────────────────────────────
+
+  describe('resendVerificationEmail()', () => {
+    it('issues a fresh token and sends a verification link to the frontend route', async () => {
+      const user = makeUser({ isEmailVerified: false });
+      usersService.findOne.mockResolvedValue(user);
+      usersService.updateVerificationToken.mockResolvedValue(undefined);
+      mailerService.sendMail.mockResolvedValue(undefined);
+
+      const result = await service.resendVerificationEmail(user.id);
+
+      expect(usersService.updateVerificationToken).toHaveBeenCalledWith(
+        user.id,
+        expect.stringMatching(/^[0-9a-f-]{36}$/),
+        expect.any(Date),
+      );
+      const mail = mailerService.sendMail.mock.calls[0][0] as { html: string };
+      expect(mail.html).toContain(
+        'href="http://localhost:3000/verify-email?token=',
+      );
+      expect(mail.html).not.toContain('/auth/verify-email');
+      expect(result.message).toMatch(/check your inbox/i);
+    });
+
+    it('rejects when the email is already verified', async () => {
+      usersService.findOne.mockResolvedValue(
+        makeUser({ isEmailVerified: true }),
+      );
+
+      await expect(
+        service.resendVerificationEmail('user-uuid-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(usersService.updateVerificationToken).not.toHaveBeenCalled();
+      expect(mailerService.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('reports a send failure as BadRequestException', async () => {
+      usersService.findOne.mockResolvedValue(
+        makeUser({ isEmailVerified: false }),
+      );
+      usersService.updateVerificationToken.mockResolvedValue(undefined);
+      mailerService.sendMail.mockRejectedValue(new Error('SMTP error'));
+
+      await expect(
+        service.resendVerificationEmail('user-uuid-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   // ── forgotPassword ─────────────────────────────────────────────────────────
 
   describe('forgotPassword()', () => {
@@ -301,7 +355,7 @@ describe('AuthService', () => {
       const user = makeUser();
       usersService.findByEmail.mockResolvedValue(user);
       usersService.setResetToken.mockResolvedValue(undefined);
-      mailerService.sendMail.mockResolvedValue(undefined as never);
+      mailerService.sendMail.mockResolvedValue(undefined);
 
       const result = await service.forgotPassword('test@example.com');
 

@@ -7,18 +7,12 @@ import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { getErrorMessage } from '../../lib/api/client';
-import { documentsApi, DocumentType } from '../../lib/api/documents.api';
+import {
+  DOCUMENT_TYPE_LABELS,
+  documentsApi,
+  DocumentType,
+} from '../../lib/api/documents.api';
 import { partitionValidFiles, buildFileAcceptAttribute } from '../../lib/validation/file-upload';
-
-const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
-  [DocumentType.BILL_OF_LADING]: 'Bill of Lading',
-  [DocumentType.PROOF_OF_DELIVERY]: 'Proof of Delivery',
-  [DocumentType.INVOICE]: 'Invoice',
-  [DocumentType.CUSTOMS_DECLARATION]: 'Customs Declaration',
-  [DocumentType.INSURANCE_CERTIFICATE]: 'Insurance Certificate',
-  [DocumentType.PHOTO]: 'Photo',
-  [DocumentType.OTHER]: 'Other',
-};
 
 /** Derived from ALLOWED_FILE_EXTENSIONS so the picker and the validator agree. */
 const ACCEPTED_FILES = buildFileAcceptAttribute();
