@@ -33,6 +33,21 @@ contract and for the backend.
 Statuses: `Created`, `Accepted`, `InTransit`, `Delivered`, `Completed`,
 `Disputed`, `Cancelled`.
 
+## Validation bounds
+
+`create_shipment` and `update_shipment` share one validator
+(`shipper::validate_terms`) and the same constants, so the limits are defined
+once and cannot drift apart:
+
+| Constant | Value | Applies to |
+|---|---|---|
+| `MAX_WEIGHT_KG` | 1 000 000 | `weight_kg` (upper bound; 0 is rejected) |
+| `MAX_LOCATION_LEN` | 255 | `origin`, `destination` (both also non-empty) |
+| `MAX_CARGO_LEN` | 1 024 | `cargo_description` (also non-empty) |
+
+Off-chain clients should use these values as the source of truth when
+validating shipment terms before submitting.
+
 ## Errors
 
 | Code | Variant | Meaning |
