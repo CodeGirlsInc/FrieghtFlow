@@ -5,3 +5,4 @@ edition = "2021"
 publish = false
 
 [dependencies]
+soroban-sdk = { version = "22.0.0", features = ["alloc"] }

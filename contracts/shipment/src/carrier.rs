@@ -31,6 +31,8 @@ pub fn accept(env: &Env, carrier: Address, shipment_id: u64) -> Result<(), Shipm
     storage::save(env, &shipment);
 
     storage::append_to_list(env, DataKey::CarrierList(carrier), shipment_id);
+    // Accepted work is no longer available to other carriers.
+    storage::remove_from_list(env, DataKey::OpenList, shipment_id);
 
     events::accepted(env, &shipment);
     Ok(())
