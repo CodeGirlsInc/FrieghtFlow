@@ -29,6 +29,23 @@ and the uploader is a party to it.
 `ipfs_cid` is capped at `MAX_IPFS_CID_LEN` (512) bytes and `reason` in
 `flag_document` at 1024 bytes.
 
+## Shipment status / document type matrix
+
+`register_document` first requires the uploader to be a party to an existing
+shipment, then applies this status matrix:
+
+| Shipment status | All `DocumentType`s |
+|---|---|
+| `Created`, `Accepted`, `InTransit`, `Delivered` | Allowed |
+| `Completed` | Allowed (post-delivery invoices, proofs and photos) |
+| `Disputed` | Allowed (either party may upload evidence) |
+| `Cancelled` | Rejected with `ShipmentCancelled` |
+
+The check is deliberately type-agnostic for now: cancelled jobs never accept
+new documents, while completed jobs keep accepting the paperwork that follows
+delivery. An ABI/deployment mismatch when decoding the shipment is reported as
+`ShipmentDecodeFailed`, never as `ShipmentNotFound`.
+
 ## Errors
 
 | Code | Variant | Meaning |
@@ -44,6 +61,9 @@ and the uploader is a party to it.
 | 9 | `Paused` | The contract is paused and the call mutates state. |
 | 10 | `NotVerified` | `flag_document` was called on a document that is not verified. |
 | 11 | `FieldTooLong` | `ipfs_cid` > 512 bytes or `reason` > 1024 bytes. |
+| 12 | `FieldTooShort` | `ipfs_cid` < 8 bytes. |
+| 13 | `ShipmentDecodeFailed` | The shipment contract's response could not be decoded (deployment bug). |
+| 14 | `ShipmentCancelled` | The shipment exists but is `Cancelled`. |
 
 ## Storage keys
 

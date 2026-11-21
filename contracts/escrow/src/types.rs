@@ -53,5 +53,10 @@ pub enum DataKey {
     /// breaking already-deployed clients for no gain. `DataKey` is never
     /// part of the ABI, so a new variant here is free.
     EscrowFee(u64),
+    /// shipment_id → the amount paid to the carrier when an admin settles a
+    /// dispute with [`crate::settlement::resolve_dispute_split`]. The shipper
+    /// receives `record.amount - value`. Stored under its own key so the
+    /// `EscrowRecord` encoding stays unchanged.
+    EscrowSplit(u64),
     Paused,
 }

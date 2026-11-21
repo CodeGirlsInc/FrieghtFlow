@@ -159,6 +159,17 @@ impl EscrowContract {
         settlement::resolve_dispute(&env, shipment_id, release_to_carrier)
     }
 
+    /// Admin settles a dispute with an explicit carrier share. See
+    /// [`settlement::resolve_dispute_split`]. `0` refunds the shipper in full;
+    /// `amount` pays the carrier in full; anything between splits the escrow.
+    pub fn resolve_dispute_split(
+        env: Env,
+        shipment_id: u64,
+        carrier_amount: i128,
+    ) -> Result<(), EscrowError> {
+        settlement::resolve_dispute_split(&env, shipment_id, carrier_amount)
+    }
+
     pub fn get_escrow(env: Env, shipment_id: u64) -> Result<EscrowRecord, EscrowError> {
         storage::load(&env, shipment_id)
     }
@@ -170,6 +181,12 @@ impl EscrowContract {
     /// recorded off-chain matches what the contract actually paid out.
     pub fn get_settlement_fee(env: Env, shipment_id: u64) -> i128 {
         storage::settlement_fee(&env, shipment_id)
+    }
+
+    /// Carrier amount from the last partial dispute settlement, or `0`.
+    /// The shipper's share is `get_escrow(id).amount - this value`.
+    pub fn get_dispute_split(env: Env, shipment_id: u64) -> i128 {
+        storage::dispute_split(&env, shipment_id)
     }
 
     /// Read the configured admin address.

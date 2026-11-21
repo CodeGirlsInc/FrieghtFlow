@@ -24,6 +24,7 @@ pub mod errors;
 pub mod events;
 mod funding;
 mod settlement;
+mod shipment;
 mod storage;
 pub mod types;
 
