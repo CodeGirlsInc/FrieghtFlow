@@ -21,20 +21,26 @@ const config = {
     ],
   },
   collectCoverageFrom: [
-    "lib/utils.ts",
-    "lib/api/notifications.api.ts",
-    "stores/toast.store.ts",
-    "stores/auth.store.ts",
-    "components/shipment/status-badge.tsx",
-    "components/ui/ToastContainer.tsx",
-    "middleware.ts",
+    "app/**/*.{ts,tsx}",
+    "components/**",
+    "lib/**",
+    "stores/**",
+    "hooks/**",
+    // Exclusions (#1840): tests, the sandbox and type-only files.
+    "!**/*.test.*",
+    "!**/*.spec.*",
+    "!**/tests/**",
+    "!**/sandbox/**",
+    "!**/*.d.ts",
   ],
   coverageThreshold: {
+    // Measured baseline with the #1840 globs above — the gate now reflects
+    // the real coverage of the app instead of a hand-picked file list.
     global: {
-      branches: 50,
-      functions: 50,
-      lines: 50,
-      statements: 50,
+      branches: 50.64,
+      functions: 51.3,
+      lines: 59.16,
+      statements: 58.83,
     },
   },
 };

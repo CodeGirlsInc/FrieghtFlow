@@ -8,10 +8,20 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
 import { formatMoney } from '../../../../lib/format/currency';
+import { getErrorMessage } from '../../../../lib/api/client';
 import {
   SUPPORTED_CURRENCIES_HINT,
   currencySchema,
 } from '../../../../lib/validation/currency';
+import {
+  CARGO_DESCRIPTION_MAX_LENGTH,
+  PRICE_MAX,
+  PRICE_MAX_DECIMALS,
+  ROUTE_FIELD_MAX_LENGTH,
+  VOLUME_MAX_DECIMALS,
+  WEIGHT_MAX_DECIMALS,
+  atMostDecimalPlaces,
+} from '../../../../lib/validation/shipment-limits';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
@@ -20,18 +30,45 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../../components
 // ── Schemas per step ──────────────────────────────────────────────────────────
 
 const step1Schema = z.object({
-  origin: z.string().min(2, 'Origin is required'),
-  destination: z.string().min(2, 'Destination is required'),
+  origin: z
+    .string()
+    .min(2, 'Origin is required')
+    .max(ROUTE_FIELD_MAX_LENGTH, 'Origin must be at most 255 characters'),
+  destination: z
+    .string()
+    .min(2, 'Destination is required')
+    .max(ROUTE_FIELD_MAX_LENGTH, 'Destination must be at most 255 characters'),
 });
 
 const step2Schema = z.object({
-  cargoDescription: z.string().min(10, 'Describe the cargo (min 10 chars)'),
-  weightKg: z.coerce.number().positive('Weight must be positive'),
-  volumeCbm: z.coerce.number().positive().optional().or(z.literal('')),
+  cargoDescription: z
+    .string()
+    .min(10, 'Describe the cargo (min 10 chars)')
+    .max(CARGO_DESCRIPTION_MAX_LENGTH, 'Cargo description must be at most 2000 characters'),
+  weightKg: z
+    .coerce.number()
+    .positive('Weight must be positive')
+    .refine(atMostDecimalPlaces(WEIGHT_MAX_DECIMALS), {
+      message: `Weight must have at most ${WEIGHT_MAX_DECIMALS} decimal places`,
+    }),
+  volumeCbm: z
+    .coerce.number()
+    .positive()
+    .optional()
+    .or(z.literal(''))
+    .refine(atMostDecimalPlaces(VOLUME_MAX_DECIMALS), {
+      message: `Volume must have at most ${VOLUME_MAX_DECIMALS} decimal places`,
+    }),
 });
 
 const step3Schema = z.object({
-  price: z.coerce.number().min(0.01, 'Price must be greater than 0'),
+  price: z
+    .coerce.number()
+    .min(0.01, 'Price must be greater than 0')
+    .max(PRICE_MAX, 'Price must be at most 1,000,000')
+    .refine(atMostDecimalPlaces(PRICE_MAX_DECIMALS), {
+      message: `Price must have at most ${PRICE_MAX_DECIMALS} decimal places`,
+    }),
   // FE-192: was `z.string().length(3)`, which accepted any three characters
   // ('ZZZ') and then crashed `Intl.NumberFormat` on every page that renders
   // this shipment's price. Only allow-listed ISO-4217 codes are accepted.
@@ -94,6 +131,24 @@ function isFormDirty(values: Partial<FormValues>): boolean {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
+
+/**
+ * Fields the create-shipment API can report validation errors on — the
+ * names match `CreateShipmentPayload` (see
+ * backend/src/shipments/dto/create-shipment.dto.ts).
+ */
+const SERVER_ERROR_FIELDS = [
+  'origin',
+  'destination',
+  'cargoDescription',
+  'weightKg',
+  'volumeCbm',
+  'price',
+  'currency',
+  'pickupDate',
+  'estimatedDeliveryDate',
+  'notes',
+] as const;
 
 export default function NewShipmentPage() {
   return (
@@ -206,6 +261,7 @@ function NewShipmentForm() {
     register,
     handleSubmit,
     trigger,
+    setError,
     getValues,
     setValue,
     watch,
@@ -325,8 +381,30 @@ function NewShipmentForm() {
       const shipment = await shipmentApi.create(payload);
       toast.success('Shipment created!');
       router.push(`/shipments/${shipment.id}`);
-    } catch {
-      toast.error('Failed to create shipment. Please try again.');
+    } catch (err) {
+      // Show the server's message — validation errors, the 429 rate-limit
+      // text, … — instead of a generic "please try again" (#1838).
+      toast.error(getErrorMessage(err) ?? 'Failed to create shipment. Please try again.');
+
+      // Map 400 field errors back onto the form fields so the error
+      // highlights the step/field the API complained about (#1838).
+      // Class-validator messages name the offending property first
+      // ("price must be …"), so match the leading known field name.
+      const errorBody = err as { message?: string | string[]; statusCode?: number };
+      if (errorBody?.statusCode === 400) {
+        const rawMessage = errorBody.message;
+        const entries = Array.isArray(rawMessage)
+          ? rawMessage
+          : typeof rawMessage === 'string'
+            ? [rawMessage]
+            : [];
+        for (const entry of entries) {
+          const field = SERVER_ERROR_FIELDS.find((name) =>
+            entry.toLowerCase().startsWith(name),
+          );
+          if (field) setError(field, { message: entry });
+        }
+      }
     }
   };
 
