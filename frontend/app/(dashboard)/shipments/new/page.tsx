@@ -202,7 +202,15 @@ function NewShipmentForm() {
     mode: 'onTouched',
   });
 
-  const { register, handleSubmit, trigger, getValues, formState: { errors, isSubmitting } } = form;
+  const {
+    register,
+    handleSubmit,
+    trigger,
+    getValues,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting },
+  } = form;
 
   // Track whether anything has been typed, across every step, so cancelling
   // only nags when there is genuinely something to lose. Evaluated once on
@@ -215,6 +223,49 @@ function NewShipmentForm() {
     });
     return () => subscription.unsubscribe();
   }, [form]);
+
+  // Suggest, rather than force, a delivery date once the route and weight are
+  // known. An unserved lane (400) is informational only — the shipper can
+  // still type a date by hand.
+  const [etaSuggestion, setEtaSuggestion] = useState<{
+    transitDays: number;
+    deliveryDate: string;
+  } | null>(null);
+  const [etaUnavailable, setEtaUnavailable] = useState(false);
+
+  const origin = watch('origin');
+  const destination = watch('destination');
+  const weightKg = watch('weightKg');
+
+  useEffect(() => {
+    setEtaSuggestion(null);
+    setEtaUnavailable(false);
+    if (!origin?.trim() || !destination?.trim() || !(Number(weightKg) > 0)) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const estimate = await shipmentApi.estimateEta({
+          origin: origin.trim(),
+          destination: destination.trim(),
+          weightKg: Number(weightKg),
+        });
+        if (!cancelled) {
+          setEtaSuggestion({
+            transitDays: estimate.estimatedTransitDays,
+            deliveryDate: `${estimate.estimatedDeliveryDate}T12:00`,
+          });
+        }
+      } catch {
+        if (!cancelled) setEtaUnavailable(true);
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [origin, destination, weightKg]);
 
   // A refresh or tab close is the one exit a dialog cannot intercept. The
   // browser shows its own generic wording here — `beforeunload` custom
@@ -448,6 +499,29 @@ function NewShipmentForm() {
                 <div className="space-y-1.5">
                   <Label htmlFor="estimatedDeliveryDate">Estimated Delivery</Label>
                   <Input id="estimatedDeliveryDate" type="datetime-local" {...register('estimatedDeliveryDate')} />
+                  {etaSuggestion && (
+                    <p className="text-xs text-muted-foreground" role="status">
+                      Estimated transit: {etaSuggestion.transitDays} days. Suggested delivery:{' '}
+                      {etaSuggestion.deliveryDate.slice(0, 10)}{' '}
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() =>
+                          setValue('estimatedDeliveryDate', etaSuggestion.deliveryDate, {
+                            shouldValidate: true,
+                            shouldDirty: true,
+                          })
+                        }
+                      >
+                        Use this date
+                      </button>
+                    </p>
+                  )}
+                  {etaUnavailable && (
+                    <p className="text-xs text-muted-foreground" role="status">
+                      No delivery estimate is available for this lane. You can enter a date manually.
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>

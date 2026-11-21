@@ -9,6 +9,19 @@ import {
   PublicShipmentTracking,
 } from '../../types/shipment.types';
 
+export interface EtaEstimatePayload {
+  origin: string;
+  destination: string;
+  weightKg: number;
+}
+
+export interface EtaEstimate {
+  estimatedTransitDays: number;
+  estimatedDeliveryDate: string;
+  originZone: string;
+  destinationZone: string;
+}
+
 function buildQuery(params: QueryShipmentParams): string {
   const q = new URLSearchParams();
   if (params.status) q.set('status', params.status);
@@ -27,6 +40,13 @@ function buildQuery(params: QueryShipmentParams): string {
 export const shipmentApi = {
   create(payload: CreateShipmentPayload): Promise<Shipment> {
     return apiClient('/shipments', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  estimateEta(payload: EtaEstimatePayload): Promise<EtaEstimate> {
+    return apiClient('/shipments/eta/estimate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   list(params: QueryShipmentParams = {}): Promise<PaginatedShipments> {
