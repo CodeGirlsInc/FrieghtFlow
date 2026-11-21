@@ -193,15 +193,17 @@ export class NotificationsGateway
 
   private buildPayload(
     eventName: string,
-    { shipment }: ShipmentEvent,
+    evt: ShipmentEvent,
   ): Record<string, unknown> {
     return {
       event: eventName,
-      shipmentId: shipment.id,
-      trackingNumber: shipment.trackingNumber,
-      status: shipment.status,
-      origin: shipment.origin,
-      destination: shipment.destination,
+      shipmentId: evt.shipment.id,
+      trackingNumber: evt.shipment.trackingNumber,
+      status: evt.shipment.status,
+      origin: evt.shipment.origin,
+      destination: evt.shipment.destination,
+      // The actor id lets clients filter out the echo of their own action.
+      actorId: evt.actorId,
       updatedAt: new Date().toISOString(),
     };
   }
