@@ -13,7 +13,7 @@ use soroban_sdk::{
     Address, BytesN,
 };
 
-use super::setup;
+use super::{emitted, setup};
 
 #[test]
 fn test_lookup_single_wallet() {
@@ -133,6 +133,33 @@ fn test_lookup_update_does_not_disturb_other_wallets_on_old_hash() {
     let moved = ctx.client.get_wallets_by_identity(&new_hash, &0u32, &10u32);
     assert_eq!(moved.len(), 1);
     assert_eq!(moved.get(0).unwrap(), wallet_a);
+}
+
+#[test]
+fn test_update_same_hash_keeps_order_and_emits_nothing() {
+    let ctx = setup();
+    let wallet_a = Address::generate(&ctx.env);
+    let wallet_b = Address::generate(&ctx.env);
+    let hash = BytesN::random(&ctx.env);
+
+    ctx.client.register_identity(&hash, &wallet_a);
+    ctx.client.register_identity(&hash, &wallet_b);
+
+    // Re-submitting the same hash must not touch the index or emit anything.
+    // Check events before any other contract call, since reads clear the buffer.
+    ctx.client.update_identity(&wallet_a, &hash);
+    let updated = emitted(&ctx.env, &ctx.client.address, "updated");
+
+    let wallets = ctx.client.get_wallets_by_identity(&hash, &0u32, &10u32);
+    assert_eq!(wallets.len(), 2);
+    assert!(
+        wallets.get(0).unwrap() == wallet_a && wallets.get(1).unwrap() == wallet_b,
+        "same-hash update reordered the wallet index"
+    );
+    assert!(
+        updated.is_empty(),
+        "same-hash update emitted an updated event"
+    );
 }
 
 // --- Issue #1454: pagination ---
