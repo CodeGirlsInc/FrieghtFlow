@@ -84,6 +84,9 @@ pub fn fund(
     };
 
     storage::store(env, &record);
+    // #1862: only `Funded`/`Disputed` escrows count as locked. Raising a
+    // dispute keeps the status live and leaves this counter untouched.
+    storage::add_locked(env, amount);
 
     events::funded(env, &record);
     Ok(())

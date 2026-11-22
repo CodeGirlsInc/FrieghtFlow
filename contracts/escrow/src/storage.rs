@@ -126,6 +126,30 @@ pub fn shipment_contract(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::ShipmentContract)
 }
 
+/// Sum of the amounts still held for `Funded`/`Disputed` escrows (#1862).
+/// Defaults to `0` for contracts deployed before this counter existed.
+pub fn total_locked(env: &Env) -> i128 {
+    env.storage().instance().get(&DataKey::TotalLocked).unwrap_or(0)
+}
+
+/// Add a newly funded escrow to the locked total.
+pub fn add_locked(env: &Env, amount: i128) {
+    let next = total_locked(env) + amount;
+    env.storage().instance().set(&DataKey::TotalLocked, &next);
+}
+
+/// Remove a settled escrow from the locked total. `saturating_sub` keeps the
+/// counter at zero even for an inconsistent legacy state, rather than
+/// poisoning every later funding operation with a negative baseline.
+pub fn release_locked(env: &Env, amount: i128) {
+    let next = total_locked(env).saturating_sub(amount);
+    if next == 0 {
+        env.storage().instance().remove(&DataKey::TotalLocked);
+    } else {
+        env.storage().instance().set(&DataKey::TotalLocked, &next);
+    }
+}
+
 /// Settlement requires the platform admin's authorisation.
 ///
 /// `DataKey::ShipmentContract` records the contract that may settle an escrow

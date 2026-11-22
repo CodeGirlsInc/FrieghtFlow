@@ -1,13 +1,22 @@
 //! Dispute lifecycle: either party raises, the admin resolves.
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, BytesN, Env};
 
 use crate::errors::ShipmentError;
 use crate::types::ShipmentStatus;
 use crate::{events, storage};
 
 /// Either party can raise a dispute when the shipment is InTransit or Delivered.
-pub fn raise(env: &Env, caller: Address, shipment_id: u64) -> Result<(), ShipmentError> {
+///
+/// `reason_hash` is optional: it can point at an off-chain statement without
+/// putting its contents on-chain. The raiser and time are always recorded
+/// under `DataKey::Dispute` (#1863); the `Shipment` record itself is unchanged.
+pub fn raise(
+    env: &Env,
+    caller: Address,
+    shipment_id: u64,
+    reason_hash: Option<BytesN<32>>,
+) -> Result<(), ShipmentError> {
     caller.require_auth();
     storage::require_not_paused(env)?;
 
@@ -23,9 +32,20 @@ pub fn raise(env: &Env, caller: Address, shipment_id: u64) -> Result<(), Shipmen
         return Err(ShipmentError::InvalidStatus);
     }
 
+    let now = env.ledger().timestamp();
     shipment.status = ShipmentStatus::Disputed;
-    shipment.updated_at = env.ledger().timestamp();
+    shipment.updated_at = now;
     storage::save(env, &shipment);
+
+    storage::store_dispute(
+        env,
+        shipment_id,
+        &crate::types::Dispute {
+            raised_by: caller,
+            raised_at: now,
+            reason_hash,
+        },
+    );
 
     events::disputed(env, &shipment);
     Ok(())

@@ -226,8 +226,19 @@ impl EscrowContract {
         storage::admin(&env)
     }
 
+    /// The **pooled** token balance of this contract, not the amount held for
+    /// any single shipment: it includes every live escrow plus any dust or
+    /// direct transfers. Use `get_escrow(shipment_id).amount` for one escrow
+    /// and `get_total_locked()` for the sum of all unsettled escrows (#1862).
     pub fn get_balance(env: Env) -> Result<i128, EscrowError> {
         let token = storage::token(&env)?;
         Ok(token.balance(&env.current_contract_address()))
+    }
+
+    /// Sum of the amounts in every `Funded`/`Disputed` escrow. The core
+    /// reconciliation invariant is `get_balance() >= get_total_locked()`;
+    /// direct token transfers can only make the left side larger (#1862).
+    pub fn get_total_locked(env: Env) -> i128 {
+        storage::total_locked(&env)
     }
 }

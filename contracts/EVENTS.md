@@ -41,7 +41,7 @@ Where a transition can go two ways it is still one event, and the payload's
 
 | Contract     | Actions |
 |--------------|---------|
-| `shipment`   | `created`, `updated`, `accepted`, `intransit`, `delivered`, `completed`, `disputed`, `resolved`, `cancelled` |
+| `shipment`   | `created`, `updated`, `accepted`, `released`, `intransit`, `delivered`, `completed`, `disputed`, `resolved`, `cancelled` |
 | `escrow`     | `funded`, `released`, `refunded`, `disputed`, `resolved` |
 | `document`   | `registered`, `verified`, `flagged` |
 | `identity`   | `registered`, `revoked`, `deregistered`, `updated` |
@@ -51,6 +51,10 @@ Where a transition can go two ways it is still one event, and the payload's
 `deregistered` only for the wallet's own `deregister_identity`; both carry the
 unbound `user_id_hash`, but indexers must not conflate a sanction with a
 voluntary exit (#1856).
+
+`shipment` emits `released` when a carrier withdraws an accepted job before
+pickup (#1864); the shipment returns to `Created` and can be accepted by a
+different carrier. Its payload is still the post-transition `Shipment`.
 
 `reputation` is the one contract with two payload shapes: `submitted` carries
 the new `RatingRecord`, while `registered` and `updated` carry the affected

@@ -58,6 +58,11 @@ pub enum DataKey {
     /// receives `record.amount - value`. Stored under its own key so the
     /// `EscrowRecord` encoding stays unchanged.
     EscrowSplit(u64),
+    /// Sum of the amounts in every `Funded` or `Disputed` escrow. Kept in
+    /// instance storage so `get_total_locked` is a single read, independent
+    /// of how many escrows exist. `get_balance` remains the pooled token
+    /// balance; this counter is the reconciled, per-escrow figure (#1862).
+    TotalLocked,
     Paused,
     /// shipment_id → ledger timestamp at which the dispute was raised.
     ///
