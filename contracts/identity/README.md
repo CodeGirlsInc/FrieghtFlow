@@ -18,7 +18,8 @@ any identity payload.
 | `register_identity(user_id_hash, wallet)` | The wallet itself | Creates the `wallet → hash` record and the reverse index entry. At most `MAX_WALLETS_PER_HASH` (64) wallets per hash. |
 | `update_identity(wallet, new_user_id_hash)` | The wallet itself | Re-points an existing record at a new hash without an unregistered window. |
 | `deregister_identity(wallet)` | The wallet itself | Self-service removal of the caller's own record and index entry. |
-| `revoke_identity(wallet)` | Admin | Admin-side removal of a wallet's record and index entry. |
+| `revoke_identity(wallet)` | Admin | Admin-side removal of a wallet's record and index entry. Writes a `Revoked(wallet)` tombstone. |
+| `reinstate_identity(admin, wallet)` | Admin | Clears the tombstone so the wallet may register again. Does not create an identity. |
 | `verify_identity(wallet)` | Read-only | `true` when the wallet has a registered identity. |
 | `get_user_identity(wallet)` | Read-only | Returns the wallet's `user_id_hash`. |
 | `get_wallets_by_identity(user_id_hash, offset, limit)` | Read-only | Paginated reverse lookup of the wallets bound to a hash. |
@@ -34,6 +35,8 @@ any identity payload.
 | 5 | `Paused` | The contract is paused and the call mutates state. |
 | 6 | `AlreadyInitialized` | `initialize` was called a second time. |
 | 7 | `WalletLimitReached` | `MAX_WALLETS_PER_HASH` (64) wallets are already bound to this hash. |
+| 8 | `WalletRevoked` | An admin revoked this wallet; an admin must reinstate it first. |
+| 9 | `NotRevoked` | `reinstate_identity` found no revocation marker. |
 
 ## Storage keys
 
@@ -41,6 +44,7 @@ any identity payload.
 |---|---|---|
 | `Identity(Address)` | Persistent | `user_id_hash` of the wallet |
 | `HashToWallets(BytesN<32>)` | Persistent | `Vec<Address>` reverse index for a hash |
+| `Revoked(Address)` | Persistent | Tombstone blocking re-registration after an admin revocation |
 | `Admin` | Instance | Current admin address |
 | `Paused` | Instance | Pause flag |
 
@@ -53,7 +57,8 @@ Emitted per the workspace convention in [`../EVENTS.md`](../EVENTS.md):
 |---|---|
 | `registered` | A wallet is registered against a hash |
 | `updated` | A wallet is re-pointed at a new hash |
-| `revoked` | A record is removed (admin `revoke_identity` or self-service `deregister_identity`) |
+| `revoked` | An admin removed a record with `revoke_identity` (the wallet is tombstoned) |
+| `deregistered` | The wallet removed its own record with `deregister_identity` (no tombstone) |
 
 ## Trust assumptions
 
@@ -63,7 +68,9 @@ Emitted per the workspace convention in [`../EVENTS.md`](../EVENTS.md):
   wallets sign their own registrations.
 - **Users** control only their own wallet's record
   (`register_identity`, `update_identity`, `deregister_identity`); each call
-  requires the wallet's own signature.
+  requires the wallet's own signature. A wallet revoked by the admin cannot
+  regain an identity until that admin calls `reinstate_identity`; a wallet
+  that deregistered itself may re-register immediately.
 - The contract stores a **hash**, not personal data; whoever holds the
   off-chain record controls what a hash resolves to. The contract makes no
   claim about the quality of the off-chain verification that produced it.

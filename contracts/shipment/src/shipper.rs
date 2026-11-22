@@ -184,15 +184,13 @@ pub fn cancel(env: &Env, shipper: Address, shipment_id: u64) -> Result<(), Shipm
     // `Shipment::is_party` still treats the ex-carrier as a party to it — which
     // `dispute::open_dispute` authorises on, so the carrier of a cancelled
     // shipment could still register dispute evidence against it.
-    let previous_carrier = shipment.carrier.take();
+    // #1855: one shared unwind, also used by `dispute::resolve(false)`.
+    storage::unassign_carrier(env, &mut shipment);
 
     shipment.status = ShipmentStatus::Cancelled;
     shipment.updated_at = env.ledger().timestamp();
     storage::save(env, &shipment);
 
-    if let Some(carrier) = previous_carrier {
-        storage::remove_from_list(env, DataKey::CarrierList(carrier), shipment_id);
-    }
     // A cancelled shipment is no longer open work, whether it was cancelled
     // from `Created` or (already-removed) `Accepted`.
     storage::remove_from_list(env, DataKey::OpenList, shipment_id);
