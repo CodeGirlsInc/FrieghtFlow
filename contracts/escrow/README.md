@@ -83,4 +83,3 @@ Actions: `funded`, `released`, `refunded`, `disputed`, `resolved`.
 - Pausing stops funding and settlement alike, so a paused contract holds
   funds in place until the admin unpauses (see
   [`SECURITY-MODEL.md`](../SECURITY-MODEL.md)).
-- Historical notes on specific audits live in [`audit.md`](audit.md).
