@@ -167,18 +167,9 @@ impl IdentityContract {
         // #1680). Skipped when the hash is unchanged: `unindex_wallet` below
         // drops the wallet from the list before `index_wallet` re-adds it, so
         // the count cannot grow and the old record is still in place.
-        if old_user_id_hash == new_user_id_hash {
-            // No-op: keep the reverse-index order and emit no event. Only the
-            // record's TTL is refreshed.
-            env.storage().persistent().extend_ttl(
-                &DataKey::Identity(wallet.clone()),
-                TTL_LEDGERS,
-                TTL_LEDGERS,
-            );
-            return Ok(());
+        if old_user_id_hash != new_user_id_hash {
+            Self::require_wallet_capacity(&env, &new_user_id_hash)?;
         }
-
-        Self::require_wallet_capacity(&env, &new_user_id_hash)?;
 
         env.storage()
             .persistent()
