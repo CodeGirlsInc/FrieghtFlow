@@ -88,6 +88,9 @@ pub fn create(
         .extend_ttl(&DataKey::Shipment(id), TTL_LEDGERS, TTL_LEDGERS);
 
     storage::append_to_list(env, DataKey::ShipperList(shipper), id);
+    // Make the new posting discoverable to carriers; it leaves this list on
+    // accept or cancel.
+    storage::append_to_list(env, DataKey::OpenList, id);
 
     events::created(env, &shipment);
     Ok(id)
@@ -190,6 +193,9 @@ pub fn cancel(env: &Env, shipper: Address, shipment_id: u64) -> Result<(), Shipm
     if let Some(carrier) = previous_carrier {
         storage::remove_from_list(env, DataKey::CarrierList(carrier), shipment_id);
     }
+    // A cancelled shipment is no longer open work, whether it was cancelled
+    // from `Created` or (already-removed) `Accepted`.
+    storage::remove_from_list(env, DataKey::OpenList, shipment_id);
 
     events::cancelled(env, &shipment);
     Ok(())

@@ -4,7 +4,7 @@
 //! here is `(escrow, <action>, <shipment id>)` with the full post-transition
 //! [`EscrowRecord`] as its payload.
 
-use soroban_sdk::{symbol_short, Env, Symbol};
+use soroban_sdk::{symbol_short, Address, Env, Symbol};
 
 use crate::types::EscrowRecord;
 
@@ -34,4 +34,9 @@ pub fn disputed(env: &Env, record: &EscrowRecord) {
 
 pub fn resolved(env: &Env, record: &EscrowRecord) {
     publish(env, symbol_short!("resolved"), record);
+}
+
+/// `(escrow, treasury)` → the new fee recipient.
+pub fn treasury_set(env: &Env, treasury: &Address) {
+    env.events().publish((SUBJECT, symbol_short!("treasury")), treasury.clone());
 }

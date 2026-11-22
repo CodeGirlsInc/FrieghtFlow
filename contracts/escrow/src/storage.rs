@@ -25,6 +25,18 @@ pub fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
     Ok(())
 }
 
+/// Address that receives cancellation fees.
+///
+/// Falls back to the admin when `DataKey::Treasury` is unset, which keeps
+/// escrows deployed before the key existed working (and paying fees to the
+/// same recipient as before) until an admin calls `set_treasury`.
+pub fn treasury(env: &Env) -> Result<Address, EscrowError> {
+    if let Some(treasury) = env.storage().instance().get(&DataKey::Treasury) {
+        return Ok(treasury);
+    }
+    admin(env)
+}
+
 pub fn token(env: &Env) -> Result<token::Client<'_>, EscrowError> {
     let token_addr: Address = env
         .storage()

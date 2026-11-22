@@ -24,15 +24,15 @@ pub fn refund(env: &Env, shipment_id: u64) -> Result<(), EscrowError> {
 /// platform.
 ///
 /// `fee_amount` is in the token's base unit. The shipper receives
-/// `amount - fee_amount` and the platform's admin receives `fee_amount`, so
+/// `amount - fee_amount` and the platform's treasury receives `fee_amount`, so
 /// the contract's token balance is fully drained across the two transfers
 /// and no dust is stranded. A `fee_amount` of `0` is a plain full refund and
 /// is equivalent to [`refund`].
 ///
-/// The fee goes to the contract's configured admin — the same address
-/// `require_settlement_authority` already treats as the platform authority,
-/// so there is exactly one canonical fee recipient and no second
-/// configuration to keep in sync.
+/// The fee goes to the configurable treasury rather than the admin key, so
+/// rotating the hot admin key after an incident does not redirect platform
+/// revenue. Escrows initialised before the treasury key existed fall back to
+/// the admin until `set_treasury` is called.
 ///
 /// # Errors
 ///
@@ -70,10 +70,10 @@ pub fn refund_with_fee(
     );
 
     if fee_amount > 0 {
-        // Fee recipient is the configured platform admin.
+        // Fee recipient is the configured platform treasury.
         token.transfer(
             &env.current_contract_address(),
-            &storage::admin(env)?,
+            &storage::treasury(env)?,
             &fee_amount,
         );
         storage::store_settlement_fee(env, shipment_id, fee_amount);

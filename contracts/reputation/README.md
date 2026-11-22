@@ -32,6 +32,7 @@ score = avg_rating            ← 0-500  rating component (stored ×100)
 | `calculate_score(user)` | Read-only | Computes the composite score. |
 | `get_reputation(user)` / `get_rating(rating_id)` | Read-only | Profile / rating lookup. |
 | `has_rated_shipment(shipment_id, rater)` | Read-only | Whether `rater` already rated that shipment. |
+| `get_ratings_for(user, offset, limit)` | Read-only | Paginated ids of the ratings `user` has received. |
 | `get_total_ratings()` | Read-only | Number of ratings ever submitted. |
 
 ## Errors
@@ -58,6 +59,7 @@ score = avg_rating            ← 0-500  rating component (stored ×100)
 | `Rating(u64)` | Persistent | `RatingRecord` |
 | `RatingCounter` | Persistent | Last assigned rating id |
 | `ShipmentRaters(u64)` | Persistent | `Vec<Address>` of raters for a shipment |
+| `RatingsFor(Address)` | Persistent | `Vec<u64>` of rating ids received by a user |
 | `Admin` | Instance | Current admin address |
 | `AuthorizedContract` | Instance | Contract allowed to call `register_user` / `update_stats` |
 | `Paused` | Instance | Pause flag |

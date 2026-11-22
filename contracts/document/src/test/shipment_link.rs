@@ -108,9 +108,10 @@ fn test_registry_can_be_repointed_at_another_shipment_contract() {
     assert_eq!(result, Err(Ok(DocumentError::ShipmentNotFound)));
 }
 
-/// The `Shipment` type in [`crate::shipment`] mirrors the shipment contract's
-/// own definition by hand. If the two ever drift, this decode fails — which is
-/// exactly what would otherwise break `register_document` in production.
+/// The `Shipment` type in [`crate::shipment`] is the shared `common` definition
+/// the shipment contract also uses. This still round-trips it across the real
+/// cross-contract boundary, so a decode mismatch (e.g. an incompatible event
+/// or storage encoding) fails here rather than in `register_document`.
 #[test]
 fn test_mirrored_shipment_type_matches_the_real_contract() {
     let ctx = setup();

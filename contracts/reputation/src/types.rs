@@ -53,4 +53,9 @@ pub enum DataKey {
     Rating(u64),
     ShipmentRaters(u64), // Vec<Address> — who has already rated this shipment
     Paused,
+    /// rated address → Vec<u64> of rating ids received by that user.
+    ///
+    /// Kept as a separate index so a user's reviews are listable without
+    /// scanning every rating id. Maintained on submit and void.
+    RatingsFor(Address),
 }

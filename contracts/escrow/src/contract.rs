@@ -26,6 +26,9 @@ impl EscrowContract {
             return Err(EscrowError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        // Default the treasury to the admin so existing deployments keep
+        // paying fees to the same address until it is explicitly changed.
+        env.storage().instance().set(&DataKey::Treasury, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
             .instance()
@@ -110,6 +113,24 @@ impl EscrowContract {
             .instance()
             .set(&DataKey::TokenContract, &new_token);
         Ok(())
+    }
+
+    /// Admin-only: set the address that receives cancellation fees.
+    ///
+    /// Kept separate from `Admin` so rotating the operational admin key does
+    /// not redirect platform revenue. Requires admin auth and an unpaused
+    /// contract, and emits a `treasury` event recording the new address.
+    pub fn set_treasury(env: Env, treasury: Address) -> Result<(), EscrowError> {
+        storage::admin(&env)?.require_auth();
+        storage::require_not_paused(&env)?;
+        env.storage().instance().set(&DataKey::Treasury, &treasury);
+        events::treasury_set(&env, &treasury);
+        Ok(())
+    }
+
+    /// Read the address that receives cancellation fees.
+    pub fn get_treasury(env: Env) -> Result<Address, EscrowError> {
+        storage::treasury(&env)
     }
 
     /// Shipper locks funds for a shipment. See [`funding::fund`].

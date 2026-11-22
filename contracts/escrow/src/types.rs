@@ -59,4 +59,10 @@ pub enum DataKey {
     /// Kept under its own key (like [`DataKey::EscrowFee`]) so the encoding of
     /// [`EscrowRecord`] and every event payload stays unchanged.
     DisputedAt(u64),
+    /// Address that receives cancellation fees.
+    ///
+    /// Kept alongside `Admin`; the storage accessor falls back to the admin
+    /// when unset, so an escrow deployed before this key existed keeps paying
+    /// fees to the admin until `set_treasury` is called.
+    Treasury,
 }

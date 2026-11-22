@@ -70,6 +70,9 @@ pub fn submit(
         .persistent()
         .extend_ttl(&DataKey::Rating(rating_id), TTL_LEDGERS, TTL_LEDGERS);
 
+    // Index the rating by its recipient so the user's reviews are listable.
+    storage::append_rating_for(env, &record.rated, rating_id);
+
     // Mark rater for this shipment.
     raters.push_back(rater);
     env.storage()
@@ -107,6 +110,9 @@ pub fn void(env: &Env, rating_id: u64) -> Result<(), ReputationError> {
     env.storage()
         .persistent()
         .remove(&DataKey::Rating(rating_id));
+
+    // A voided rating must disappear from the recipient's list as well.
+    storage::remove_rating_for(env, &record.rated, rating_id);
 
     // Free the rater to submit a new rating for this shipment.
     let raters: Vec<Address> = env
