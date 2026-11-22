@@ -24,10 +24,12 @@ initialisation.
 | `refund_payment(shipment_id)` | Settlement authority (admin) | Refunds a `Funded` escrow to the shipper. |
 | `refund_payment_with_fee(shipment_id, fee_amount)` | Settlement authority (admin) | Refunds and retains `fee_amount` for the platform treasury. |
 | `raise_dispute(caller, shipment_id)` | Shipper or carrier | Marks the escrow `Disputed` so no payout happens. |
-| `resolve_dispute(shipment_id, release_to_carrier, fee_amount)` | Admin | Splits a `Disputed` escrow and settles it. |
+| `resolve_dispute(shipment_id, release_to_carrier)` | Admin | All-or-nothing resolution: pays the carrier or refunds the shipper. Kept for ABI compatibility. |
+| `resolve_dispute_split(shipment_id, carrier_amount)` | Admin | Settles a `Disputed` escrow with any split: `carrier_amount` to the carrier, the remainder to the shipper. |
 | `get_escrow(shipment_id)` | Read-only | Returns the `EscrowRecord`. |
 | `get_settlement_fee(shipment_id)` | Read-only | Fee retained the last time this escrow settled as a partial refund. |
 | `get_disputed_at(shipment_id)` | Read-only | Ledger timestamp the dispute was raised at (`0` if never disputed). |
+| `get_dispute_split(shipment_id)` | Read-only | Carrier share of the last partial dispute settlement. |
 | `get_admin()` / `get_balance()` | Read-only | Admin address / contract token balance. |
 
 Statuses: `Pending` (declared, currently unused — see `types.rs`),
@@ -44,10 +46,14 @@ Statuses: `Pending` (declared, currently unused — see `types.rs`),
 | 5 | `NotFunded` | The escrow is not in `Funded` state. |
 | 6 | `InvalidStatus` | The transition is not allowed from the current status. |
 | 7 | `Unauthorized` | The caller is not authorised (non-party, non-admin). |
-| 8 | `InvalidAmount` | Amount is non-positive, or a fee is negative or ≥ the escrow. |
+| 8 | `InvalidAmount` | Amount is non-positive, a fee is negative or ≥ the escrow, or a dispute split is out of range. |
 | 9 | `InsufficientBalance` | The contract's token balance cannot cover the payout. |
 | 10 | `Paused` | The contract is paused and the call mutates state. |
 | 11 | `InvalidParties` | Shipper and carrier are the same address. |
+| 12 | `ShipmentLookupFailed` | The linked shipment contract could not be read/decoded. |
+| 13 | `ShipmentNotAccepted` | The shipment is not `Accepted`. |
+| 14 | `CarrierMismatch` | The supplied carrier is not the shipment's carrier. |
+| 15 | `AmountMismatch` | The supplied amount differs from `Shipment.price`. |
 
 ## Storage keys
 
@@ -58,6 +64,7 @@ Statuses: `Pending` (declared, currently unused — see `types.rs`),
 | `DisputedAt(u64)` | Persistent | Ledger timestamp the dispute was raised |
 | `Admin` | Instance | Settlement authority |
 | `Treasury` | Instance | Platform fee recipient; defaults to `Admin` when unset |
+| `EscrowSplit(u64)` | Persistent | Carrier share at last partial dispute settlement |
 | `TokenContract` | Instance | SEP-41 token holding the funds |
 | `ShipmentContract` | Instance | Shipment contract this escrow is wired to |
 | `Paused` | Instance | Pause flag |
@@ -83,7 +90,10 @@ Actions: `funded`, `released`, `refunded`, `disputed`, `resolved`, plus
   the **carrier** cannot pull funds, only dispute.
 - The escrow trusts the **shipment contract's** status as the business
   trigger for settlement; `set_shipment_contract` lets an admin re-wire it
-  after a redeploy.
+  after a redeploy. When that link is set, `fund_escrow` also verifies the
+  shipment is `Accepted` and that the carrier and amount match the shipment;
+  with no link, funding is a trusted/off-chain operation and those checks are
+  skipped (issue #1861).
 - Pausing stops funding and settlement alike, so a paused contract holds
   funds in place until the admin unpauses (see
   [`SECURITY-MODEL.md`](../SECURITY-MODEL.md)).

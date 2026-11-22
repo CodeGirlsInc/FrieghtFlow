@@ -20,4 +20,13 @@ pub enum EscrowError {
     /// structurally invalid escrow: this one can never become valid, because the
     /// parties are fixed at funding time (issue #1675).
     InvalidParties = 11,
+    /// The linked shipment contract could not be queried or its response
+    /// could not be decoded — a deployment/ABI problem, not bad input.
+    ShipmentLookupFailed = 12,
+    /// The shipment exists but is not in `Accepted` state.
+    ShipmentNotAccepted = 13,
+    /// `carrier` does not match the shipment's assigned carrier.
+    CarrierMismatch = 14,
+    /// `amount` does not match `Shipment.price`.
+    AmountMismatch = 15,
 }

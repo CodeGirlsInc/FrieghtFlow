@@ -4,7 +4,7 @@ use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Bytes, BytesN, Env, Vec};
 
 use crate::errors::DocumentError;
-use crate::shipment::{Shipment, ShipmentClient};
+use crate::shipment::{Shipment, ShipmentClient, ShipmentStatus};
 use crate::types::{DataKey, DocumentRecord, DocumentType, HashAlgorithm};
 use crate::{events, storage};
 
@@ -58,6 +58,12 @@ pub fn register(
     let shipment = fetch_shipment(env, shipment_id)?;
     if !shipment.is_party(&uploader) {
         return Err(DocumentError::NotShipmentParty);
+    }
+    // #1859: a cancelled job must not accumulate new paperwork. Other
+    // statuses (including Completed, for post-delivery invoices/proofs and
+    // Disputed, for evidence) remain valid upload surfaces; see README.
+    if shipment.status == ShipmentStatus::Cancelled {
+        return Err(DocumentError::ShipmentCancelled);
     }
 
     let id = storage::next_id(env);
@@ -154,6 +160,7 @@ fn fetch_shipment(env: &Env, shipment_id: u64) -> Result<Shipment, DocumentError
         // The shipment contract returned an error — the id is unknown.
         .map_err(|_| DocumentError::ShipmentNotFound)?
         // A decode failure means our mirrored `Shipment` has drifted from the
-        // shipment contract's; that is a deployment bug, not user input.
-        .map_err(|_| DocumentError::ShipmentNotFound)
+        // shipment contract's; that is a deployment bug, not user input, and
+        // deserves its own error code (#1858).
+        .map_err(|_| DocumentError::ShipmentDecodeFailed)
 }

@@ -186,3 +186,51 @@ pub fn resolve_dispute(
     events::resolved(env, &record);
     Ok(())
 }
+
+/// Admin settles a disputed escrow with an explicit carrier share (#1860).
+///
+/// `carrier_amount` goes to the carrier and the remainder of the escrowed
+/// amount goes to the shipper, so the two transfers always sum to the held
+/// balance. The boolean [`resolve_dispute`] entrypoint is kept for ABI
+/// compatibility and delegates the all-or-nothing cases here.
+pub fn resolve_dispute_split(
+    env: &Env,
+    shipment_id: u64,
+    carrier_amount: i128,
+) -> Result<(), EscrowError> {
+    storage::require_settlement_authority(env)?;
+    storage::require_not_paused(env)?;
+
+    let mut record = storage::load(env, shipment_id)?;
+    if record.status != EscrowStatus::Disputed {
+        return Err(EscrowError::InvalidStatus);
+    }
+    if carrier_amount < 0 || carrier_amount > record.amount {
+        return Err(EscrowError::InvalidAmount);
+    }
+
+    let shipper_amount = record.amount - carrier_amount;
+    let token = storage::token(env)?;
+    let contract = env.current_contract_address();
+
+    if carrier_amount > 0 {
+        token.transfer(&contract, &record.carrier, &carrier_amount);
+    }
+    if shipper_amount > 0 {
+        token.transfer(&contract, &record.shipper, &shipper_amount);
+    }
+
+    record.status = if carrier_amount == 0 {
+        EscrowStatus::Refunded
+    } else {
+        EscrowStatus::Released
+    };
+    record.settled_at = env.ledger().timestamp();
+    storage::store(env, &record);
+    storage::store_dispute_split(env, shipment_id, carrier_amount);
+
+    // One post-transition event, as with the boolean entrypoint; the split is
+    // read back with `get_dispute_split` rather than smuggled into the payload.
+    events::resolved(env, &record);
+    Ok(())
+}

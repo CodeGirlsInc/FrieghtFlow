@@ -37,4 +37,10 @@ pub enum DocumentError {
     /// from the same uploader on the same shipment, or pointed a document at
     /// itself.
     InvalidSupersede = 13,
+    /// The shipment contract returned a value that could not be decoded into
+    /// our mirrored `Shipment` — an ABI/deployment mismatch, not a missing id.
+    ShipmentDecodeFailed = 14,
+    /// The shipment exists but its status is `Cancelled`; documents cannot be
+    /// attached to a job that has been called off.
+    ShipmentCancelled = 15,
 }

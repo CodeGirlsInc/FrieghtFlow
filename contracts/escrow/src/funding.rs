@@ -3,6 +3,7 @@
 use soroban_sdk::{Address, Env};
 
 use crate::errors::EscrowError;
+use crate::shipment::{ShipmentClient, ShipmentStatus};
 use crate::types::{DataKey, EscrowRecord, EscrowStatus};
 use crate::{events, storage};
 
@@ -56,6 +57,12 @@ pub fn fund(
         }
     }
 
+    // #1861: when a shipment contract is linked, refuse to lock funds for a
+    // shipment that is not Accepted, for a carrier that is not assigned to it,
+    // or for an amount that differs from its price. With no link configured
+    // the old trusted/off-chain mode is preserved.
+    validate_against_shipment(env, &carrier, shipment_id, amount)?;
+
     // Pull tokens from shipper into this contract.
     // transfer_from: spender=this_contract, from=shipper, to=this_contract, amount
     storage::token(env)?.transfer_from(
@@ -79,5 +86,36 @@ pub fn fund(
     storage::store(env, &record);
 
     events::funded(env, &record);
+    Ok(())
+}
+
+/// Cross-check funding inputs against the linked shipment contract (#1861).
+fn validate_against_shipment(
+    env: &Env,
+    carrier: &Address,
+    shipment_id: u64,
+    amount: i128,
+) -> Result<(), EscrowError> {
+    let Some(shipment_contract) = storage::shipment_contract(env) else {
+        // No link: the caller is trusted to supply correct shipment data
+        // off-chain. This mode is retained for existing deployments.
+        return Ok(());
+    };
+
+    let client = ShipmentClient::new(env, &shipment_contract);
+    let shipment = client
+        .try_get_shipment(&shipment_id)
+        .map_err(|_| EscrowError::ShipmentLookupFailed)?
+        .map_err(|_| EscrowError::ShipmentLookupFailed)?;
+
+    if shipment.status != ShipmentStatus::Accepted {
+        return Err(EscrowError::ShipmentNotAccepted);
+    }
+    if shipment.carrier.as_ref() != Some(carrier) {
+        return Err(EscrowError::CarrierMismatch);
+    }
+    if shipment.price != amount {
+        return Err(EscrowError::AmountMismatch);
+    }
     Ok(())
 }

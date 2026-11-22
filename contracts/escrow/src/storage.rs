@@ -105,6 +105,27 @@ pub fn store_disputed_at(env: &Env, shipment_id: u64, when: u64) {
         .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
 }
 
+/// Carrier amount chosen the last time a disputed escrow was split, or `0`
+/// when it has not been split (or the carrier received nothing).
+pub fn dispute_split(env: &Env, shipment_id: u64) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::EscrowSplit(shipment_id))
+        .unwrap_or(0)
+}
+
+/// Records a partial dispute settlement alongside the escrow record.
+pub fn store_dispute_split(env: &Env, shipment_id: u64, carrier_amount: i128) {
+    let key = DataKey::EscrowSplit(shipment_id);
+    env.storage().persistent().set(&key, &carrier_amount);
+    env.storage().persistent().extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+}
+
+/// Address of the linked shipment contract, when one has been configured.
+pub fn shipment_contract(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::ShipmentContract)
+}
+
 /// Settlement requires the platform admin's authorisation.
 ///
 /// `DataKey::ShipmentContract` records the contract that may settle an escrow
