@@ -144,6 +144,7 @@ pub fn raise_dispute(env: &Env, caller: Address, shipment_id: u64) -> Result<(),
 
     record.status = EscrowStatus::Disputed;
     storage::store(env, &record);
+    storage::store_disputed_at(env, shipment_id, env.ledger().timestamp());
 
     events::disputed(env, &record);
     Ok(())

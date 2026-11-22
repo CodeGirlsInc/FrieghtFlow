@@ -33,4 +33,8 @@ pub enum DocumentError {
     /// off-chain pointer that does not exist, and no canonical CID is
     /// shorter than the 8-byte `bafkqaaa` CIDv1 form.
     FieldTooShort = 12,
+    /// `supersede_document` was given a replacement that is not a newer record
+    /// from the same uploader on the same shipment, or pointed a document at
+    /// itself.
+    InvalidSupersede = 13,
 }

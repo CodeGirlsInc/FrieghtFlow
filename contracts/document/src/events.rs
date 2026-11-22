@@ -31,3 +31,11 @@ pub fn flagged(env: &Env, doc: &DocumentRecord) {
     env.events()
         .publish((SUBJECT, symbol_short!("flagged"), doc.id), doc.clone());
 }
+
+/// `(document, superseded, doc id)` → the id of the replacement document.
+pub fn superseded(env: &Env, doc_id: u64, new_doc_id: u64) {
+    env.events().publish(
+        (SUBJECT, Symbol::new(env, "superseded"), doc_id),
+        new_doc_id,
+    );
+}

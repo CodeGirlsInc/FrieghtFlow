@@ -54,4 +54,9 @@ pub enum DataKey {
     /// part of the ABI, so a new variant here is free.
     EscrowFee(u64),
     Paused,
+    /// shipment_id → ledger timestamp at which the dispute was raised.
+    ///
+    /// Kept under its own key (like [`DataKey::EscrowFee`]) so the encoding of
+    /// [`EscrowRecord`] and every event payload stays unchanged.
+    DisputedAt(u64),
 }

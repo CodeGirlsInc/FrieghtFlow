@@ -68,4 +68,9 @@ pub enum DataKey {
     Document(u64),
     ShipmentDocs(u64), // shipment_id → Vec<u64> of doc IDs
     Paused,
+    /// doc_id → id of the document that supersedes it.
+    ///
+    /// Kept under its own key rather than as a `DocumentRecord` field so the
+    /// record's on-chain encoding (and every event payload) is unchanged.
+    SupersededBy(u64),
 }

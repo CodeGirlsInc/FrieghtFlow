@@ -172,6 +172,12 @@ impl EscrowContract {
         storage::settlement_fee(&env, shipment_id)
     }
 
+    /// The ledger timestamp at which this escrow's dispute was raised, or
+    /// `0` if it has never been disputed.
+    pub fn get_disputed_at(env: Env, shipment_id: u64) -> u64 {
+        storage::disputed_at(&env, shipment_id)
+    }
+
     /// Read the configured admin address.
     ///
     /// Lets external callers (e.g. the backend's Soroban integration layer)
