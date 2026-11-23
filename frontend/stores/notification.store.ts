@@ -35,7 +35,10 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       };
       // Keep only the most recent 20 notifications
       const notifications = [notification, ...state.notifications].slice(0, 20);
-      return { notifications, unreadCount: state.unreadCount + 1 };
+      return {
+        notifications,
+        unreadCount: notifications.filter((n) => !n.read).length,
+      };
     }),
 
   markAllRead: () =>
