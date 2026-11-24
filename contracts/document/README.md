@@ -20,6 +20,8 @@ and the uploader is a party to it.
 | `register_document(uploader, shipment_id, doc_type, content_hash, hash_algorithm, ipfs_cid)` | Shipper or carrier of the shipment | Validates the shipment, party and CID length, stores the record and appends it to the shipment's document list. |
 | `verify_document(verifier, doc_id)` | Admin | Marks a document authentic (`is_verified = true`). |
 | `flag_document(admin, doc_id, reason)` | Admin | Flags a verified document as fraudulent, reversing verification and recording the reason. |
+| `supersede_document(uploader, doc_id, new_doc_id)` | Uploader | Marks the caller's own unverified document as superseded by a newer document from the same uploader on the same shipment. |
+| `get_superseded_by(doc_id)` | Read-only | The id of the document that supersedes `doc_id`, if any. |
 | `check_integrity(doc_id, hash)` | Read-only | Compares a supplied hash with the registered `content_hash`. |
 | `get_document(doc_id)` | Read-only | Returns the `DocumentRecord`. |
 | `get_documents_by_shipment(shipment_id, offset, limit)` | Read-only | Paginated document ids for a shipment. |
@@ -28,6 +30,23 @@ and the uploader is a party to it.
 
 `ipfs_cid` is capped at `MAX_IPFS_CID_LEN` (512) bytes and `reason` in
 `flag_document` at 1024 bytes.
+
+## Shipment status / document type matrix
+
+`register_document` first requires the uploader to be a party to an existing
+shipment, then applies this status matrix:
+
+| Shipment status | All `DocumentType`s |
+|---|---|
+| `Created`, `Accepted`, `InTransit`, `Delivered` | Allowed |
+| `Completed` | Allowed (post-delivery invoices, proofs and photos) |
+| `Disputed` | Allowed (either party may upload evidence) |
+| `Cancelled` | Rejected with `ShipmentCancelled` |
+
+The check is deliberately type-agnostic for now: cancelled jobs never accept
+new documents, while completed jobs keep accepting the paperwork that follows
+delivery. An ABI/deployment mismatch when decoding the shipment is reported as
+`ShipmentDecodeFailed`, never as `ShipmentNotFound`.
 
 ## Errors
 
@@ -44,6 +63,10 @@ and the uploader is a party to it.
 | 9 | `Paused` | The contract is paused and the call mutates state. |
 | 10 | `NotVerified` | `flag_document` was called on a document that is not verified. |
 | 11 | `FieldTooLong` | `ipfs_cid` > 512 bytes or `reason` > 1024 bytes. |
+| 12 | `FieldTooShort` | `ipfs_cid` < 8 bytes. |
+| 13 | `InvalidSupersede` | The replacement is not the same uploader's document on the same shipment, or is the document itself. |
+| 14 | `ShipmentDecodeFailed` | The shipment contract's response could not be decoded (deployment bug). |
+| 15 | `ShipmentCancelled` | The shipment exists but is `Cancelled`. |
 
 ## Storage keys
 
@@ -52,6 +75,7 @@ and the uploader is a party to it.
 | `Counter` | Persistent | Last assigned document id |
 | `Document(u64)` | Persistent | `DocumentRecord` |
 | `ShipmentDocs(u64)` | Persistent | `Vec<u64>` of document ids for a shipment |
+| `SupersededBy(u64)` | Persistent | Id of the document that supersedes this one |
 | `Admin` | Instance | Current admin address |
 | `ShipmentContract` | Instance | Shipment contract used for cross-contract validation |
 | `Paused` | Instance | Pause flag |
@@ -61,7 +85,8 @@ and the uploader is a party to it.
 Emitted per [`../EVENTS.md`](../EVENTS.md): `(document, <action>, document id)`
 with the full post-transition `DocumentRecord` as payload.
 
-Actions: `registered`, `verified`, `flagged`.
+Actions: `registered`, `verified`, `flagged`, `superseded` (payload: the
+replacement document id).
 
 ## Trust assumptions
 

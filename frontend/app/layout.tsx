@@ -26,12 +26,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Inline script to apply theme before first paint — prevents flash */}
+        {/* Inline script to apply theme before first paint — prevents flash.
+            `suppressHydrationWarning` on <html> above covers the class this
+            script adds; the storage read is guarded because `localStorage`
+            access throws in browsers where storage is blocked. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var s=localStorage.getItem('theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;if(s==='dark'||(s===null&&d)){document.documentElement.classList.add('dark');}})();`,
+            __html: `(function(){
+              var theme = null;
+              try { theme = localStorage.getItem('theme'); } catch { theme = null; }
+              var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+              if (theme === 'dark' || (theme === null && prefersDark)) {
+                document.documentElement.classList.add('dark');
+              }
+            })();`,
           }}
         />
       </head>

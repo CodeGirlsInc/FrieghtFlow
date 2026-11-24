@@ -11,6 +11,7 @@ export const appConfigValidationSchema = Joi.object({
     .default('development'),
   PORT: Joi.number().default(6006),
   FRONTEND_URL: Joi.string().default('http://localhost:3000'),
+  APP_PUBLIC_URL: Joi.string().uri().optional(),
   /**
    * How many reverse proxies sit in front of this app, so `request.ip` (and
    * therefore every IP-based rate limit) resolves to the real client rather than

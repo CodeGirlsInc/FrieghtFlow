@@ -20,6 +20,7 @@ const CARRIER_NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/shipments', label: 'My Jobs' },
   { href: '/marketplace', label: 'Marketplace' },
+  { href: '/carrier/certifications', label: 'Certifications' },
 ];
 
 const ADMIN_NAV = [

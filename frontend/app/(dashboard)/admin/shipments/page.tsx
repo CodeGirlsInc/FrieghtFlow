@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { adminApi, PaginatedAdminShipments } from '../../../../lib/api/admin.api';
 import { ShipmentStatus } from '../../../../types/shipment.types';
 import { Button } from '../../../../components/ui/button';
 import { Pagination } from '../../../../components/ui/pagination';
+import { Input } from '../../../../components/ui/input';
+import { Label } from '../../../../components/ui/label';
 import {
   Card,
   CardContent,
@@ -39,12 +41,23 @@ const STATUS_STYLES: Record<ShipmentStatus, string> = {
 };
 
 export default function AdminShipmentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminShipmentsTable />
+    </Suspense>
+  );
+}
+
+function AdminShipmentsTable() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuthStore();
   const [result, setResult] = useState<PaginatedAdminShipments | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ShipmentStatus | 'all'>('all');
   const [page, setPage] = useState(1);
+  const [fromDate, setFromDate] = useState(searchParams.get('from') ?? '');
+  const [toDate, setToDate] = useState(searchParams.get('to') ?? '');
 
   useEffect(() => {
     if (user && user.role !== 'admin') {
@@ -59,16 +72,34 @@ export default function AdminShipmentsPage() {
         status: activeTab === 'all' ? undefined : activeTab,
         page,
         limit: 20,
+        from: fromDate || undefined,
+        to: toDate || undefined,
       })
       .then(setResult)
       .catch(() => toast.error('Failed to load shipments'))
       .finally(() => setLoading(false));
-  }, [activeTab, page]);
+  }, [activeTab, page, fromDate, toDate]);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') return;
     load();
   }, [user, load]);
+
+  // Date-range filter: the URL is the source of truth so the view can be
+  // shared, and changing a bound resets to page 1 since earlier pages don't
+  // apply to the new range.
+  const updateDateFilter = (which: 'from' | 'to', value: string) => {
+    const nextFrom = which === 'from' ? value : fromDate;
+    const nextTo = which === 'to' ? value : toDate;
+    setPage(1);
+    setFromDate(nextFrom);
+    setToDate(nextTo);
+    const params = new URLSearchParams();
+    if (nextFrom) params.set('from', nextFrom);
+    if (nextTo) params.set('to', nextTo);
+    const search = params.toString();
+    router.replace(search ? `/admin/shipments?${search}` : '/admin/shipments');
+  };
 
   if (!user || user.role !== 'admin') return null;
 
@@ -79,6 +110,24 @@ export default function AdminShipmentsPage() {
         <p className="text-muted-foreground text-sm mt-1">
           {result ? `${result.total} total shipments` : 'Loading…'}
         </p>
+      </div>
+
+      {/* Date-range filter */}
+      <div className="flex items-center gap-3">
+        <Label htmlFor="from">From</Label>
+        <Input
+          id="from"
+          type="date"
+          value={fromDate}
+          onChange={(e) => updateDateFilter('from', e.target.value)}
+        />
+        <Label htmlFor="to">To</Label>
+        <Input
+          id="to"
+          type="date"
+          value={toDate}
+          onChange={(e) => updateDateFilter('to', e.target.value)}
+        />
       </div>
 
       {/* Tabs */}

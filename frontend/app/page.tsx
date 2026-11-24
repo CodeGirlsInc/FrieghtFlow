@@ -2,13 +2,6 @@ import Link from "next/link";
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-const STATS = [
-  { value: "24,000+", label: "Shipments moved" },
-  { value: "6,800+", label: "Verified carriers" },
-  { value: "52", label: "Countries covered" },
-  { value: "98.7%", label: "On-time rate" },
-];
-
 const STEPS = [
   {
     number: "01",
@@ -73,25 +66,6 @@ const CARRIER_FEATURES = [
   },
 ];
 
-const TESTIMONIALS = [
-  {
-    quote:
-      "Before FreightFlow, I was spending two hours a day just chasing paperwork. Now I post a shipment, accept a carrier, and my goods arrive. The escrow system alone is worth it.",
-    name: "Amara Osei",
-    role: "Operations Director",
-    company: "Kente Export Co.",
-    initials: "AO",
-  },
-  {
-    quote:
-      "I tripled my load volume in three months. The marketplace shows me exactly what pays well on my usual routes. And payments actually land on time — that was never the case before.",
-    name: "Emeka Nwosu",
-    role: "Independent Carrier",
-    company: "Lagos–Abuja corridor",
-    initials: "EN",
-  },
-];
-
 const FOOTER_LINKS = {
   Product: [
     "How it works",
@@ -110,10 +84,6 @@ export default function HomePage() {
   return (
     <>
       <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
-        }
         @keyframes route-dash {
           to { stroke-dashoffset: -40; }
         }
@@ -129,8 +99,6 @@ export default function HomePage() {
         .fade-up-1 { animation: fade-up 0.7s 0.1s ease both; }
         .fade-up-2 { animation: fade-up 0.7s 0.25s ease both; }
         .fade-up-3 { animation: fade-up 0.7s 0.4s ease both; }
-        .float-card { animation: float 4s ease-in-out infinite; }
-        .float-card-2 { animation: float 4s 1.2s ease-in-out infinite; }
         .route-line { animation: route-dash 1.5s linear infinite; }
         .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
         .hero-grid {
@@ -275,7 +243,7 @@ export default function HomePage() {
             {/* Badge */}
             <div className="fade-up-1 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-4 py-1.5 text-xs text-white/70 mb-8 backdrop-blur-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 pulse-dot inline-block" />
-              Now live in 52 countries — blockchain-verified freight
+              Blockchain-verified freight
             </div>
 
             {/* Headline */}
@@ -321,30 +289,6 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Floating metric cards */}
-          <div className="absolute left-6 xl:left-20 top-1/2 -translate-y-1/2 hidden lg:block float-card">
-            <div className="bg-white/8 backdrop-blur-md border border-white/12 rounded-2xl p-4 w-44">
-              <p className="text-white/50 text-xs mb-1">Active shipments</p>
-              <p className="text-white text-2xl font-bold">1,284</p>
-              <p className="text-emerald-400 text-xs mt-1">↑ 12% this week</p>
-            </div>
-          </div>
-
-          <div className="absolute right-6 xl:right-20 top-1/2 -translate-y-1/2 hidden lg:block float-card-2">
-            <div className="bg-white/8 backdrop-blur-md border border-white/12 rounded-2xl p-4 w-48">
-              <p className="text-white/50 text-xs mb-2">Last delivery</p>
-              <div className="flex items-center gap-2">
-                <div className="h-7 w-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs text-emerald-400 font-bold shrink-0">
-                  EK
-                </div>
-                <div>
-                  <p className="text-white text-xs font-medium">Emeka K.</p>
-                  <p className="text-white/40 text-xs">Lagos → Abuja · ★ 5.0</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Scroll indicator */}
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-40">
             <span className="text-white text-xs tracking-widest uppercase">
@@ -354,17 +298,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── Stats bar ───────────────────────────────────────────────────── */}
-        <section className="border-y border-border bg-muted/40">
-          <div className="mx-auto max-w-5xl px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8">
-            {STATS.map((s) => (
-              <div key={s.label} className="text-center">
-                <p className="text-3xl font-black text-foreground">{s.value}</p>
-                <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
 
         {/* ── How it works ────────────────────────────────────────────────── */}
         <section className="py-24 px-6">
@@ -631,53 +564,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── Testimonials ────────────────────────────────────────────────── */}
-        <section className="py-24 px-6 bg-muted/20">
-          <div className="mx-auto max-w-6xl">
-            <div className="text-center mb-14">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-3">
-                From the people using it
-              </p>
-              <h2 className="text-4xl font-black text-foreground tracking-tight">
-                Real people. Real freight.
-              </h2>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              {TESTIMONIALS.map((t) => (
-                <div
-                  key={t.name}
-                  className="bg-card border border-border rounded-2xl p-8 card-hover"
-                >
-                  {/* Stars */}
-                  <div className="flex gap-0.5 mb-5">
-                    {[...Array(5)].map((_, i) => (
-                      <span key={i} className="text-amber-400 text-sm">
-                        ★
-                      </span>
-                    ))}
-                  </div>
-                  <blockquote className="text-foreground text-base leading-relaxed mb-6">
-                    &ldquo;{t.quote}&rdquo;
-                  </blockquote>
-                  <div className="flex items-center gap-3 pt-4 border-t border-border">
-                    <div className="h-10 w-10 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                      {t.initials}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground text-sm">
-                        {t.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {t.role} · {t.company}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
         {/* ── Final CTA ───────────────────────────────────────────────────── */}
         <section className="relative py-32 px-6 bg-[#0a0a0a] overflow-hidden">

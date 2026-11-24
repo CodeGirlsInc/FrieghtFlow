@@ -53,5 +53,26 @@ pub enum DataKey {
     /// breaking already-deployed clients for no gain. `DataKey` is never
     /// part of the ABI, so a new variant here is free.
     EscrowFee(u64),
+    /// shipment_id → the amount paid to the carrier when an admin settles a
+    /// dispute with [`crate::settlement::resolve_dispute_split`]. The shipper
+    /// receives `record.amount - value`. Stored under its own key so the
+    /// `EscrowRecord` encoding stays unchanged.
+    EscrowSplit(u64),
+    /// Sum of the amounts in every `Funded` or `Disputed` escrow. Kept in
+    /// instance storage so `get_total_locked` is a single read, independent
+    /// of how many escrows exist. `get_balance` remains the pooled token
+    /// balance; this counter is the reconciled, per-escrow figure (#1862).
+    TotalLocked,
     Paused,
+    /// shipment_id → ledger timestamp at which the dispute was raised.
+    ///
+    /// Kept under its own key (like [`DataKey::EscrowFee`]) so the encoding of
+    /// [`EscrowRecord`] and every event payload stays unchanged.
+    DisputedAt(u64),
+    /// Address that receives cancellation fees.
+    ///
+    /// Kept alongside `Admin`; the storage accessor falls back to the admin
+    /// when unset, so an escrow deployed before this key existed keeps paying
+    /// fees to the admin until `set_treasury` is called.
+    Treasury,
 }

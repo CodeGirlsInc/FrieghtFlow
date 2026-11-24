@@ -1,11 +1,17 @@
 //! Workspace-shared policy constants for the FreightFlow contracts.
 //!
 //! Each contract crate compiles to a standalone Wasm blob, so contracts cannot
-//! share code with one another; any value that encodes workspace-wide policy
-//! and must stay in sync across all five crates lives here once and is
-//! imported by each contract instead of being re-declared.
+//! share logic with one another; any value or **type** that encodes
+//! workspace-wide policy and must stay in sync across all five crates lives
+//! here once and is imported by each contract instead of being re-declared.
+//!
+//! Shared contract types must be defined here rather than hand-copied: a
+//! `#[contracttype]` struct is decoded by field name, so two divergent copies
+//! of the same record fail at the cross-contract boundary.
 
 #![no_std]
+
+pub mod shipment;
 
 /// Ledger-extended-ttl budget (~1 year at ~5s/ledger) applied to every
 /// persistent-storage key the contracts write.

@@ -1,41 +1,77 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { shipmentApi } from '../../../lib/api/shipment.api';
-import { formatMoney } from '../../../lib/format/currency';
-import { StatusTimeline } from '../../../components/shipment/status-timeline';
+import { PublicStatusTimeline } from '../../../components/shipment/status-timeline';
 import { StatusBadge } from '../../../components/shipment/status-badge';
-import type { Shipment, ShipmentStatusHistory } from '../../../types/shipment.types';
+import { ShipmentStatus, type PublicShipmentTracking } from '../../../types/shipment.types';
+
+const POLL_INTERVAL_MS = 60_000;
+const TERMINAL_STATUSES = new Set([ShipmentStatus.COMPLETED, ShipmentStatus.CANCELLED]);
 
 export default function TrackingPage() {
   const { trackingNumber } = useParams<{ trackingNumber: string }>();
-  const [shipment, setShipment] = useState<Shipment | null>(null);
-  const [history, setHistory] = useState<ShipmentStatusHistory[]>([]);
+  const [shipment, setShipment] = useState<PublicShipmentTracking | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // `silent` keeps background refreshes from swapping the page back to its
+  // full-screen spinner; manual refreshes use the same path.
+  const fetchStatus = useCallback(
+    async (silent = false) => {
+      if (!trackingNumber) return;
+      if (silent) setRefreshing(true);
+      else setLoading(true);
+      try {
+        const data = await shipmentApi.track(trackingNumber);
+        setShipment(data);
+        setLastUpdated(new Date());
+        setNotFound(false);
+        setError(false);
+      } catch (err: unknown) {
+        const apiError = err as { statusCode?: number };
+        if (apiError?.statusCode === 404) setNotFound(true);
+        else if (!silent) setError(true);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [trackingNumber],
+  );
 
   useEffect(() => {
-    if (!trackingNumber) return;
-    setLoading(true);
-    shipmentApi
-      .track(trackingNumber)
-      .then(async (s) => {
-        setShipment(s);
-        try {
-          const hist = await shipmentApi.getHistory(s.id);
-          setHistory(hist);
-        } catch {
-          // history is best-effort
-        }
-      })
-      .catch((err: { statusCode?: number }) => {
-        if (err?.statusCode === 404) setNotFound(true);
-        else setError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [trackingNumber]);
+    void fetchStatus();
+  }, [fetchStatus]);
+
+  const isTerminal = shipment
+    ? TERMINAL_STATUSES.has(shipment.status)
+    : false;
+
+  // Public tracking has no socket, so poll while the shipment is live. The
+  // interval and the visibility handler never fire requests for hidden tabs,
+  // and stop entirely once the shipment reaches a terminal status (#1850).
+  useEffect(() => {
+    if (!shipment || isTerminal) return;
+
+    const poll = () => {
+      if (!document.hidden) void fetchStatus(true);
+    };
+    const onVisibilityChange = () => {
+      if (!document.hidden) void fetchStatus(true);
+    };
+
+    const interval = window.setInterval(poll, POLL_INTERVAL_MS);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [shipment?.status, isTerminal, fetchStatus]);
 
   if (loading) {
     return (
@@ -88,40 +124,25 @@ export default function TrackingPage() {
             </h1>
             <StatusBadge status={shipment.status} />
           </div>
+          <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+            {lastUpdated && (
+              <span aria-live="polite">
+                Last updated {lastUpdated.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => void fetchStatus(true)}
+              disabled={refreshing}
+              className="underline underline-offset-2 disabled:opacity-50"
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
         </div>
 
         {/* Details */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 text-sm">
-          <div>
-            <p className="text-muted-foreground text-xs">Cargo</p>
-            <p className="font-medium">{shipment.cargoDescription}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground text-xs">Weight</p>
-            <p className="font-medium">{Number(shipment.weightKg).toLocaleString()} kg</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground text-xs">Price</p>
-            <p className="font-medium">
-              {formatMoney(shipment.price, shipment.currency)}
-            </p>
-          </div>
-          {shipment.shipper && (
-            <div>
-              <p className="text-muted-foreground text-xs">Shipper</p>
-              <p className="font-medium">
-                {shipment.shipper.firstName} {shipment.shipper.lastName}
-              </p>
-            </div>
-          )}
-          {shipment.carrier && (
-            <div>
-              <p className="text-muted-foreground text-xs">Carrier</p>
-              <p className="font-medium">
-                {shipment.carrier.firstName} {shipment.carrier.lastName}
-              </p>
-            </div>
-          )}
           {shipment.estimatedDeliveryDate && (
             <div>
               <p className="text-muted-foreground text-xs">Est. Delivery</p>
@@ -139,7 +160,7 @@ export default function TrackingPage() {
         {/* Timeline */}
         <div>
           <h2 className="text-base font-semibold mb-4">Status Timeline</h2>
-          <StatusTimeline history={history} />
+          <PublicStatusTimeline history={shipment.timeline} />
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { UserRole } from '../../types/auth.types';
 
 /**
  * Canonical preference keys, matching the backend `notification-preferences`
@@ -43,37 +44,54 @@ export interface NotificationPreference {
   enabled: boolean;
 }
 
-const PREFERENCE_META: Record<
-  NotificationPreferenceKey,
-  { label: string; description: string }
-> = {
+/**
+ * Per-key copy. The default descriptions describe events from the shipper's
+ * side; `carrierDescription` replaces it for carrier users — the backend
+ * emails carriers on the same preference keys, so they need carrier-relevant
+ * wording instead of the shipper's.
+ */
+type PreferenceMeta = {
+  label: string;
+  description: string;
+  /** Carrier-side description; falls back to `description` when omitted. */
+  carrierDescription?: string;
+};
+
+const PREFERENCE_META: Record<NotificationPreferenceKey, PreferenceMeta> = {
   shipmentAccepted: {
     label: 'Shipment Accepted',
     description: 'When a carrier accepts your shipment.',
+    carrierDescription: 'When you accept a shipment.',
   },
   shipmentInTransit: {
     label: 'Shipment In Transit',
     description: 'When your shipment is picked up and in transit.',
+    carrierDescription: 'When you pick up a shipment and it is in transit.',
   },
   shipmentDelivered: {
     label: 'Shipment Delivered',
     description: 'When your shipment is delivered.',
+    carrierDescription: 'When you deliver a shipment.',
   },
   shipmentCompleted: {
     label: 'Shipment Completed',
     description: 'When a delivery is confirmed and the shipment is completed.',
+    carrierDescription: 'When delivery is confirmed and the shipment is completed.',
   },
   shipmentCancelled: {
     label: 'Shipment Cancelled',
     description: 'When a shipment is cancelled.',
+    carrierDescription: 'When a shipment you accepted is cancelled.',
   },
   shipmentDisputed: {
     label: 'Dispute Opened',
     description: 'When a dispute is raised on a shipment.',
+    carrierDescription: 'When a dispute is raised on a shipment you accepted.',
   },
   disputeResolved: {
     label: 'Dispute Resolved',
     description: 'When a dispute is resolved.',
+    carrierDescription: 'When a dispute on a shipment you accepted is resolved.',
   },
 };
 
@@ -82,34 +100,50 @@ export const NOTIFICATION_PREFERENCE_KEYS = Object.keys(
   PREFERENCE_META,
 ) as NotificationPreferenceKey[];
 
+/** Pick the description that matches the viewer's role (#1848). */
+function preferenceDescription(
+  type: NotificationPreferenceKey,
+  role?: UserRole,
+): string {
+  const meta = PREFERENCE_META[type];
+  return role === 'carrier'
+    ? meta.carrierDescription ?? meta.description
+    : meta.description;
+}
+
 /** Adapt the backend entity into an ordered, display-ready list for the UI. */
 export function toPreferenceList(
   res: NotificationPreferencesResponse,
+  role?: UserRole,
 ): NotificationPreference[] {
   return NOTIFICATION_PREFERENCE_KEYS.map((type) => ({
     type,
     label: PREFERENCE_META[type].label,
-    description: PREFERENCE_META[type].description,
+    description: preferenceDescription(type, role),
     enabled: Boolean(res[type]),
   }));
 }
 
 /** Default list used when preferences cannot be loaded (all channels on). */
-export function defaultPreferenceList(): NotificationPreference[] {
+export function defaultPreferenceList(
+  role?: UserRole,
+): NotificationPreference[] {
   return NOTIFICATION_PREFERENCE_KEYS.map((type) => ({
     type,
     label: PREFERENCE_META[type].label,
-    description: PREFERENCE_META[type].description,
+    description: preferenceDescription(type, role),
     enabled: true,
   }));
 }
 
 export const notificationsApi = {
-  getPreferences: async (): Promise<NotificationPreference[]> => {
+  getPreferences: async (
+    role?: UserRole,
+  ): Promise<NotificationPreference[]> => {
     const res = await apiClient<NotificationPreferencesResponse>(
       '/notifications/preferences',
     );
-    return toPreferenceList(res);
+    return toPreferenceList(res, role);
   },
 
   updatePreferences: (

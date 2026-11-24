@@ -52,6 +52,23 @@ export interface ShipmentStatusHistory {
   changedAt: string;
 }
 
+export interface PublicTrackingEvent {
+  status: ShipmentStatus;
+  changedAt: string;
+}
+
+export interface PublicShipmentTracking {
+  trackingNumber: string;
+  status: ShipmentStatus;
+  origin: string;
+  destination: string;
+  pickupDate: string | null;
+  estimatedDeliveryDate: string | null;
+  actualDeliveryDate: string | null;
+  updatedAt: string;
+  timeline: PublicTrackingEvent[];
+}
+
 export interface CreateShipmentPayload {
   origin: string;
   destination: string;

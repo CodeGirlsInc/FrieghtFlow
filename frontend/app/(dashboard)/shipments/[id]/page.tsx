@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { Eye, FileText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Shipment, ShipmentStatus, ShipmentStatusHistory } from '../../../../types/shipment.types';
 import { Payment, PaymentStatus } from '../../../../types/payment.types';
@@ -13,8 +14,16 @@ import { useAuthStore } from '../../../../stores/auth.store';
 import { StatusBadge } from '../../../../components/shipment/status-badge';
 import { StatusTimeline } from '../../../../components/shipment/status-timeline';
 import { SubmitReviewForm } from '../../../../components/reviews/SubmitReviewForm';
+import { DocumentUploadModal } from '../../../../components/documents/DocumentUploadModal';
+import { DocumentViewer } from '../../../../components/documents/DocumentViewer';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { EmptyDocuments } from '../../../../components/ui/empty-state';
+import {
+  DOCUMENT_TYPE_LABELS,
+  documentsApi,
+  type DocumentMetadata,
+} from '../../../../lib/api/documents.api';
 
 /**
  * Cap on a free-text reason/note. The backend (`CancelBody`/`ResolveDisputeBody`
@@ -141,6 +150,28 @@ export default function ShipmentDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [reason, setReason] = useState('');
+  const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<DocumentMetadata | null>(null);
+
+  const isShipper = user?.id === shipment?.shipperId;
+  const isCarrier = user?.id === shipment?.carrierId;
+  const isAdmin = user?.role === 'admin';
+  const canManageDocuments = Boolean(
+    shipment && (isShipper || isCarrier || isAdmin),
+  );
+
+  const loadDocuments = useCallback(async (shipmentId: string) => {
+    setDocumentsLoading(true);
+    try {
+      setDocuments(await documentsApi.listByShipment(shipmentId));
+    } catch (err) {
+      toast.error(getErrorMessage(err) ?? 'Failed to load documents.');
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     const [s, h] = await Promise.all([
@@ -157,6 +188,11 @@ export default function ShipmentDetailPage() {
       .catch(() => toast.error('Failed to load shipment'))
       .finally(() => setLoading(false));
   }, [reload]);
+
+  useEffect(() => {
+    if (!shipment || !canManageDocuments) return;
+    loadDocuments(shipment.id);
+  }, [shipment, canManageDocuments, loadDocuments]);
 
   const act = async (fn: () => Promise<unknown>, successMsg: string, onDone?: () => void) => {
     setActionLoading(true);
@@ -185,6 +221,16 @@ export default function ShipmentDetailPage() {
   const closeAction = () => {
     setPendingAction(null);
     setReason('');
+  };
+
+  const removeDocument = async (document: DocumentMetadata) => {
+    try {
+      await documentsApi.remove(document.id);
+      toast.success('Document deleted.');
+      if (shipment) await loadDocuments(shipment.id);
+    } catch (err) {
+      toast.error(getErrorMessage(err) ?? 'Failed to delete document.');
+    }
   };
 
   const confirmAction = () => {
@@ -224,10 +270,6 @@ export default function ShipmentDetailPage() {
       </div>
     );
   }
-
-  const isShipper = user?.id === shipment.shipperId;
-  const isCarrier = user?.id === shipment.carrierId;
-  const isAdmin = user?.role === 'admin';
 
   // Never throws on an unrecognised currency code — see lib/format/currency.ts.
   const formattedPrice = formatMoney(shipment.price, shipment.currency);
@@ -338,6 +380,61 @@ export default function ShipmentDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {canManageDocuments && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-base">Documents</CardTitle>
+                <Button size="sm" onClick={() => setUploadOpen(true)}>
+                  Upload
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {documentsLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading documents…</p>
+                ) : documents.length === 0 ? (
+                  <EmptyDocuments onUpload={() => setUploadOpen(true)} />
+                ) : (
+                  <ul className="divide-y rounded-md border">
+                    {documents.map((document) => (
+                      <li
+                        key={document.id}
+                        className="flex items-center gap-3 px-3 py-2 text-sm"
+                      >
+                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{document.originalName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {DOCUMENT_TYPE_LABELS[document.documentType]} ·{' '}
+                            {(document.sizeBytes / 1024).toFixed(1)} KB ·{' '}
+                            {new Date(document.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          aria-label={`View ${document.originalName}`}
+                          onClick={() => setViewingDocument(document)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {(document.uploaderId === user?.id || isAdmin) && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            aria-label={`Delete ${document.originalName}`}
+                            onClick={() => removeDocument(document)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Actions */}
           <Card>
@@ -480,6 +577,26 @@ export default function ShipmentDetailPage() {
           )}
         </div>
       </div>
+
+      {canManageDocuments && (
+        <>
+          <DocumentUploadModal
+            open={uploadOpen}
+            onOpenChange={setUploadOpen}
+            shipmentId={shipment.id}
+            onSuccess={() => loadDocuments(shipment.id)}
+          />
+          {viewingDocument && (
+            <DocumentViewer
+              open
+              onClose={() => setViewingDocument(null)}
+              documentId={viewingDocument.id}
+              fileName={viewingDocument.originalName}
+              mimeType={viewingDocument.mimetype}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

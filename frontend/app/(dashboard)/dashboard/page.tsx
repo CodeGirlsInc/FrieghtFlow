@@ -10,18 +10,32 @@ import { ShipmentCard } from '../../../components/shipment/shipment-card';
 import { ShipmentCardSkeleton, StatsCardSkeleton } from '../../../components/ui/skeleton';
 import { EmptyShipments } from '../../../components/ui/empty-state';
 import { Shipment, ShipmentStatus } from '../../../types/shipment.types';
+import { useVerificationResend } from '../../../hooks/useVerificationResend';
 
 interface Stats {
-  active: number;
-  completed: number;
   pending: number;
+  accepted: number;
+  inTransit: number;
+  delivered: number;
+  completed: number;
 }
 
 export default function DashboardPage() {
   const { user, fetchCurrentUser, isLoading } = useAuthStore();
   const [recentShipments, setRecentShipments] = useState<Shipment[]>([]);
-  const [stats, setStats] = useState<Stats>({ active: 0, completed: 0, pending: 0 });
+  const [stats, setStats] = useState<Stats>({
+    pending: 0,
+    accepted: 0,
+    inTransit: 0,
+    delivered: 0,
+    completed: 0,
+  });
   const [dataLoading, setDataLoading] = useState(true);
+  const {
+    resend: resendVerification,
+    disabled: resendDisabled,
+    label: resendLabel,
+  } = useVerificationResend();
 
   useEffect(() => {
     if (!user) fetchCurrentUser();
@@ -34,14 +48,18 @@ export default function DashboardPage() {
     Promise.all([
       shipmentApi.list({ limit: 4 }),
       shipmentApi.list({ status: ShipmentStatus.PENDING, limit: 1 }),
+      shipmentApi.list({ status: ShipmentStatus.ACCEPTED, limit: 1 }),
       shipmentApi.list({ status: ShipmentStatus.IN_TRANSIT, limit: 1 }),
+      shipmentApi.list({ status: ShipmentStatus.DELIVERED, limit: 1 }),
       shipmentApi.list({ status: ShipmentStatus.COMPLETED, limit: 1 }),
     ])
-      .then(([recent, pending, inTransit, completed]) => {
+      .then(([recent, pending, accepted, inTransit, delivered, completed]) => {
         setRecentShipments(recent.data);
         setStats({
           pending: pending.total,
-          active: inTransit.total,
+          accepted: accepted.total,
+          inTransit: inTransit.total,
+          delivered: delivered.total,
           completed: completed.total,
         });
       })
@@ -70,6 +88,7 @@ export default function DashboardPage() {
 
   const isShipper = user.role === 'shipper' || user.role === 'admin';
   const isCarrier = user.role === 'carrier';
+  const activeCount = stats.accepted + stats.inTransit + stats.delivered;
 
   return (
     <div className="p-8 space-y-6">
@@ -95,10 +114,21 @@ export default function DashboardPage() {
 
       {/* Email verification banner */}
       {!user.isEmailVerified && (
-        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
-          <strong>Verify your email:</strong> We sent a verification link to{' '}
-          <span className="font-medium">{user.email}</span>. Please check your inbox to
-          unlock all features.
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
+          <p>
+            <strong>Verify your email:</strong> We sent a verification link to{' '}
+            <span className="font-medium">{user.email}</span>. Please check your inbox
+            to unlock all features.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={resendDisabled}
+            onClick={resendVerification}
+          >
+            {resendLabel}
+          </Button>
         </div>
       )}
 
@@ -112,24 +142,28 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">
-              {dataLoading ? '—' : stats.active}
+              {dataLoading ? '—' : activeCount}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">In transit</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {isCarrier
+                ? 'Assigned, in transit or awaiting confirmation'
+                : 'Accepted, in transit or awaiting confirmation'}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Pending
+              {isCarrier ? 'Awaiting Confirmation' : 'Pending'}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">
-              {dataLoading ? '—' : stats.pending}
+              {dataLoading ? '—' : isCarrier ? stats.delivered : stats.pending}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {isCarrier ? 'Awaiting pickup' : 'Awaiting carrier'}
+              {isCarrier ? 'Delivered — confirm completion' : 'Awaiting carrier'}
             </p>
           </CardContent>
         </Card>

@@ -6,13 +6,25 @@ export enum DocumentType {
   INVOICE = 'invoice',
   CUSTOMS_DECLARATION = 'customs_declaration',
   INSURANCE_CERTIFICATE = 'insurance_certificate',
+  CARRIER_CERTIFICATION = 'carrier_certification',
   PHOTO = 'photo',
   OTHER = 'other',
 }
 
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  [DocumentType.BILL_OF_LADING]: 'Bill of Lading',
+  [DocumentType.PROOF_OF_DELIVERY]: 'Proof of Delivery',
+  [DocumentType.INVOICE]: 'Invoice',
+  [DocumentType.CUSTOMS_DECLARATION]: 'Customs Declaration',
+  [DocumentType.INSURANCE_CERTIFICATE]: 'Insurance Certificate',
+  [DocumentType.CARRIER_CERTIFICATION]: 'Carrier Certification',
+  [DocumentType.PHOTO]: 'Photo',
+  [DocumentType.OTHER]: 'Other',
+};
+
 export interface DocumentMetadata {
   id: string;
-  shipmentId: string;
+  shipmentId: string | null;
   uploaderId: string;
   documentType: DocumentType;
   originalName: string;
@@ -74,6 +86,21 @@ export const documentsApi = {
 
     return uploadWithProgress<DocumentMetadata>(
       '/documents/upload',
+      formData,
+      onProgress,
+      signal,
+    );
+  },
+
+  uploadCertificationDocument(
+    file: File,
+    onProgress?: (percent: number) => void,
+    signal?: AbortSignal,
+  ): Promise<DocumentMetadata> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return uploadWithProgress<DocumentMetadata>(
+      '/documents/certification',
       formData,
       onProgress,
       signal,

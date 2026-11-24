@@ -158,6 +158,21 @@ describe('NotificationsGateway', () => {
     );
   });
 
+  it('includes the actor id in the emitted payload', () => {
+    const emit = jest.fn();
+    server.to.mockReturnValue({ emit });
+
+    gateway.onCreated(new ShipmentEvent(shipment, 'actor-1'));
+
+    expect(emit).toHaveBeenCalledWith(
+      'shipment:updated',
+      expect.objectContaining({
+        shipmentId: 'shipment-1',
+        actorId: 'actor-1',
+      }),
+    );
+  });
+
   it('emits to both shipper and carrier for accepted events but not to unrelated users', () => {
     const shipperEmit = jest.fn();
     const carrierEmit = jest.fn();

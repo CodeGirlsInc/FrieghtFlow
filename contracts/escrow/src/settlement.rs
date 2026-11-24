@@ -24,15 +24,15 @@ pub fn refund(env: &Env, shipment_id: u64) -> Result<(), EscrowError> {
 /// platform.
 ///
 /// `fee_amount` is in the token's base unit. The shipper receives
-/// `amount - fee_amount` and the platform's admin receives `fee_amount`, so
+/// `amount - fee_amount` and the platform's treasury receives `fee_amount`, so
 /// the contract's token balance is fully drained across the two transfers
 /// and no dust is stranded. A `fee_amount` of `0` is a plain full refund and
 /// is equivalent to [`refund`].
 ///
-/// The fee goes to the contract's configured admin — the same address
-/// `require_settlement_authority` already treats as the platform authority,
-/// so there is exactly one canonical fee recipient and no second
-/// configuration to keep in sync.
+/// The fee goes to the configurable treasury rather than the admin key, so
+/// rotating the hot admin key after an incident does not redirect platform
+/// revenue. Escrows initialised before the treasury key existed fall back to
+/// the admin until `set_treasury` is called.
 ///
 /// # Errors
 ///
@@ -70,10 +70,10 @@ pub fn refund_with_fee(
     );
 
     if fee_amount > 0 {
-        // Fee recipient is the configured platform admin.
+        // Fee recipient is the configured platform treasury.
         token.transfer(
             &env.current_contract_address(),
-            &storage::admin(env)?,
+            &storage::treasury(env)?,
             &fee_amount,
         );
         storage::store_settlement_fee(env, shipment_id, fee_amount);
@@ -82,6 +82,7 @@ pub fn refund_with_fee(
     record.status = EscrowStatus::Refunded;
     record.settled_at = env.ledger().timestamp();
     storage::store(env, &record);
+    storage::release_locked(env, record.amount); // #1862
 
     // Same `refunded` action as a full refund — the event convention
     // (`contracts/EVENTS.md`) is one post-transition `EscrowRecord` payload
@@ -117,6 +118,7 @@ fn settle(env: &Env, shipment_id: u64, to_carrier: bool) -> Result<(), EscrowErr
     };
     record.settled_at = env.ledger().timestamp();
     storage::store(env, &record);
+    storage::release_locked(env, record.amount); // #1862
 
     if to_carrier {
         events::released(env, &record);
@@ -144,6 +146,7 @@ pub fn raise_dispute(env: &Env, caller: Address, shipment_id: u64) -> Result<(),
 
     record.status = EscrowStatus::Disputed;
     storage::store(env, &record);
+    storage::store_disputed_at(env, shipment_id, env.ledger().timestamp());
 
     events::disputed(env, &record);
     Ok(())
@@ -180,8 +183,57 @@ pub fn resolve_dispute(
     };
     record.settled_at = env.ledger().timestamp();
     storage::store(env, &record);
+    storage::release_locked(env, record.amount); // #1862
 
     // A single `resolved` event; its payload's `status` says which way it went.
+    events::resolved(env, &record);
+    Ok(())
+}
+
+/// Admin settles a disputed escrow with an explicit carrier share (#1860).
+///
+/// `carrier_amount` goes to the carrier and the remainder of the escrowed
+/// amount goes to the shipper, so the two transfers always sum to the held
+/// balance. The boolean [`resolve_dispute`] entrypoint is kept for ABI
+/// compatibility and delegates the all-or-nothing cases here.
+pub fn resolve_dispute_split(
+    env: &Env,
+    shipment_id: u64,
+    carrier_amount: i128,
+) -> Result<(), EscrowError> {
+    storage::require_settlement_authority(env)?;
+    storage::require_not_paused(env)?;
+
+    let mut record = storage::load(env, shipment_id)?;
+    if record.status != EscrowStatus::Disputed {
+        return Err(EscrowError::InvalidStatus);
+    }
+    if carrier_amount < 0 || carrier_amount > record.amount {
+        return Err(EscrowError::InvalidAmount);
+    }
+
+    let shipper_amount = record.amount - carrier_amount;
+    let token = storage::token(env)?;
+    let contract = env.current_contract_address();
+
+    if carrier_amount > 0 {
+        token.transfer(&contract, &record.carrier, &carrier_amount);
+    }
+    if shipper_amount > 0 {
+        token.transfer(&contract, &record.shipper, &shipper_amount);
+    }
+
+    record.status = if carrier_amount == 0 {
+        EscrowStatus::Refunded
+    } else {
+        EscrowStatus::Released
+    };
+    record.settled_at = env.ledger().timestamp();
+    storage::store(env, &record);
+    storage::store_dispute_split(env, shipment_id, carrier_amount);
+
+    // One post-transition event, as with the boolean entrypoint; the split is
+    // read back with `get_dispute_split` rather than smuggled into the payload.
     events::resolved(env, &record);
     Ok(())
 }

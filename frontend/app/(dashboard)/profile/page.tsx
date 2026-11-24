@@ -20,6 +20,7 @@ import { useAuthStore } from '../../../stores/auth.store';
 import { updateProfile } from '../../../lib/api/auth.api';
 import { reviewsApi } from '../../../lib/api/reviews.api';
 import { getErrorMessage } from '../../../lib/api/client';
+import { useVerificationResend } from '../../../hooks/useVerificationResend';
 
 interface RatingSummary {
   averageRating: number;
@@ -46,12 +47,17 @@ export default function ProfilePage() {
   const { user, setUser, fetchCurrentUser, isLoading } = useAuthStore();
   const [ratingSummary, setRatingSummary] = useState<RatingSummary | null>(null);
   const [ratingLoading, setRatingLoading] = useState(true);
+  const {
+    resend: resendVerification,
+    disabled: resendDisabled,
+    label: resendLabel,
+  } = useVerificationResend();
 
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting, isDirty },
+    formState: { errors, isSubmitting, isDirty, dirtyFields },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   useEffect(() => {
@@ -95,7 +101,9 @@ export default function ProfilePage() {
       const updated = await updateProfile({
         firstName: data.firstName,
         lastName: data.lastName,
-        walletAddress: data.walletAddress || undefined,
+        walletAddress: dirtyFields.walletAddress
+          ? data.walletAddress || null
+          : undefined,
       });
       setUser(updated);
       reset({
@@ -147,13 +155,27 @@ export default function ProfilePage() {
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
                 Email verified
               </p>
-              <p className="text-sm font-medium">
-                {user.isEmailVerified ? (
-                  <span className="text-green-600">Verified</span>
-                ) : (
-                  <span className="text-yellow-600">Pending verification</span>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">
+                  {user.isEmailVerified ? (
+                    <span className="text-green-600">Verified</span>
+                  ) : (
+                    <span className="text-yellow-600">Pending verification</span>
+                  )}
+                </p>
+                {!user.isEmailVerified && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs"
+                    disabled={resendDisabled}
+                    onClick={resendVerification}
+                  >
+                    {resendLabel}
+                  </Button>
                 )}
-              </p>
+              </div>
             </div>
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">

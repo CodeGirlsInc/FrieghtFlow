@@ -19,19 +19,53 @@ contract and for the backend.
 | `create_shipment(shipper, origin, destination, cargo_description, weight_kg, price)` | Shipper | Creates a `Created` shipment and returns its id. |
 | `update_shipment(...)` | Shipper | Edits terms while the shipment is still `Created`. |
 | `accept_shipment(carrier, shipment_id)` | Carrier | Moves `Created → Accepted` and records the carrier. |
+| `withdraw_acceptance(carrier, shipment_id)` | Assigned carrier | Releases an `Accepted` job back to `Created` before pickup (#1864). |
 | `mark_in_transit(carrier, shipment_id)` | Carrier | Moves `Accepted → InTransit`. |
 | `mark_delivered(carrier, shipment_id)` | Carrier | Moves `InTransit → Delivered`. |
 | `confirm_delivery(shipper, shipment_id)` | Shipper | Moves `Delivered → Completed`, the signal for payment release. |
 | `cancel_shipment(shipper, shipment_id)` | Shipper | Cancels from `Created` or `Accepted` only. |
-| `raise_dispute(caller, shipment_id)` | Shipper or carrier | Moves the shipment into `Disputed`. |
+| `raise_dispute(caller, shipment_id, reason_hash)` | Shipper or carrier | Moves the shipment into `Disputed` and records who/why. `reason_hash` is `Option<BytesN<32>>` (#1863). |
 | `resolve_dispute(shipment_id, resolve_as_completed)` | Admin | Resolves a dispute as completed or cancelled. |
 | `get_shipment(shipment_id)` | Read-only | Returns the full `Shipment` record. |
+| `get_dispute(shipment_id)` | Read-only | Raiser, timestamp and optional reason hash of the dispute (#1863). |
+| `get_milestones(shipment_id)` | Read-only | Accepted / in-transit / delivered / completed timestamps (`0` = not reached) (#1865). |
 | `get_shipments_by_shipper(shipper, offset, limit)` | Read-only | Paginated list of the shipper's shipment ids. |
 | `get_shipments_by_carrier(carrier, offset, limit)` | Read-only | Paginated list of the carrier's shipment ids. |
+| `get_open_shipments(offset, limit)` | Read-only | Paginated list of shipments still in `Created`. |
 | `get_total_shipments()` | Read-only | Number of shipments ever created. |
 
 Statuses: `Created`, `Accepted`, `InTransit`, `Delivered`, `Completed`,
 `Disputed`, `Cancelled`.
+
+## Validation bounds
+
+`create_shipment` and `update_shipment` share one validator
+(`shipper::validate_terms`) and the same constants, so the limits are defined
+once and cannot drift apart:
+
+| Constant | Value | Applies to |
+|---|---|---|
+| `MAX_WEIGHT_KG` | 1 000 000 | `weight_kg` (upper bound; 0 is rejected) |
+| `MAX_LOCATION_LEN` | 255 | `origin`, `destination` (both also non-empty) |
+| `MAX_CARGO_LEN` | 1 024 | `cargo_description` (also non-empty) |
+
+Off-chain clients should use these values as the source of truth when
+validating shipment terms before submitting.
+
+Both paths into `Cancelled` — `cancel_shipment` and
+`resolve_dispute(..., false)` — call the same `storage::unassign_carrier`
+helper. The `carrier` field is cleared and the id removed from
+`CarrierList(carrier)`, so a cancelled job is not returned by
+`get_shipments_by_carrier` and the ex-carrier is no longer `is_party` (and so
+cannot authorise document uploads on it). Audit history stays in the
+`resolved` / `cancelled` event; it is deliberately not kept in the live
+record as a usable assignment (#1855).
+
+`Dispute` and `Milestones` live under their own `DataKey`s rather than as new
+`Shipment` fields, so the `Shipment` encoding, getters and event payloads keep
+their existing ABI. `get_milestones` is zero-filled for shipments created
+before these timestamps existed; individual transition times survive later
+status changes because only the dedicated record is written per transition.
 
 ## Errors
 
@@ -56,6 +90,7 @@ Statuses: `Created`, `Accepted`, `InTransit`, `Delivered`, `Completed`,
 | `Shipment(u64)` | Persistent | `Shipment` record |
 | `ShipperList(Address)` | Persistent | `Vec<u64>` of the shipper's ids |
 | `CarrierList(Address)` | Persistent | `Vec<u64>` of the carrier's ids |
+| `OpenList` | Persistent | `Vec<u64>` of shipments still in `Created` |
 | `Admin` | Instance | Current admin address |
 | `Paused` | Instance | Pause flag |
 
