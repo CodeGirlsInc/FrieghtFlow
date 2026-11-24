@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -18,6 +18,14 @@ import {
 } from '../../../components/ui/card';
 import { useAuthStore } from '../../../stores/auth.store';
 import { updateProfile } from '../../../lib/api/auth.api';
+import { reviewsApi } from '../../../lib/api/reviews.api';
+import { getErrorMessage } from '../../../lib/api/client';
+import { useVerificationResend } from '../../../hooks/useVerificationResend';
+
+interface RatingSummary {
+  averageRating: number;
+  totalReviews: number;
+}
 
 // Stellar public key: starts with G, 56 chars, base32
 const STELLAR_RE = /^G[A-Z2-7]{55}$/;
@@ -37,12 +45,19 @@ type FormData = z.infer<typeof schema>;
 
 export default function ProfilePage() {
   const { user, setUser, fetchCurrentUser, isLoading } = useAuthStore();
+  const [ratingSummary, setRatingSummary] = useState<RatingSummary | null>(null);
+  const [ratingLoading, setRatingLoading] = useState(true);
+  const {
+    resend: resendVerification,
+    disabled: resendDisabled,
+    label: resendLabel,
+  } = useVerificationResend();
 
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting, isDirty },
+    formState: { errors, isSubmitting, isDirty, dirtyFields },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   useEffect(() => {
@@ -50,6 +65,25 @@ export default function ProfilePage() {
       fetchCurrentUser();
     }
   }, [user, fetchCurrentUser]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    setRatingLoading(true);
+    reviewsApi.getAverageRating(user.id)
+      .then((summary) => {
+        if (active) setRatingSummary(summary);
+      })
+      .catch((err: unknown) => {
+        if (active) toast.error(getErrorMessage(err) ?? 'Failed to load your rating.');
+      })
+      .finally(() => {
+        if (active) setRatingLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   // Populate form once user loads
   useEffect(() => {
@@ -67,7 +101,9 @@ export default function ProfilePage() {
       const updated = await updateProfile({
         firstName: data.firstName,
         lastName: data.lastName,
-        walletAddress: data.walletAddress || undefined,
+        walletAddress: dirtyFields.walletAddress
+          ? data.walletAddress || null
+          : undefined,
       });
       setUser(updated);
       reset({
@@ -119,13 +155,27 @@ export default function ProfilePage() {
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
                 Email verified
               </p>
-              <p className="text-sm font-medium">
-                {user.isEmailVerified ? (
-                  <span className="text-green-600">Verified</span>
-                ) : (
-                  <span className="text-yellow-600">Pending verification</span>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">
+                  {user.isEmailVerified ? (
+                    <span className="text-green-600">Verified</span>
+                  ) : (
+                    <span className="text-yellow-600">Pending verification</span>
+                  )}
+                </p>
+                {!user.isEmailVerified && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs"
+                    disabled={resendDisabled}
+                    onClick={resendVerification}
+                  >
+                    {resendLabel}
+                  </Button>
                 )}
-              </p>
+              </div>
             </div>
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
@@ -136,6 +186,27 @@ export default function ProfilePage() {
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Received rating</CardTitle>
+          <CardDescription>Ratings left by the other party on completed shipments.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {ratingLoading ? (
+            <p className="text-sm text-muted-foreground">Loading rating…</p>
+          ) : ratingSummary && ratingSummary.totalReviews > 0 ? (
+            <p className="text-sm">
+              <span className="font-semibold">{ratingSummary.averageRating.toFixed(1)} / 5</span>
+              <span className="text-muted-foreground">
+                {' '}· {ratingSummary.totalReviews} review{ratingSummary.totalReviews === 1 ? '' : 's'}
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">No ratings yet.</p>
+          )}
         </CardContent>
       </Card>
 

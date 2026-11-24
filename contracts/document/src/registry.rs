@@ -4,7 +4,7 @@ use common::TTL_LEDGERS;
 use soroban_sdk::{Address, Bytes, BytesN, Env, Vec};
 
 use crate::errors::DocumentError;
-use crate::shipment::{Shipment, ShipmentClient};
+use crate::shipment::{Shipment, ShipmentClient, ShipmentStatus};
 use crate::types::{DataKey, DocumentRecord, DocumentType, HashAlgorithm};
 use crate::{events, storage};
 
@@ -59,6 +59,12 @@ pub fn register(
     if !shipment.is_party(&uploader) {
         return Err(DocumentError::NotShipmentParty);
     }
+    // #1859: a cancelled job must not accumulate new paperwork. Other
+    // statuses (including Completed, for post-delivery invoices/proofs and
+    // Disputed, for evidence) remain valid upload surfaces; see README.
+    if shipment.status == ShipmentStatus::Cancelled {
+        return Err(DocumentError::ShipmentCancelled);
+    }
 
     let id = storage::next_id(env);
     let doc = DocumentRecord {
@@ -100,6 +106,49 @@ pub fn register(
     Ok(id)
 }
 
+/// Mark one of the caller's own unverified documents as superseded by a newer
+/// document on the same shipment.
+///
+/// A document record itself is immutable, so the replacement is recorded under
+/// a separate [`DataKey::SupersededBy`] entry and surfaced through
+/// `get_superseded_by`. Only the original uploader may supersede a document,
+/// only while it is unverified, and the replacement must belong to the same
+/// uploader and the same shipment.
+pub fn supersede(
+    env: &Env,
+    uploader: Address,
+    doc_id: u64,
+    new_doc_id: u64,
+) -> Result<(), DocumentError> {
+    uploader.require_auth();
+    storage::require_not_paused(env)?;
+
+    let doc = storage::load(env, doc_id)?;
+    if doc.uploader != uploader {
+        return Err(DocumentError::Unauthorized);
+    }
+    if doc.is_verified {
+        return Err(DocumentError::AlreadyVerified);
+    }
+    if doc_id == new_doc_id {
+        return Err(DocumentError::InvalidSupersede);
+    }
+
+    let replacement = storage::load(env, new_doc_id)?;
+    if replacement.uploader != uploader || replacement.shipment_id != doc.shipment_id {
+        return Err(DocumentError::InvalidSupersede);
+    }
+
+    let key = DataKey::SupersededBy(doc_id);
+    env.storage().persistent().set(&key, &new_doc_id);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+
+    events::superseded(env, doc_id, new_doc_id);
+    Ok(())
+}
+
 /// Cross-contract read of `shipment_id` from the configured shipment contract,
 /// mapping "no such shipment" onto a typed error instead of letting the
 /// callee's trap unwind this contract.
@@ -111,6 +160,7 @@ fn fetch_shipment(env: &Env, shipment_id: u64) -> Result<Shipment, DocumentError
         // The shipment contract returned an error — the id is unknown.
         .map_err(|_| DocumentError::ShipmentNotFound)?
         // A decode failure means our mirrored `Shipment` has drifted from the
-        // shipment contract's; that is a deployment bug, not user input.
-        .map_err(|_| DocumentError::ShipmentNotFound)
+        // shipment contract's; that is a deployment bug, not user input, and
+        // deserves its own error code (#1858).
+        .map_err(|_| DocumentError::ShipmentDecodeFailed)
 }

@@ -1,13 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
 
 const DISMISS_KEY = 'onboarding_checklist_dismissed';
 
+// Use lowercase role strings that match the backend UserRole enum.
+type UserRole = 'shipper' | 'carrier';
+
 interface UserProfile {
-  role: 'SHIPPER' | 'CARRIER';
+  role: UserRole;
   emailVerified: boolean;
   profileComplete: boolean;
   hasShipment: boolean;
@@ -18,17 +22,21 @@ interface UserProfile {
 }
 
 const SHIPPER_STEPS = [
-  { key: 'emailVerified', label: 'Verify email' },
-  { key: 'profileComplete', label: 'Complete profile' },
-  { key: 'hasShipment', label: 'Create first shipment' },
-  { key: 'hasDocument', label: 'Upload a document' },
+  { key: 'emailVerified', label: 'Verify email', href: '/profile' },
+  { key: 'profileComplete', label: 'Complete profile', href: '/profile' },
+  { key: 'hasShipment', label: 'Create first shipment', href: '/shipments/new' },
+  { key: 'hasDocument', label: 'Upload a document', href: '/shipments' },
 ] as const;
 
 const CARRIER_STEPS = [
-  { key: 'emailVerified', label: 'Verify email' },
-  { key: 'hasRoutePreferences', label: 'Add route preferences' },
-  { key: 'hasCertifications', label: 'Upload certifications' },
-  { key: 'hasAcceptedShipment', label: 'Accept first shipment' },
+  { key: 'emailVerified', label: 'Verify email', href: '/profile' },
+  { key: 'hasRoutePreferences', label: 'Add route preferences', href: '/settings' },
+  {
+    key: 'hasCertifications',
+    label: 'Upload certifications',
+    href: '/carrier/certifications',
+  },
+  { key: 'hasAcceptedShipment', label: 'Accept first shipment', href: '/marketplace' },
 ] as const;
 
 export default function OnboardingChecklist() {
@@ -38,14 +46,28 @@ export default function OnboardingChecklist() {
     setDismissed(localStorage.getItem(DISMISS_KEY) === 'true');
   }, []);
 
-  const { data: profile } = useQuery({
+  const {
+    data: profile,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ['onboarding-profile'],
     queryFn: () => apiClient<UserProfile>('/users/me/onboarding'),
+    // Do not throw on 404 — the endpoint may not exist yet.
+    retry: false,
   });
+
+  // Show nothing while loading or if the endpoint is unavailable.
+  // Log errors so they appear in the browser console for debugging.
+  if (isError) {
+    console.error('[OnboardingChecklist] Failed to load profile:', error);
+    return null;
+  }
 
   if (dismissed || !profile) return null;
 
-  const steps = profile.role === 'CARRIER' ? CARRIER_STEPS : SHIPPER_STEPS;
+  // Compare role in lowercase to match the backend UserRole enum values.
+  const steps = profile.role === 'carrier' ? CARRIER_STEPS : SHIPPER_STEPS;
   const completed = steps.filter((s) => profile[s.key]).length;
 
   if (completed === steps.length) return null;
@@ -76,9 +98,12 @@ export default function OnboardingChecklist() {
             <span className={profile[step.key] ? 'text-green-500' : 'text-gray-300'}>
               {profile[step.key] ? '✓' : '○'}
             </span>
-            <span className={profile[step.key] ? 'text-gray-400 line-through' : 'text-gray-700'}>
+            <Link
+              href={step.href}
+              className={profile[step.key] ? 'text-gray-400 line-through' : 'text-gray-700 hover:underline'}
+            >
               {step.label}
-            </span>
+            </Link>
           </li>
         ))}
       </ul>

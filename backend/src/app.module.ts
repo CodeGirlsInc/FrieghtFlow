@@ -33,15 +33,14 @@ import {
 import { appConfigValidationSchema } from './config/app-config.validation';
 
 const throttlerErrorMessage = (context: ExecutionContext): string => {
-  const request = context.switchToHttp().getRequest<{
-    method?: string;
-    originalUrl?: string;
-    url?: string;
-  }>();
+  const request = context.switchToHttp().getRequest<{ method?: string }>();
 
-  const requestPath = request.originalUrl ?? request.url ?? '';
+  const isShipmentCreation =
+    request.method === 'POST' &&
+    context.getClass().name === 'ShipmentsController' &&
+    context.getHandler().name === 'create';
 
-  if (request.method === 'POST' && requestPath.includes('/shipments')) {
+  if (isShipmentCreation) {
     return 'Shipment creation rate limit exceeded. Authenticated users can create up to 10 shipments per minute.';
   }
 

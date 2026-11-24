@@ -62,6 +62,19 @@ export async function getCurrentUser(): Promise<User> {
   return apiClient<User>('/auth/me');
 }
 
+export async function verifyEmail(token: string): Promise<{ message: string }> {
+  return apiClient<{ message: string }>(
+    `/auth/verify-email?token=${encodeURIComponent(token)}`,
+    { skipAuth: true },
+  );
+}
+
+export async function resendVerificationEmail(): Promise<{ message: string }> {
+  return apiClient<{ message: string }>('/auth/resend-verification', {
+    method: 'POST',
+  });
+}
+
 export async function forgotPassword(email: string): Promise<{ message: string }> {
   return apiClient<{ message: string }>('/auth/forgot-password', {
     method: 'POST',
@@ -84,7 +97,7 @@ export async function resetPassword(
 export async function updateProfile(dto: {
   firstName?: string;
   lastName?: string;
-  walletAddress?: string;
+  walletAddress?: string | null;
 }): Promise<User> {
   return apiClient<User>('/auth/profile', {
     method: 'PATCH',

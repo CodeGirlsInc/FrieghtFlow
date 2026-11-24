@@ -26,6 +26,18 @@ pub fn revoked(env: &Env, wallet: &Address, user_id_hash: &BytesN<32>) {
     );
 }
 
+/// `(identity, deregistered, wallet)` → the user id hash that was unbound.
+///
+/// Distinct from `revoked`: indexers can tell a wallet that left voluntarily
+/// from one the admin sanctioned (#1856).
+pub fn deregistered(env: &Env, wallet: &Address, user_id_hash: &BytesN<32>) {
+    // "deregistered" is 12 chars, past `symbol_short!`'s 9-char limit.
+    env.events().publish(
+        (SUBJECT, Symbol::new(env, "deregistered"), wallet.clone()),
+        user_id_hash.clone(),
+    );
+}
+
 /// `(identity, updated, wallet)` → the new user id hash.
 pub fn updated(env: &Env, wallet: &Address, user_id_hash: &BytesN<32>) {
     env.events().publish(

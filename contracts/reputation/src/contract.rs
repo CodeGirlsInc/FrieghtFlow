@@ -168,6 +168,17 @@ impl ReputationContract {
             .unwrap_or(false)
     }
 
+    /// Paginated ids of the ratings `user` has received, newest last.
+    /// Voided ratings are removed from the list.
+    pub fn get_ratings_for(env: Env, user: Address, offset: u32, limit: u32) -> Vec<u64> {
+        let list: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RatingsFor(user))
+            .unwrap_or_else(|| Vec::new(&env));
+        storage::paginate(&env, list, offset, limit)
+    }
+
     pub fn get_total_ratings(env: Env) -> u64 {
         env.storage()
             .persistent()

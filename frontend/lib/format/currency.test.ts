@@ -1,4 +1,4 @@
-import { formatMoney, DEFAULT_CURRENCY } from './currency';
+import { formatMoney, DEFAULT_CURRENCY, AMOUNT_PLACEHOLDER } from './currency';
 
 /** What the call sites used to do inline, for the codes `Intl` accepts. */
 const legacyFormat = (value: number | string, currency?: string) =>
@@ -89,8 +89,8 @@ describe('formatMoney — amount coercion', () => {
     expect(formatMoney('0', 'USD')).toBe('$0.00');
   });
 
-  it('treats an empty value as zero, matching Number() coercion', () => {
-    expect(formatMoney('', 'USD')).toBe('$0.00');
+  it('renders the placeholder for an empty amount, not zero or "NaN"', () => {
+    expect(formatMoney('', 'USD')).toBe(AMOUNT_PLACEHOLDER);
   });
 
   it('formats large amounts with thousands separators', () => {
@@ -108,5 +108,19 @@ describe('formatMoney — amount coercion', () => {
     expect(() => formatMoney('not-a-number', 'USD')).not.toThrow();
     expect(() => formatMoney(Number.POSITIVE_INFINITY, 'USD')).not.toThrow();
     expect(() => formatMoney(Number.NaN, '123')).not.toThrow();
+  });
+});
+
+describe('formatMoney — missing and non-numeric amounts render a placeholder', () => {
+  it('renders the placeholder for null, undefined, empty and garbage values', () => {
+    expect(formatMoney(null, 'USD')).toBe(AMOUNT_PLACEHOLDER);
+    expect(formatMoney(undefined, 'USD')).toBe(AMOUNT_PLACEHOLDER);
+    expect(formatMoney('', 'USD')).toBe(AMOUNT_PLACEHOLDER);
+    expect(formatMoney('not-a-number', 'USD')).toBe(AMOUNT_PLACEHOLDER);
+  });
+
+  it('renders the placeholder for NaN and Infinity', () => {
+    expect(formatMoney(Number.NaN, 'USD')).toBe(AMOUNT_PLACEHOLDER);
+    expect(formatMoney(Number.POSITIVE_INFINITY, 'USD')).toBe(AMOUNT_PLACEHOLDER);
   });
 });

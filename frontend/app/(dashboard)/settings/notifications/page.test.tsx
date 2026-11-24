@@ -3,6 +3,8 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import NotificationPreferencesPage from './page';
 import { apiClient } from '../../../../lib/api/client';
 import type { NotificationPreferencesResponse } from '../../../../lib/api/notifications.api';
+import { useAuthStore } from '../../../../stores/auth.store';
+import type { User } from '../../../../types/auth.types';
 
 jest.mock('../../../../lib/api/client');
 jest.mock('sonner', () => ({
@@ -30,6 +32,23 @@ function makeEntity(
     disputeResolved: true,
     updatedAt: '2026-08-20T00:00:00.000Z',
     ...overrides,
+  };
+}
+
+function makeUser(role: User['role']): User {
+  return {
+    id: 'u-1',
+    email: 'u@example.com',
+    firstName: 'A',
+    lastName: 'B',
+    role,
+    isEmailVerified: true,
+    isActive: true,
+    walletAddress: null,
+    verificationToken: null,
+    verificationTokenExpiry: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -136,5 +155,36 @@ describe('Notification preferences page', () => {
     screen.getAllByRole('switch').forEach((sw) => {
       expect(sw).toHaveAttribute('aria-checked', 'true');
     });
+  });
+
+  it('renders carrier-relevant descriptions for carrier users (#1848)', async () => {
+    useAuthStore.setState({
+      user: makeUser('carrier'),
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    wireBackend(makeEntity());
+    render(<NotificationPreferencesPage />);
+
+    expect(await screen.findByText('When you accept a shipment.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('When a carrier accepts your shipment.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('When you deliver a shipment.')).toBeInTheDocument();
+  });
+
+  it('renders shipper-side descriptions for shipper users (#1848)', async () => {
+    useAuthStore.setState({
+      user: makeUser('shipper'),
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    wireBackend(makeEntity());
+    render(<NotificationPreferencesPage />);
+
+    expect(
+      await screen.findByText('When a carrier accepts your shipment.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('When you accept a shipment.')).not.toBeInTheDocument();
   });
 });

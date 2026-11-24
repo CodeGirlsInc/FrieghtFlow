@@ -18,6 +18,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AddressesService } from './addresses.service';
+import { parseLimit } from '../common/cursor-pagination.util';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -51,7 +52,7 @@ export class AddressesController {
   ) {
     return this.addressesService.findPage(user.id, {
       cursor,
-      limit: limit ? Number(limit) : undefined,
+      limit: parseLimit(limit),
     });
   }
 

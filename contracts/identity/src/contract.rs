@@ -91,6 +91,16 @@ impl IdentityContract {
         wallet.require_auth();
         Self::require_not_paused(&env)?;
 
+        // #1857: an admin revocation has to stick. Deregistered wallets are
+        // not marked, so only admin-revoked ones are blocked here.
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Revoked(wallet.clone()))
+        {
+            return Err(IdentityError::WalletRevoked);
+        }
+
         if env
             .storage()
             .persistent()
@@ -131,6 +141,17 @@ impl IdentityContract {
     ) -> Result<(), IdentityError> {
         wallet.require_auth();
         Self::require_not_paused(&env)?;
+
+        // A revoked wallet must not sidestep the tombstone by "updating" the
+        // identity it no longer has — nor by keeping a stale record, though
+        // `revoke_identity` removes that too.
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Revoked(wallet.clone()))
+        {
+            return Err(IdentityError::WalletRevoked);
+        }
 
         let old_user_id_hash: BytesN<32> = env
             .storage()
@@ -245,7 +266,40 @@ impl IdentityContract {
 
         Self::unindex_wallet(&env, &user_id_hash, &wallet);
 
+        // #1857: tombstone the wallet so it cannot immediately re-register.
+        // The marker lives under its own key, so the `Identity` record's
+        // encoding and the reverse index are untouched.
+        let revoked_key = DataKey::Revoked(wallet.clone());
+        env.storage().persistent().set(&revoked_key, &true);
+        env.storage()
+            .persistent()
+            .extend_ttl(&revoked_key, TTL_LEDGERS, TTL_LEDGERS);
+
         events::revoked(&env, &wallet, &user_id_hash);
+        Ok(())
+    }
+
+    /// Admin-only: clear the revocation marker so a wallet can register again.
+    ///
+    /// The counterpart to `revoke_identity` (#1857). It does not create an
+    /// identity — the wallet still has to sign a fresh `register_identity`.
+    pub fn reinstate_identity(env: Env, admin: Address, wallet: Address) -> Result<(), IdentityError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(IdentityError::NotInitialized)?;
+        admin.require_auth();
+        if admin != stored_admin {
+            return Err(IdentityError::Unauthorized);
+        }
+        Self::require_not_paused(&env)?;
+
+        let revoked_key = DataKey::Revoked(wallet);
+        if !env.storage().persistent().has(&revoked_key) {
+            return Err(IdentityError::NotRevoked);
+        }
+        env.storage().persistent().remove(&revoked_key);
         Ok(())
     }
 
@@ -259,11 +313,11 @@ impl IdentityContract {
     /// `update_identity` is not a substitute: it can only re-point the wallet
     /// at another hash, never remove the link entirely.
     ///
-    /// This is the self-service counterpart to `revoke_identity`, and it emits
-    /// the same `revoked` event: on this path the wallet in the event topic
-    /// *is* the actor, so the event identifies who removed the record without
-    /// a second event type. It removes both the forward record and the reverse
-    /// index entry, exactly as `revoke_identity` does.
+    /// This is the self-service counterpart to `revoke_identity`: it removes
+    /// the same forward record and reverse index entry, but emits a distinct
+    /// `deregistered` event so a voluntary exit is never indexed as an admin
+    /// sanction (#1856). It also leaves no revocation marker, so the wallet
+    /// may register again.
     ///
     /// Fails with `NotRegistered` if `wallet` has no identity to remove.
     pub fn deregister_identity(env: Env, wallet: Address) -> Result<(), IdentityError> {
@@ -282,7 +336,9 @@ impl IdentityContract {
 
         Self::unindex_wallet(&env, &user_id_hash, &wallet);
 
-        events::revoked(&env, &wallet, &user_id_hash);
+        // #1856: a voluntary exit is not an admin sanction. No tombstone is
+        // written, so the wallet can register again later.
+        events::deregistered(&env, &wallet, &user_id_hash);
         Ok(())
     }
 

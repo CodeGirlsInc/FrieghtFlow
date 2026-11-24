@@ -7,6 +7,41 @@ use crate::errors::ShipmentError;
 use crate::types::{DataKey, Shipment, ShipmentStatus};
 use crate::{events, storage};
 
+/// Upper bound on `weight_kg`, in kilograms.
+pub const MAX_WEIGHT_KG: u32 = 1_000_000;
+/// Maximum length, in bytes, of `origin` and `destination`.
+pub const MAX_LOCATION_LEN: u32 = 255;
+/// Maximum length, in bytes, of `cargo_description`.
+pub const MAX_CARGO_LEN: u32 = 1024;
+
+/// Validate the shipment terms accepted by both [`create`] and [`update`].
+///
+/// Keeping the bounds in one place means the backend and the contract cannot
+/// drift apart: the constants above are the single source of truth.
+fn validate_terms(
+    origin: &String,
+    destination: &String,
+    cargo_description: &String,
+    weight_kg: u32,
+    price: i128,
+) -> Result<(), ShipmentError> {
+    if weight_kg == 0 || weight_kg > MAX_WEIGHT_KG || price <= 0 {
+        return Err(ShipmentError::InvalidInput);
+    }
+
+    if origin.len() == 0
+        || destination.len() == 0
+        || cargo_description.len() == 0
+        || origin.len() > MAX_LOCATION_LEN
+        || destination.len() > MAX_LOCATION_LEN
+        || cargo_description.len() > MAX_CARGO_LEN
+    {
+        return Err(ShipmentError::InvalidInput);
+    }
+
+    Ok(())
+}
+
 /// Shipper creates a new shipment posting.
 pub fn create(
     env: &Env,
@@ -20,21 +55,13 @@ pub fn create(
     shipper.require_auth();
     storage::require_not_paused(env)?;
 
-    if weight_kg == 0 || weight_kg > 1_000_000 || price <= 0 {
-        return Err(ShipmentError::InvalidInput);
-    }
-
-    // Blank or oversized free-text fields are rejected: origin and destination
-    // must be 1-255 chars, cargo_description 1-1024 chars.
-    if origin.len() == 0
-        || destination.len() == 0
-        || cargo_description.len() == 0
-        || origin.len() > 255
-        || destination.len() > 255
-        || cargo_description.len() > 1024
-    {
-        return Err(ShipmentError::InvalidInput);
-    }
+    validate_terms(
+        &origin,
+        &destination,
+        &cargo_description,
+        weight_kg,
+        price,
+    )?;
 
     let id = storage::next_id(env);
     let now = env.ledger().timestamp();
@@ -61,6 +88,9 @@ pub fn create(
         .extend_ttl(&DataKey::Shipment(id), TTL_LEDGERS, TTL_LEDGERS);
 
     storage::append_to_list(env, DataKey::ShipperList(shipper), id);
+    // Make the new posting discoverable to carriers; it leaves this list on
+    // accept or cancel.
+    storage::append_to_list(env, DataKey::OpenList, id);
 
     events::created(env, &shipment);
     Ok(id)
@@ -88,18 +118,13 @@ pub fn update(
         return Err(ShipmentError::InvalidStatus);
     }
 
-    if weight_kg == 0 || weight_kg > 1_000_000 || price <= 0 {
-        return Err(ShipmentError::InvalidInput);
-    }
-    // Same free-text bounds as `create`: destination must be 1-255 chars,
-    // cargo_description 1-1024 chars.
-    if destination.len() == 0
-        || cargo_description.len() == 0
-        || destination.len() > 255
-        || cargo_description.len() > 1024
-    {
-        return Err(ShipmentError::InvalidInput);
-    }
+    validate_terms(
+        &shipment.origin,
+        &destination,
+        &cargo_description,
+        weight_kg,
+        price,
+    )?;
 
     shipment.destination = destination;
     shipment.cargo_description = cargo_description;
@@ -129,9 +154,14 @@ pub fn confirm_delivery(
         return Err(ShipmentError::InvalidStatus);
     }
 
+    let now = env.ledger().timestamp();
     shipment.status = ShipmentStatus::Completed;
-    shipment.updated_at = env.ledger().timestamp();
+    shipment.updated_at = now;
     storage::save(env, &shipment);
+
+    let mut milestones = storage::milestones(env, shipment_id);
+    milestones.completed_at = now;
+    storage::store_milestones(env, shipment_id, &milestones);
 
     events::completed(env, &shipment);
     Ok(())
@@ -159,15 +189,16 @@ pub fn cancel(env: &Env, shipper: Address, shipment_id: u64) -> Result<(), Shipm
     // `Shipment::is_party` still treats the ex-carrier as a party to it — which
     // `dispute::open_dispute` authorises on, so the carrier of a cancelled
     // shipment could still register dispute evidence against it.
-    let previous_carrier = shipment.carrier.take();
+    // #1855: one shared unwind, also used by `dispute::resolve(false)`.
+    storage::unassign_carrier(env, &mut shipment);
 
     shipment.status = ShipmentStatus::Cancelled;
     shipment.updated_at = env.ledger().timestamp();
     storage::save(env, &shipment);
 
-    if let Some(carrier) = previous_carrier {
-        storage::remove_from_list(env, DataKey::CarrierList(carrier), shipment_id);
-    }
+    // A cancelled shipment is no longer open work, whether it was cancelled
+    // from `Created` or (already-removed) `Accepted`.
+    storage::remove_from_list(env, DataKey::OpenList, shipment_id);
 
     events::cancelled(env, &shipment);
     Ok(())

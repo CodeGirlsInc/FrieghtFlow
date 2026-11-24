@@ -1,14 +1,12 @@
 import {
-  Body,
   Controller,
   Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseUUIDPipe,
-  Patch,
   Post,
+  Patch,
+  Param,
+  Body,
   Query,
+  ParseUUIDPipe,
   UseGuards,
   DefaultValuePipe,
   ParseIntPipe,
@@ -17,6 +15,7 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -30,31 +29,32 @@ import { User } from '../users/entities/user.entity';
 
 @ApiTags('bids')
 @ApiBearerAuth()
-@Controller('shipments/:id/bids')
+@Controller('shipments')
 export class BidsController {
   constructor(private readonly bidsService: BidsService) {}
 
-  @Post()
+  @Post(':shipmentId/bids')
   @UseGuards(RolesGuard)
   @Roles(UserRole.CARRIER)
-  @ApiOperation({ summary: 'Carrier submits a bid on a shipment' })
-  @ApiParam({ name: 'id', description: 'Shipment ID' })
+  @ApiOperation({ summary: 'Submit a bid on a shipment (carrier only)' })
   @ApiResponse({ status: 201, description: 'Bid submitted' })
+  @ApiResponse({ status: 409, description: 'Duplicate pending bid' })
   submitBid(
-    @Param('id', ParseUUIDPipe) shipmentId: string,
-    @CurrentUser() carrier: User,
+    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
+    @CurrentUser() user: User,
     @Body() dto: CreateBidDto,
   ) {
-    return this.bidsService.submitBid(shipmentId, carrier.id, dto);
+    return this.bidsService.submitBid(shipmentId, user.id, dto);
   }
 
-  @Get()
+  @Get(':shipmentId/bids')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Shipper views all bids on their shipment' })
-  @ApiParam({ name: 'id', description: 'Shipment ID' })
+  @ApiOperation({ summary: 'List bids for a shipment (shipment owner only)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   getBids(
-    @Param('id', ParseUUIDPipe) shipmentId: string,
+    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
     @CurrentUser() user: User,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
@@ -62,20 +62,34 @@ export class BidsController {
     return this.bidsService.getBids(shipmentId, user.id, page, limit);
   }
 
-  @Patch(':bidId/accept')
-  @HttpCode(HttpStatus.OK)
+  @Patch(':shipmentId/bids/:bidId/accept')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SHIPPER)
   @ApiOperation({
     summary: 'Shipper accepts a bid — assigns carrier, rejects others',
   })
-  @ApiParam({ name: 'id', description: 'Shipment ID' })
+  @ApiParam({ name: 'shipmentId', description: 'Shipment ID' })
   @ApiParam({ name: 'bidId', description: 'Bid ID' })
   acceptBid(
-    @Param('id', ParseUUIDPipe) shipmentId: string,
+    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
     @Param('bidId', ParseUUIDPipe) bidId: string,
     @CurrentUser() user: User,
   ) {
     return this.bidsService.acceptBid(shipmentId, bidId, user.id);
+  }
+
+  @Patch(':shipmentId/bids/:bidId/withdraw')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.CARRIER)
+  @ApiOperation({ summary: 'Withdraw a pending bid (bid owner only)' })
+  @ApiResponse({ status: 200, description: 'Bid withdrawn' })
+  @ApiResponse({ status: 400, description: 'Bid is not pending' })
+  @ApiResponse({ status: 403, description: 'Not the bid owner' })
+  withdrawBid(
+    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
+    @Param('bidId', ParseUUIDPipe) bidId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.bidsService.withdrawBid(shipmentId, bidId, user.id);
   }
 }

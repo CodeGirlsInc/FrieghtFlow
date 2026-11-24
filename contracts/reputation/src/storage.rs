@@ -1,7 +1,7 @@
 //! Storage accessors shared by the contract's entrypoint modules.
 
 use common::TTL_LEDGERS;
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Vec};
 
 use crate::errors::ReputationError;
 use crate::types::{DataKey, Reputation};
@@ -45,6 +45,66 @@ pub fn save_reputation(env: &Env, rep: &Reputation) {
     env.storage()
         .persistent()
         .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+}
+
+/// Append `rating_id` to the list of ratings received by `user`.
+pub fn append_rating_for(env: &Env, user: &Address, rating_id: u64) {
+    let key = DataKey::RatingsFor(user.clone());
+    let mut list: Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env));
+    list.push_back(rating_id);
+    env.storage().persistent().set(&key, &list);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+}
+
+/// Drop `rating_id` from `user`'s received-ratings list, removing the key
+/// entirely once the list is empty.
+pub fn remove_rating_for(env: &Env, user: &Address, rating_id: u64) {
+    let key = DataKey::RatingsFor(user.clone());
+    let list: Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env));
+
+    let mut remaining = Vec::new(env);
+    for item in list.iter() {
+        if item != rating_id {
+            remaining.push_back(item);
+        }
+    }
+
+    if remaining.is_empty() {
+        env.storage().persistent().remove(&key);
+    } else {
+        env.storage().persistent().set(&key, &remaining);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, TTL_LEDGERS, TTL_LEDGERS);
+    }
+}
+
+/// Slice `list[offset..offset+limit]`, clamped to the list's bounds.
+pub fn paginate(env: &Env, list: Vec<u64>, offset: u32, limit: u32) -> Vec<u64> {
+    let mut paged = Vec::new(env);
+    let len = list.len();
+
+    if offset >= len {
+        return paged;
+    }
+
+    let end = (offset + limit).min(len);
+    for i in offset..end {
+        if let Some(item) = list.get(i) {
+            paged.push_back(item);
+        }
+    }
+    paged
 }
 
 pub fn next_rating_id(env: &Env) -> u64 {

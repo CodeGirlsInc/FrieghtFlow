@@ -1,9 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { useSocketStatusStore } from '../stores/socket-status.store';
-
-// Strip /api/v1 from the API URL to get the socket server origin
-const SOCKET_URL =
-  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:6000/api/v1').replace('/api/v1', '');
+import { SOCKET_ORIGIN } from './config';
 
 /** How long to wait before retrying after socket.io gives up on its own
  * reconnectionAttempts budget (a "sustained" drop, per FE-109). */
@@ -42,7 +39,7 @@ export function connectSocket(token: string): Socket {
 
   useSocketStatusStore.getState().setStatus('connecting');
 
-  socket = io(SOCKET_URL, {
+  socket = io(SOCKET_ORIGIN, {
     auth: { token: `Bearer ${token}` },
     transports: ['websocket'],
     autoConnect: true,

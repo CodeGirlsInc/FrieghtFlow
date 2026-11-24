@@ -11,4 +11,9 @@ pub enum DataKey {
     /// every mutation path — `register_identity`, `update_identity`, and
     /// `revoke_identity` — so a hash can be looked up back to its wallet(s).
     HashToWallets(BytesN<32>),
+    /// Persistent tombstone written by `revoke_identity` (#1857). While this
+    /// marker exists the wallet may not register or update an identity, so an
+    /// admin revocation cannot be undone by the wallet simply re-registering.
+    /// `reinstate_identity` clears it; self-deregistration never writes it.
+    Revoked(Address),
 }

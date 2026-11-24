@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import ShipmentDetailPage from './page';
 import { useAuthStore } from '../../../../stores/auth.store';
 import { shipmentApi } from '../../../../lib/api/shipment.api';
+import { reviewsApi } from '../../../../lib/api/reviews.api';
 import { ShipmentStatus, type Shipment } from '../../../../types/shipment.types';
 import type { User } from '../../../../types/auth.types';
 
@@ -22,10 +23,14 @@ jest.mock('../../../../lib/api/shipment.api', () => ({
     resolveDispute: jest.fn(),
   },
 }));
+jest.mock('../../../../lib/api/reviews.api', () => ({
+  reviewsApi: { submit: jest.fn() },
+}));
 const mockGetById = shipmentApi.getById as jest.MockedFunction<typeof shipmentApi.getById>;
 const mockGetHistory = shipmentApi.getHistory as jest.MockedFunction<typeof shipmentApi.getHistory>;
 const mockCancel = shipmentApi.cancel as jest.MockedFunction<typeof shipmentApi.cancel>;
 const mockResolve = shipmentApi.resolveDispute as jest.MockedFunction<typeof shipmentApi.resolveDispute>;
+const mockSubmitReview = reviewsApi.submit as jest.MockedFunction<typeof reviewsApi.submit>;
 
 const mockToast = { success: jest.fn(), error: jest.fn() };
 jest.mock('sonner', () => ({
@@ -86,6 +91,7 @@ const resetAuthStore = (user: User | null) =>
 async function renderPage(shipment: Shipment) {
   mockGetById.mockResolvedValue(shipment);
   mockGetHistory.mockResolvedValue([]);
+  mockSubmitReview.mockResolvedValue(undefined);
   const view = render(<ShipmentDetailPage />);
   expect(await screen.findByText(shipment.trackingNumber)).toBeInTheDocument();
   return view;
@@ -301,6 +307,33 @@ describe('ShipmentDetailPage — price rendering survives a bogus currency (FE-1
     await renderPage(makeShipment({ currency: '123' }));
 
     expect(screen.getByText('123 3,500.00')).toBeInTheDocument();
+  });
+
+  describe('ShipmentDetailPage — both parties can review a completed shipment (FE-223)', () => {
+    const completed = () => makeShipment({ status: ShipmentStatus.COMPLETED });
+
+    it('shows the shipper a form to rate the carrier', async () => {
+      resetAuthStore(makeUser({ id: 'u-shipper', role: 'shipper' }));
+      await renderPage(completed());
+
+      expect(screen.getByText('Rate your carrier')).toBeInTheDocument();
+      expect(screen.getByRole('radiogroup', { name: 'Rating' })).toBeInTheDocument();
+    });
+
+    it('shows the carrier a form to rate the shipper', async () => {
+      resetAuthStore(makeUser({ id: 'u-carrier', role: 'carrier' }));
+      await renderPage(completed());
+
+      expect(screen.getByText('Rate your shipper')).toBeInTheDocument();
+      expect(screen.getByRole('radiogroup', { name: 'Rating' })).toBeInTheDocument();
+    });
+
+    it('does not show a review form to an unrelated user', async () => {
+      resetAuthStore(makeUser({ id: 'u-other', role: 'shipper' }));
+      await renderPage(completed());
+
+      expect(screen.queryByRole('radiogroup', { name: 'Rating' })).not.toBeInTheDocument();
+    });
   });
 
   it('still renders a valid currency exactly as before', async () => {

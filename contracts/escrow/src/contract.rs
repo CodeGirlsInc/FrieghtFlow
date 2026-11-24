@@ -26,6 +26,9 @@ impl EscrowContract {
             return Err(EscrowError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        // Default the treasury to the admin so existing deployments keep
+        // paying fees to the same address until it is explicitly changed.
+        env.storage().instance().set(&DataKey::Treasury, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
             .instance()
@@ -112,6 +115,24 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Admin-only: set the address that receives cancellation fees.
+    ///
+    /// Kept separate from `Admin` so rotating the operational admin key does
+    /// not redirect platform revenue. Requires admin auth and an unpaused
+    /// contract, and emits a `treasury` event recording the new address.
+    pub fn set_treasury(env: Env, treasury: Address) -> Result<(), EscrowError> {
+        storage::admin(&env)?.require_auth();
+        storage::require_not_paused(&env)?;
+        env.storage().instance().set(&DataKey::Treasury, &treasury);
+        events::treasury_set(&env, &treasury);
+        Ok(())
+    }
+
+    /// Read the address that receives cancellation fees.
+    pub fn get_treasury(env: Env) -> Result<Address, EscrowError> {
+        storage::treasury(&env)
+    }
+
     /// Shipper locks funds for a shipment. See [`funding::fund`].
     pub fn fund_escrow(
         env: Env,
@@ -159,6 +180,17 @@ impl EscrowContract {
         settlement::resolve_dispute(&env, shipment_id, release_to_carrier)
     }
 
+    /// Admin settles a dispute with an explicit carrier share. See
+    /// [`settlement::resolve_dispute_split`]. `0` refunds the shipper in full;
+    /// `amount` pays the carrier in full; anything between splits the escrow.
+    pub fn resolve_dispute_split(
+        env: Env,
+        shipment_id: u64,
+        carrier_amount: i128,
+    ) -> Result<(), EscrowError> {
+        settlement::resolve_dispute_split(&env, shipment_id, carrier_amount)
+    }
+
     pub fn get_escrow(env: Env, shipment_id: u64) -> Result<EscrowRecord, EscrowError> {
         storage::load(&env, shipment_id)
     }
@@ -172,6 +204,18 @@ impl EscrowContract {
         storage::settlement_fee(&env, shipment_id)
     }
 
+    /// The ledger timestamp at which this escrow's dispute was raised, or
+    /// `0` if it has never been disputed.
+    pub fn get_disputed_at(env: Env, shipment_id: u64) -> u64 {
+        storage::disputed_at(&env, shipment_id)
+    }
+
+    /// Carrier amount from the last partial dispute settlement, or `0`.
+    /// The shipper's share is `get_escrow(id).amount - this value`.
+    pub fn get_dispute_split(env: Env, shipment_id: u64) -> i128 {
+        storage::dispute_split(&env, shipment_id)
+    }
+
     /// Read the configured admin address.
     ///
     /// Lets external callers (e.g. the backend's Soroban integration layer)
@@ -182,8 +226,19 @@ impl EscrowContract {
         storage::admin(&env)
     }
 
+    /// The **pooled** token balance of this contract, not the amount held for
+    /// any single shipment: it includes every live escrow plus any dust or
+    /// direct transfers. Use `get_escrow(shipment_id).amount` for one escrow
+    /// and `get_total_locked()` for the sum of all unsettled escrows (#1862).
     pub fn get_balance(env: Env) -> Result<i128, EscrowError> {
         let token = storage::token(&env)?;
         Ok(token.balance(&env.current_contract_address()))
+    }
+
+    /// Sum of the amounts in every `Funded`/`Disputed` escrow. The core
+    /// reconciliation invariant is `get_balance() >= get_total_locked()`;
+    /// direct token transfers can only make the left side larger (#1862).
+    pub fn get_total_locked(env: Env) -> i128 {
+        storage::total_locked(&env)
     }
 }

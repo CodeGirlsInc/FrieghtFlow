@@ -9,8 +9,10 @@ import type { User } from '../../../../types/auth.types';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
+const mockSearchParams = new URLSearchParams();
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => mockSearchParams,
 }));
 
 jest.mock('../../../../lib/api/admin.api', () => ({
@@ -71,6 +73,8 @@ const resetAuthStore = (user: User | null) =>
 describe('AdminShipmentsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSearchParams.delete('from');
+    mockSearchParams.delete('to');
   });
 
   it('redirects a non-admin user to the dashboard and renders nothing', async () => {
@@ -175,6 +179,30 @@ describe('AdminShipmentsPage', () => {
 
     expect(await screen.findByText('USD 1,234.5')).toBeInTheDocument();
     expect(screen.queryByText(/1234\.50/)).not.toBeInTheDocument();
+  });
+
+  it('sends the from/to date filters from the URL to the API', async () => {
+    mockSearchParams.set('from', '2026-01-01');
+    mockSearchParams.set('to', '2026-01-31');
+    resetAuthStore(makeUser());
+    mockListShipments.mockResolvedValue({
+      data: [makeShipment()],
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+    render(<AdminShipmentsPage />);
+
+    await waitFor(() =>
+      expect(mockListShipments).toHaveBeenCalledWith({
+        status: undefined,
+        page: 1,
+        limit: 20,
+        from: '2026-01-01',
+        to: '2026-01-31',
+      }),
+    );
   });
 
   it('shows an error toast when loading shipments fails', async () => {

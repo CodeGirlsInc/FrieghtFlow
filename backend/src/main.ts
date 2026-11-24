@@ -88,7 +88,6 @@ async function bootstrap() {
         .setVersion('1.0')
         .setTermsOfService('terms-of-service')
         .setLicense('MIT License', 'mit')
-        .addServer(`http://localhost:${configService.get<number>('PORT', 6006)}`)
         .addBearerAuth()
         .build();
 

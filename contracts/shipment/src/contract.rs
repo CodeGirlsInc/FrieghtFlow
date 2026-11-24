@@ -5,10 +5,10 @@
 //! each one lives in the module named in its body ([`crate::shipper`],
 //! [`crate::carrier`], [`crate::dispute`]).
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
 
 use crate::errors::ShipmentError;
-use crate::types::{DataKey, Shipment};
+use crate::types::{DataKey, Dispute, Milestones, Shipment};
 use crate::{carrier, dispute, shipper, storage};
 
 #[contract]
@@ -130,6 +130,16 @@ impl ShipmentContract {
         carrier::accept(&env, carrier, shipment_id)
     }
 
+    /// Carrier gives back an accepted job before pickup. See
+    /// [`carrier::withdraw_acceptance`] (#1864).
+    pub fn withdraw_acceptance(
+        env: Env,
+        carrier: Address,
+        shipment_id: u64,
+    ) -> Result<(), ShipmentError> {
+        carrier::withdraw_acceptance(&env, carrier, shipment_id)
+    }
+
     /// Carrier reports pickup. See [`carrier::mark_in_transit`].
     pub fn mark_in_transit(
         env: Env,
@@ -148,9 +158,15 @@ impl ShipmentContract {
         carrier::mark_delivered(&env, carrier, shipment_id)
     }
 
-    /// Either party raises a dispute. See [`dispute::raise`].
-    pub fn raise_dispute(env: Env, caller: Address, shipment_id: u64) -> Result<(), ShipmentError> {
-        dispute::raise(&env, caller, shipment_id)
+    /// Either party raises a dispute, optionally pointing at an off-chain
+    /// reason by hash. See [`dispute::raise`] (#1863).
+    pub fn raise_dispute(
+        env: Env,
+        caller: Address,
+        shipment_id: u64,
+        reason_hash: Option<BytesN<32>>,
+    ) -> Result<(), ShipmentError> {
+        dispute::raise(&env, caller, shipment_id, reason_hash)
     }
 
     /// Admin resolves a dispute. See [`dispute::resolve`].
@@ -164,6 +180,17 @@ impl ShipmentContract {
 
     pub fn get_shipment(env: Env, shipment_id: u64) -> Result<Shipment, ShipmentError> {
         storage::load(&env, shipment_id)
+    }
+
+    /// Who raised the dispute, when, and the optional reason hash (#1863).
+    pub fn get_dispute(env: Env, shipment_id: u64) -> Result<Dispute, ShipmentError> {
+        storage::dispute(&env, shipment_id)
+    }
+
+    /// Accepted / in-transit / delivered / completed timestamps (#1865).
+    /// Zero means that transition has not happened (or predates this getter).
+    pub fn get_milestones(env: Env, shipment_id: u64) -> Milestones {
+        storage::milestones(&env, shipment_id)
     }
 
     pub fn get_shipments_by_shipper(
@@ -190,6 +217,19 @@ impl ShipmentContract {
             .storage()
             .persistent()
             .get(&DataKey::CarrierList(carrier))
+            .unwrap_or_else(|| Vec::new(&env));
+        storage::paginate(&env, list, offset, limit)
+    }
+
+    /// Paginated ids of shipments still in `Created`.
+    ///
+    /// Appended on create and removed on accept/cancel, so a carrier can list
+    /// open work without scanning every shipment id.
+    pub fn get_open_shipments(env: Env, offset: u32, limit: u32) -> Vec<u64> {
+        let list: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::OpenList)
             .unwrap_or_else(|| Vec::new(&env));
         storage::paginate(&env, list, offset, limit)
     }

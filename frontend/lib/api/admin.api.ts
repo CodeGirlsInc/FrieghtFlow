@@ -51,6 +51,34 @@ export interface QueryAdminShipmentsParams {
   limit?: number;
 }
 
+/** Mirrors the backend `EscrowRecord` (stellar/escrow-record.interface.ts). */
+export interface ReconcileEscrowOnChain {
+  shipmentId: number;
+  shipper: string;
+  carrier: string;
+  /** On-chain escrow amount (the backend decodes a BigInt here). */
+  amount: number;
+  status: string;
+  fundedAt: number | null;
+  settledAt: number | null;
+}
+
+/** Shape of `GET /admin/escrow/:shipmentId/reconcile` (#1846). */
+export interface ReconcileEscrowResult {
+  shipmentId: string;
+  offChain: {
+    paymentId: string;
+    status: string;
+    onChainShipmentId: number;
+    stellarTxHash: string | null;
+    amount: number;
+    assetCode: string;
+  };
+  onChain: ReconcileEscrowOnChain | null;
+  match: boolean;
+  mismatches: string[];
+}
+
 function buildQuery(params: Record<string, string | number | boolean | undefined>): string {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined);
   if (entries.length === 0) return '';
@@ -89,5 +117,14 @@ export const adminApi = {
     return apiClient<PaginatedAdminShipments>(
       `/admin/shipments${buildQuery(params as Record<string, string | number | boolean | undefined>)}`,
     );
+  },
+
+  /**
+   * Compares the local payment row against live on-chain escrow (#1846).
+   * Admins must see the amount, currency and DB vs on-chain status before
+   * resolving a dispute.
+   */
+  reconcileEscrow(shipmentId: string): Promise<ReconcileEscrowResult> {
+    return apiClient<ReconcileEscrowResult>(`/admin/escrow/${shipmentId}/reconcile`);
   },
 };

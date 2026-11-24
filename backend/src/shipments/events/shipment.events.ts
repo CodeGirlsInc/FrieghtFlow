@@ -1,4 +1,5 @@
 import { Shipment } from '../entities/shipment.entity';
+import { ShipmentStatus } from '../../common/enums/shipment-status.enum';
 
 export const SHIPMENT_CREATED = 'shipment.created';
 export const SHIPMENT_ACCEPTED = 'shipment.accepted';
@@ -18,5 +19,6 @@ export class ShipmentEvent {
     public readonly shipment: Shipment,
     public readonly actorId: string,
     public readonly reason?: string,
+    public readonly previousStatus?: ShipmentStatus,
   ) {}
 }

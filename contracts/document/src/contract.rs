@@ -128,6 +128,24 @@ impl DocumentContract {
         verification::flag(&env, admin, doc_id, reason)
     }
 
+    /// Uploader marks one of their own unverified documents as superseded by
+    /// a newer document on the same shipment. See [`registry::supersede`].
+    pub fn supersede_document(
+        env: Env,
+        uploader: Address,
+        doc_id: u64,
+        new_doc_id: u64,
+    ) -> Result<(), DocumentError> {
+        registry::supersede(&env, uploader, doc_id, new_doc_id)
+    }
+
+    /// The id of the document that supersedes `doc_id`, if any.
+    pub fn get_superseded_by(env: Env, doc_id: u64) -> Option<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SupersededBy(doc_id))
+    }
+
     /// Check a hash against the registered one. See [`verification::check_integrity`].
     pub fn check_integrity(
         env: Env,

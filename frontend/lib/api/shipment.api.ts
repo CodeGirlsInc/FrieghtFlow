@@ -6,7 +6,21 @@ import {
   QueryShipmentParams,
   PaginatedShipments,
   ShipmentStatus,
+  PublicShipmentTracking,
 } from '../../types/shipment.types';
+
+export interface EtaEstimatePayload {
+  origin: string;
+  destination: string;
+  weightKg: number;
+}
+
+export interface EtaEstimate {
+  estimatedTransitDays: number;
+  estimatedDeliveryDate: string;
+  originZone: string;
+  destinationZone: string;
+}
 
 function buildQuery(params: QueryShipmentParams): string {
   const q = new URLSearchParams();
@@ -28,6 +42,13 @@ export const shipmentApi = {
     return apiClient('/shipments', { method: 'POST', body: JSON.stringify(payload) });
   },
 
+  estimateEta(payload: EtaEstimatePayload): Promise<EtaEstimate> {
+    return apiClient('/shipments/eta/estimate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   list(params: QueryShipmentParams = {}): Promise<PaginatedShipments> {
     return apiClient(`/shipments${buildQuery(params)}`);
   },
@@ -40,7 +61,7 @@ export const shipmentApi = {
     return apiClient(`/shipments/${id}`);
   },
 
-  track(trackingNumber: string): Promise<Shipment> {
+  track(trackingNumber: string): Promise<PublicShipmentTracking> {
     return apiClient(`/shipments/track/${trackingNumber}`);
   },
 

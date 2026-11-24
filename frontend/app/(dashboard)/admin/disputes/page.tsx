@@ -80,6 +80,13 @@ function DisputeDetail({
   const [note, setNote] = useState('');
   const [resolving, setResolving] = useState(false);
 
+  // Escrow reconciliation (#1846): amount, currency and DB vs on-chain
+  // status, shown before the resolve buttons.
+  const { data: reconcile } = useQuery({
+    queryKey: ['admin-reconcile', shipment.id],
+    queryFn: () => adminApi.reconcileEscrow(shipment.id),
+  });
+
   const loadHistory = useCallback(async () => {
     if (histLoaded) return;
     try {
@@ -159,6 +166,37 @@ function DisputeDetail({
               <p className="text-xs font-medium text-muted-foreground mb-3">Status History</p>
               <StatusTimeline history={history} />
             </div>
+
+            {/* Escrow status (#1846) — shown before the resolve buttons */}
+            {reconcile && (
+              <div className="rounded-md border border-border bg-muted/30 p-4 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground">Escrow status</p>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Amount</p>
+                    <p className="font-medium">
+                      {fmt(reconcile.offChain.amount, reconcile.offChain.assetCode)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <p className="font-medium">
+                      DB {reconcile.offChain.status} / on-chain{' '}
+                      {reconcile.onChain?.status ?? 'unavailable'}
+                    </p>
+                  </div>
+                </div>
+                {reconcile.match ? (
+                  <p className="text-xs text-emerald-600">
+                    Off-chain and on-chain status agree.
+                  </p>
+                ) : (
+                  <p className="text-xs font-medium text-destructive">
+                    {reconcile.mismatches.join(' · ')}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Resolution actions */}
             <div className="flex gap-2 pt-2 border-t border-border">

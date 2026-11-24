@@ -70,10 +70,11 @@ function buildMonthlySpend(shipments: Shipment[]) {
 }
 
 // A hard cap on how many pages this dashboard will fetch, so a very
-// large account can't make it page forever — 50 * 200 = 10,000
+// large account can't make it page forever — 50 * 100 = 5,000
 // shipments, comfortably past any realistic reporting window.
+// Keep this at or below the API's @Max(100) limit for QueryShipmentDto.limit.
 const MAX_PAGES = 50;
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 100;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
